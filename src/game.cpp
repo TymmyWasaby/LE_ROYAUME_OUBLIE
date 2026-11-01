@@ -8062,11 +8062,10 @@ static void tdGame() {
         float rg = TD_TRG[type] + 7 * (lvl - 1);
         float rate = TD_TRT[type] / (1.0f + 0.2f * (lvl - 1));
         int dmg = TD_TDM[type] + TD_TDM2[type] * (lvl - 1);
-        int splash = (type == 2) ? 22 : 0;
         if (type == 1 && spc == 0) { rate *= 0.5f; dmg = dmg * 7 / 10; }            // MITRAILLE
         if (type == 1 && spc == 1) { rg += 40; dmg = dmg * 3 / 2; }                  // SNIPE
-        if (type == 2 && spc == 0) { splash = 34; rate *= 0.7f; }                    // MORTIER
-        if (type == 2 && spc == 1) { dmg *= 2; splash = 16; }                        // BOMBE LOURDE
+        if (type == 2 && spc == 0) { rate *= 0.7f; }                                // MORTIER (splash 34 a l'impact)
+        if (type == 2 && spc == 1) { dmg *= 2; }                                     // BOMBE LOURDE (splash 16 a l'impact)
         if (type == 3 && spc == 0) { dmg *= 2; }                                     // POLE NORD : degats x2, gel 4 s a l'impact
         int bi = -1; float bd = rg * rg;
         for (int i = 0; i < ne; i++) {
@@ -8242,6 +8241,71 @@ static void tdGame() {
     }
     Ion::Timing::msleep(16); // ~60 FPS
   }
+}
+// ---- V5.33 : regles Othello (coups legaux, pose, IA minimax alpha-beta) ----
+static int otFlip(uint8_t *b, int idx, int p, bool play) { // compte les pions retournes (et les retourne si play)
+  static const int dx[8] = { 1, -1, 0, 0, 1, 1, -1, -1 };
+  static const int dy[8] = { 0, 0, 1, -1, 1, -1, 1, -1 };
+  int x = idx % 8, y = idx / 8, foe = 3 - p, n = 0;
+  for (int d = 0; d < 8; d++) {
+    int cx2 = x + dx[d], cy2 = y + dy[d], cnt = 0;
+    while (cx2 >= 0 && cx2 < 8 && cy2 >= 0 && cy2 < 8 && b[cy2 * 8 + cx2] == foe) { cnt++; cx2 += dx[d]; cy2 += dy[d]; }
+    if (cnt > 0 && cx2 >= 0 && cx2 < 8 && cy2 >= 0 && cy2 < 8 && b[cy2 * 8 + cx2] == p) {
+      for (int t = 1; t <= cnt; t++) { if (play) b[(y + dy[d] * t) * 8 + x + dx[d] * t] = p; }
+      n += cnt;
+    }
+  }
+  return n;
+}
+static int otLegal(uint8_t *b, int idx, int p) { if (b[idx] != 0) return 0; return otFlip(b, idx, p, false); }
+static void otPlay(uint8_t *b, int idx, int p) { otFlip(b, idx, p, true); b[idx] = p; }
+static int otMoves(uint8_t *b, int p, int *pm) { // liste tous les coups legaux de p
+  int n = 0;
+  for (int i = 0; i < 64; i++) { if (otLegal(b, i, p) > 0) pm[n++] = i; }
+  return n;
+}
+static int otEval(uint8_t *b) { // score du point de vue de l'IA (pion 2), coins et bords valorises
+  int s = 0;
+  for (int i = 0; i < 64; i++) {
+    int x = i % 8, y = i / 8;
+    int v = (x == 0 || x == 7 || y == 0 || y == 7) ? 4 : 1; // bords, et donc coins, comptent plus
+    if (b[i] == 2) s += v;
+    else if (b[i] == 1) s -= v;
+  }
+  return s;
+}
+static int otSearch(uint8_t *b, int depth, int alpha, int beta, int p) { // minimax alpha-beta, score IA
+  int pm[64];
+  int n = otMoves(b, p, pm);
+  if (depth <= 0) return otEval(b); // horizon atteint : on evalue
+  if (n == 0) { // p doit passer : si l'adversaire peut jouer on continue, sinon fin
+    if (otMoves(b, 3 - p, pm) == 0) return otEval(b);
+    return otSearch(b, depth - 1, alpha, beta, 3 - p);
+  }
+  if (p == 2) { // tour de l'IA : maximise
+    int best = -1000000;
+    for (int k = 0; k < n; k++) {
+      uint8_t nb[64];
+      for (int i = 0; i < 64; i++) nb[i] = b[i];
+      otPlay(nb, pm[k], 2);
+      int v = otSearch(nb, depth - 1, alpha, beta, 1);
+      if (v > best) best = v;
+      if (best > alpha) alpha = best;
+      if (alpha >= beta) break; // coupe
+    }
+    return best;
+  }
+  int best = 1000000; // tour du joueur : minimise
+  for (int k = 0; k < n; k++) {
+    uint8_t nb[64];
+    for (int i = 0; i < 64; i++) nb[i] = b[i];
+    otPlay(nb, pm[k], 1);
+    int v = otSearch(nb, depth - 1, alpha, beta, 2);
+    if (v < best) best = v;
+    if (best < beta) beta = best;
+    if (alpha >= beta) break; // coupe
+  }
+  return best;
 }
 static void otDraw(uint8_t *b, int ccx, int ccy, int *pm, int np, const char *msg, KDColor mc, int lvlN) {
   fRect(0, 0, SW, SH, KDColor::RGB24(0x1A2028));
