@@ -1630,7 +1630,7 @@ static bool loadAcc() {
       if (tdWavesT < 0) tdWavesT = 0;
       if (tdKillsT < 0) tdKillsT = 0;
       if (tdMapMax < 1) tdMapMax = 1;
-      if (tdMapMax > 3) tdMapMax = 3;
+      if (tdMapMax > 5) tdMapMax = 5;
     }
     if (len == 802 || len == 808) { // V5.33 : stats Othello
       otWins = (buf[p] << 8) | buf[p + 1]; p += 2;
@@ -6482,37 +6482,55 @@ static void auEjectScreen(int bi, bool wasImp, int impsLeft) { // bi = -1 pour T
   }
   waitRelease();
 }
-static bool auWiringGame(int taskIdx) { // V5.26 : CABLAGE — renvoie true si complete
+static bool auWiringGame(int taskIdx) { // V5.35 : CABLAGE jouable — tu saisis un fil a gauche puis tu choisis SA borne a droite
   waitRelease();
-  static const uint32_t WC[3] = {0xC51111, 0xF5C518, 0x38FEDC};
-  int perm[3] = {0, 1, 2};
+  static const uint32_t WC[4] = { 0xC51111, 0xF5C518, 0x38FEDC, 0xB44BFF }; // rouge, jaune, cyan, violet
+  int perm[4] = { 0, 1, 2, 3 }; // les bornes de droite sont melangees
   int s = taskIdx * 7 + 5;
-  for (int i = 2; i > 0; i--) { int j = s % (i + 1); s = s * 13 + 5; int tmp = perm[i]; perm[i] = perm[j]; perm[j] = tmp; }
-  bool done[3] = {false, false, false};
-  int cur = 0, sel = 0, flashT = 0;
-  bool ok = false, pU = false, pD = false, pO = false, pB = false;
+  for (int i = 3; i > 0; i--) { int j = s % (i + 1); s = s * 13 + 5; int tmp = perm[i]; perm[i] = perm[j]; perm[j] = tmp; }
+  bool linked[4] = { false, false, false, false };
+  int side = 0, sel = 0, hold = -1, flashT = 0, okN = 0; // side : 0 = fils a gauche, 1 = bornes a droite
+  bool ok = false, pU = false, pD = false, pO = false, pB = false, pL2 = false;
   while (!ok) {
     pollKeys();
-    if (kUp && !pU && sel > 0) sel--;
-    if (kDown && !pD && sel < 2) sel++;
+    if (kUp && !pU) sel--;
+    if (kDown && !pD) sel++;
+    if (sel < 0) sel = 3;
+    if (sel > 3) sel = 0;
+    if (kLeft && !pL2 && hold >= 0) { hold = -1; side = 0; waitRelease(); } // on repose le fil : retour aux fils
     if (keyOK && !pO) {
-      if (perm[sel] == cur) { done[cur] = true; while (cur < 3 && done[cur]) cur++; if (cur >= 3) ok = true; }
-      else flashT = 400;
+      if (side == 0) { // saisir un fil non branche
+        if (!linked[sel]) { hold = sel; side = 1; sel = 0; waitRelease(); }
+      } else if (hold >= 0) { // le brancher sur la borne visee
+        if (perm[sel] == hold) { linked[hold] = true; okN++; if (okN >= 4) ok = true; } // couleurs identiques : ca tient
+        else flashT = 400; // borne d'une autre couleur : flash rouge
+        hold = -1; side = 0; waitRelease();
+      }
     }
     if (keyBack && !pB) { waitRelease(); return false; }
-    pU = kUp; pD = kDown; pO = keyOK; pB = keyBack;
-    fRect(40, 40, 240, 130, KDColor::RGB24(0x1B1B25));
-    if (flashT > 0) { flashT -= 33; fRect(40, 40, 240, 3, KDColor::RGB24(0xC51111)); fRect(40, 167, 240, 3, KDColor::RGB24(0xC51111)); }
-    drawTextC(48, "CABLAGE : RELIE LES FILS", C_YEL);
-    for (int w = 0; w < 3; w++) { // fils a gauche (ordre fixe), bornes a droite (melangees)
-      int y = 80 + w * 30;
-      fRect(70, y - 3, 10, 10, KDColor::RGB24(WC[w]));
-      fRect(240, y - 3, 10, 10, KDColor::RGB24(WC[perm[w]]));
-      if (w == sel) drawText(230, y - 3, ">", C_YEL);
-      if (done[w]) auLine(80, y, 240, 80 + perm[w] * 30, KDColor::RGB24(WC[w]));
+    pU = kUp; pD = kDown; pO = keyOK; pB = keyBack; pL2 = kLeft;
+    fRect(40, 36, 240, 140, KDColor::RGB24(0x1B1B25));
+    if (flashT > 0) { flashT -= 33; fRect(40, 36, 240, 3, KDColor::RGB24(0xC51111)); fRect(40, 173, 240, 3, KDColor::RGB24(0xC51111)); }
+    drawTextC(44, "CABLAGE : RELIE LES FILS", C_YEL);
+    for (int w = 0; w < 4; w++) { // fils a gauche (haut vers le bas), bornes de droite (couleurs melangees)
+      int y = 74 + w * 26;
+      int r2 = (side == 1) ? sel : -1; // borne survolee quand on tient un fil
+      fRect(64, y - 4, 12, 12, KDColor::RGB24(WC[w])); // fil gauche
+      fRect(244, y - 4, 12, 12, KDColor::RGB24(WC[perm[w]])); // borne droite
+      if (linked[w]) { auLine(76, y + 2, 244, 74 + perm[w] * 26 + 2, KDColor::RGB24(WC[w])); fCirc(76, y + 2, 3, C_WHT); fCirc(244, 74 + perm[w] * 26 + 2, 3, C_WHT); } // branche : ligne solide + connecteurs
+      if (side == 0 && w == sel) { fRect(56, y - 8, 4, 20, C_YEL); } // curseur fil actif
+      if (side == 1 && w == r2) { fRect(260, y - 8, 4, 20, C_YEL); } // curseur borne visee
     }
-    drawTextC(178, "FLECHES:CHOISIR  OK:BRANCHER", C_GRE);
-    drawTextC(196, "RETOUR:ABANDONNER", C_GRE);
+    if (hold >= 0) { // V5.35 : le fil tenu suit le curseur : on VOIT ou il va se brancher
+      int y1 = 74 + hold * 26 + 2, y2 = 74 + sel * 26 + 2;
+      auLine(76, y1, 244, y2, KDColor::RGB24(WC[hold]));
+      fRect(60, 74 + hold * 26 - 8, 20, 4, C_WHT); // signal blanc sur le fil tenu
+      drawTextC(166, "OK:BRANCHER  GAUCHE:REPOSER", C_GRE);
+    } else {
+      drawTextC(166, "FLECHES:FIL  OK:SAISIR", C_GRE);
+    }
+    char pb2[24]; snprintf(pb2, 24, "BRANCHES : %d/4", okN); drawTextC(184, pb2, okN >= 4 ? C_GREEN : C_WHT);
+    drawTextC(202, "RETOUR:ABANDONNER", C_GRE);
     blit();
     Ion::Timing::msleep(33);
   }
@@ -7400,10 +7418,14 @@ static void amongUsGame() {
 }
 
 
-// ======================= VAMPIRE SURVIVORS MINI (V5.32) ==============
-// Survie : les ennemis arrivent par vagues croissantes, l'arme tire TOUTE
-// SEULE sur le plus proche. Ramasse les ames (XP), choisis tes bonus a
-// chaque niveau, survis le plus longtemps possible. Boss toutes les 60 s.
+// ======================= VAMPIRE SURVIVORS MINI (V5.34) ===============
+// Survie aux vagues : les ames (XP) font monter en niveau, chaque niveau
+// propose 3 ameliorations. 7 stats + 9 POUVOIRS : chaque pouvoir monte
+// jusqu'a NV5 puis gagne sa FORME EPIQUE (effet bonus puissant, confirme
+// sur le web d'apres Vampire Survivors : Bible/Vesperes, Ail/Devoreur,
+// Foudre/Boucle, Couteaux/Mille Lames, Fouet/Larme Cruelle, Haches/
+// Spirale, Croix/Epee Celeste, Eau Benite/La Borra, Feu/Enfer).
+// Ennemis SPECIAUX apres 40 s : RAPIDE, BLINDE, GEANT. OK : NOVA.
 static void vsGame() {
   // ---- donnees des 5 types d'ennemis : chauve-souris, squelette, zombie, fantome, boss
   static const float VS_SPD[5] = { 48.0f, 34.0f, 24.0f, 40.0f, 15.0f };
@@ -7414,20 +7436,37 @@ static void vsGame() {
   static const KDColor VS_COL[5] = { KDColor::RGB24(0xB44BFF), KDColor::RGB24(0xE8E8E8),
                                      KDColor::RGB24(0x3DDC55), KDColor::RGB24(0x35D4E8),
                                      KDColor::RGB24(0xFF3B3B) };
-  static const char *VS_UPN[10] = { "DEGATS +35%", "CADENCE +25%", "VITESSE +15%",
+  static const KDColor VS_MCOL[4] = { KDColor::RGB24(0x000000), C_YEL, KDColor::RGB24(0x8A8A8A), KDColor::RGB24(0xFF6AF0) };
+  // V5.34 : 16 entrees = 7 stats + 9 pouvoirs (NV5 = forme epique)
+  static const char *VS_UPN[16] = { "DEGATS +35%", "CADENCE +25%", "VITESSE +15%",
                                    "PV MAX +25", "+1 PROJECTILE", "AIMANT +40%", "REGEN +0.5/S",
-                                   "ORBES ORBITANTS", "FOUDRE AUTOMATIQUE", "AURA SACREE" };
-  enum { VS_NE = 46, VS_NP = 24, VS_NG = 40 }; // quotas memoire fixes
-  static float ex[VS_NE], ey[VS_NE], ew[VS_NE]; static int ehp[VS_NE]; static uint8_t etp[VS_NE];
-  static float ppx[VS_NP], ppy[VS_NP], pvx[VS_NP], pvy[VS_NP]; static int plife[VS_NP];
+                                   "ORBES ORBITANTS", "FOUDRE AUTOMATIQUE", "AURA SACREE",
+                                   "COUTEAUX", "FOUET", "HACHETTES", "CROIX BOOMERANG",
+                                   "EAU BENITE", "BAGUETTE DE FEU" };
+  static const char *VS_EPN[9] = { "VESPERES IMPIES", "BOUCLE TONNERRE", "DEVOREUR D'AMES",
+                                   "MILLE LAMES", "LARME CRUELLE", "SPIRALE MORTELLE",
+                                   "EPEE CELESTE", "LA BORRA", "FEU DE L'ENFER" };
+  static const char *VS_EPD[9] = { "ORBE : DEGATS X2 ET RAYON +8", "FOUDRE DOUBLE, -1 S RECHARGE",
+                                   "L'AURA TE SOIGNE EN COMBATTANT", "3 COUTEAUX QUI TRANSPERCENT",
+                                   "LE FOUET VOLE 1 PV PAR COUP", "HACHES QUI TOURNENT AUTOUR DE TOI",
+                                   "CROIX : DEGATS X2", "ZONES GEANTES ET DURABLES",
+                                   "LE FEU PERCE TOUT SUR SON PASSAGE" };
+  enum { VS_NE = 46, VS_NP = 30, VS_NG = 40, VS_NZ = 6 }; // quotas memoire fixes
+  static float ex[VS_NE], ey[VS_NE], ew[VS_NE]; static int ehp[VS_NE]; static uint8_t etp[VS_NE], esp[VS_NE];
+  static float ppx[VS_NP], ppy[VS_NP], pvx[VS_NP], pvy[VS_NP]; static int plife[VS_NP], phc[VS_NP]; static uint8_t pw[VS_NP];
   static float gx[VS_NG], gy[VS_NG]; static uint8_t gxp[VS_NG];
+  static float zlx[VS_NZ], zly[VS_NZ], zlt[VS_NZ]; static int zlr[VS_NZ], zld[VS_NZ]; // zones eau benite
   int ne = 0;
   // ---- joueur et stats
   float vpx = SW / 2.0f, vpy = 130.0f;
   int maxHp = 100, hp = 100, lvl = 1, xp = 0, xpNeed = 7, kills = 0, bossN = 0;
   int uDmg = 0, uRate = 0, uSpd = 0, uHp = 0, uMul = 0, uMag = 0, uReg = 0;
-  int uOrb = 0, uFdr = 0, uAura = 0; // V5.33 : pouvoirs (orbes, foudre, aura)
+  int uWl[9]; // V5.34 : niveaux des 9 pouvoirs (orbes, foudre, aura, couteaux, fouet, haches, croix, eau, feu) — NV5 = epique
+  for (int i = 0; i < 9; i++) uWl[i] = 0;
   float orbA = 0.0f, foudT = 0.0f, novaT = 0.0f, novaFxT = 0.0f, foudFxT = 0.0f, foudX = 0.0f, foudY = 0.0f;
+  float knT = 0.0f, whT = 0.0f, axT = 0.0f, crT = 0.0f, waT = 0.0f, fiT = 0.0f; // V5.34 : timers des pouvoirs
+  float whFxT = 0.0f; int whFxDir = 1; // flash du fouet
+  float healT = 0.0f; // V5.34 : timer de soin DEVOREUR D'AMES
   float fireT = 0.0f, invT = 0.0f, regT = 0.0f, gameTime = 0.0f, spawnT = 0.0f, bossMsgT = 0.0f;
   int bossNext = 60;
   bool faceR = true;
@@ -7435,13 +7474,47 @@ static void vsGame() {
   bool prevBk = false, prevOK2 = false;
   int lastMs = (int)Ion::Timing::millis();
   bool dead = false;
+  bool pickChar = true; // V5.35 : perso a choisir au debut et a chaque rejouer
+  static const char *VS_CN[4] = { "GUERRIER", "CHASSEUR", "SORCIERE", "ASSASSIN" };
+  static const char *VS_CD[4] = { "120 PV, TRES SOLIDE", "COMMENCE AUX COUTEAUX", "COMMENCE AU FEU, FRAGILE", "+15% VITESSE PERMANENT" };
+  float chX = -99.0f, chY = -99.0f; bool chOn = false; // V5.35 : coffre lache par le boss
   while (true) { // ================= boucle principale =================
+    if (pickChar) { // ---- V5.35 : choix du perso (bonus de depart differents)
+      pickChar = false;
+      int csel = 0; bool cU = false, cD = false, cOK = false, cB = false;
+      while (true) {
+        pollKeys();
+        if (kUp && !cU && csel > 0) csel--;
+        if (kDown && !cD && csel < 3) csel++;
+        cU = kUp; cD = kDown;
+        if (keyOK && !cOK) { waitRelease(); break; }
+        if (keyBack && !cB) { waitRelease(); return; }
+        cOK = keyOK; cB = keyBack;
+        bgPanel();
+        drawTextC(10, "CHOISIS TON PERSO", C_YEL);
+        for (int i = 0; i < 4; i++) {
+          rRect(SW / 2 - 130, 32 + i * 38, 260, 32, 6, csel == i ? C_YEL : KDColor::RGB24(0x3A3A4A));
+          drawTextC(39 + i * 38, VS_CN[i], csel == i ? C_BLK : C_WHT);
+          drawTextC(55 + i * 38, VS_CD[i], csel == i ? C_BLK : C_GRE);
+        }
+        drawTextC(194, "OK POUR CHOISIR", C_GRE);
+        blit(); Ion::Timing::msleep(30);
+      }
+      maxHp = 100; hp = 100; uSpd = 0;
+      for (int i = 0; i < 9; i++) uWl[i] = 0;
+      if (csel == 0) { maxHp = 120; hp = 120; }
+      else if (csel == 1) { uWl[3] = 1; maxHp = 90; hp = 90; }
+      else if (csel == 2) { uWl[8] = 1; maxHp = 85; hp = 85; }
+      else { uSpd = 1; maxHp = 90; hp = 90; }
+      lastMs = (int)Ion::Timing::millis();
+    }
     int nowMs = (int)Ion::Timing::millis();
     float dt = (nowMs - lastMs) / 1000.0f; lastMs = nowMs;
     if (dt > 0.05f) dt = 0.05f;
     if (dt <= 0.0f) dt = 0.0001f;
     if (!dead) {
       gameTime += dt; invT -= dt; regT += dt; bossMsgT -= dt; orbA += dt * 3.2f; novaT -= dt; novaFxT -= dt; foudFxT -= dt;
+      knT -= dt; whT -= dt; axT -= dt; crT -= dt; waT -= dt; fiT -= dt; whFxT -= dt;
       // ---- deplacement joueur (fleches, vitesse selon bonus)
       float spd = 85.0f * (1.0f + 0.15f * uSpd);
       float dx = (kRight ? 1.0f : 0.0f) - (kLeft ? 1.0f : 0.0f);
@@ -7461,7 +7534,7 @@ static void vsGame() {
         bossNext += 60; bossN++;
         if (ne < VS_NE) { int s = rnd(4); float sx = (s == 0) ? -10.0f : (s == 1) ? SW + 10.0f : (s == 2) ? rnd(SW) * 1.0f : rnd(SW) * 1.0f;
           float sy = (s == 2) ? -10.0f : (s == 3) ? SH + 10.0f : rnd(SH) * 1.0f;
-          ex[ne] = sx; ey[ne] = sy; ew[ne] = 0; etp[ne] = 4; ehp[ne] = VS_HP0[4] + (bossN - 1) * 160; ne++; }
+          ex[ne] = sx; ey[ne] = sy; ew[ne] = 0; etp[ne] = 4; esp[ne] = 0; ehp[ne] = VS_HP0[4] + (bossN - 1) * 160; ne++; }
         bossMsgT = 2.5f;
       }
       spawnT += dt;
@@ -7477,10 +7550,15 @@ static void vsGame() {
           ex[ne] = (s == 0) ? -8.0f : (s == 1) ? SW + 8.0f : (s == 2) ? rnd(SW) * 1.0f : rnd(SW) * 1.0f;
           ey[ne] = (s == 2) ? -8.0f : (s == 3) ? SH + 8.0f : rnd(SH) * 1.0f;
           ew[ne] = rnd(628) / 100.0f; etp[ne] = (uint8_t)t;
-          ehp[ne] = (int)(VS_HP0[t] * (1.0f + gameTime / 55.0f)); ne++;
+          esp[ne] = 0; // V5.34 : ennemis speciaux apres 40 s (RAPIDE, BLINDE, GEANT)
+          if (gameTime > 40 && rnd(100) < 12) esp[ne] = (uint8_t)(1 + rnd(3));
+          ehp[ne] = (int)(VS_HP0[t] * (1.0f + gameTime / 55.0f));
+          if (esp[ne] == 2) ehp[ne] = ehp[ne] * 9 / 5;   // BLINDE : PV presque doubles
+          if (esp[ne] == 3) ehp[ne] = ehp[ne] * 7 / 5;   // GEANT : PV accrus
+          ne++;
         }
       }
-      // ---- tir automatique sur l'ennemi le plus proche
+      // ---- tir automatique sur l'ennemi le plus proche (baguette magique)
       fireT -= dt;
       float fireCd = 0.75f / (1.0f + 0.25f * uRate);
       int dmg = (int)(10 * (1.0f + 0.35f * uDmg));
@@ -7496,33 +7574,128 @@ static void vsGame() {
             for (int j = 0; j < VS_NP; j++) { if (plife[j] <= 0) { slot = j; break; } }
             if (slot < 0) break;
             float a = base + (k - (nproj - 1) / 2.0f) * 0.16f;
-            ppx[slot] = vpx; ppy[slot] = vpy; pvx[slot] = fcosf(a) * 260.0f; pvy[slot] = fsinf(a) * 260.0f; plife[slot] = 130; // 0.65 s
+            ppx[slot] = vpx; ppy[slot] = vpy; pvx[slot] = fcosf(a) * 260.0f; pvy[slot] = fsinf(a) * 260.0f; plife[slot] = 130; pw[slot] = 0; phc[slot] = 0; // 0.65 s
           }
         }
       }
-      // ---- projectiles
+      // ---- V5.34 COUTEAUX : vise l'ennemi le plus proche, tres rapide a haut niveau
+      if (uWl[3] > 0 && knT <= 0.0f && ne > 0) {
+        knT = (uWl[3] >= 5) ? 0.40f : (1.2f - 0.18f * uWl[3]);
+        float best = 1e9f; int bi = -1;
+        for (int i = 0; i < ne; i++) { float ddx = ex[i] - vpx, ddy = ey[i] - vpy; float d2 = ddx * ddx + ddy * ddy; if (d2 < best) { best = d2; bi = i; } }
+        if (bi >= 0) {
+          int nKn = (uWl[3] >= 5) ? 3 : 1; // MILLE LAMES : rafale triple
+          float base = atan2f(ey[bi] - vpy, ex[bi] - vpx);
+          for (int k = 0; k < nKn; k++) {
+            int slot = -1;
+            for (int j = 0; j < VS_NP; j++) { if (plife[j] <= 0) { slot = j; break; } }
+            if (slot < 0) break;
+            float a = base + (k - (nKn - 1) / 2.0f) * 0.22f;
+            ppx[slot] = vpx; ppy[slot] = vpy; pvx[slot] = fcosf(a) * 300.0f; pvy[slot] = fsinf(a) * 300.0f; plife[slot] = 70; pw[slot] = 1; phc[slot] = 0;
+          }
+        }
+      }
+      // ---- V5.34 HACHETTES : lances en cloche (gravite), la SPIRALE epique les fait orbiter
+      if (uWl[5] > 0 && axT <= 0.0f) {
+        axT = 1.6f - 0.2f * uWl[5];
+        int nAx = (uWl[5] >= 3) ? 2 : 1;
+        for (int k = 0; k < nAx; k++) {
+          int slot = -1;
+          for (int j = 0; j < VS_NP; j++) { if (plife[j] <= 0) { slot = j; break; } }
+          if (slot < 0) break;
+          ppx[slot] = vpx; ppy[slot] = vpy; pvx[slot] = (rnd(100) - 50) * 0.8f; pvy[slot] = -170.0f; plife[slot] = 100; pw[slot] = 2; phc[slot] = 0;
+        }
+      }
+      // ---- V5.34 CROIX BOOMERANG : part tout droit puis revient
+      if (uWl[6] > 0 && crT <= 0.0f && ne > 0) {
+        crT = 2.2f - 0.25f * uWl[6];
+        float best = 1e9f; int bi = -1;
+        for (int i = 0; i < ne; i++) { float ddx = ex[i] - vpx, ddy = ey[i] - vpy; float d2 = ddx * ddx + ddy * ddy; if (d2 < best) { best = d2; bi = i; } }
+        if (bi >= 0) {
+          int slot = -1;
+          for (int j = 0; j < VS_NP; j++) { if (plife[j] <= 0) { slot = j; break; } }
+          if (slot >= 0) {
+            float a = atan2f(ey[bi] - vpy, ex[bi] - vpx);
+            ppx[slot] = vpx; ppy[slot] = vpy; pvx[slot] = fcosf(a) * 240.0f; pvy[slot] = fsinf(a) * 240.0f; plife[slot] = 110; pw[slot] = 3; phc[slot] = 0;
+          }
+        }
+      }
+      // ---- V5.34 BAGUETTE DE FEU : gros projectile lent vers un ennemi au hasard
+      if (uWl[8] > 0 && fiT <= 0.0f && ne > 0) {
+        fiT = 3.8f - 0.4f * uWl[8];
+        int bi = rnd(ne);
+        int slot = -1;
+        for (int j = 0; j < VS_NP; j++) { if (plife[j] <= 0) { slot = j; break; } }
+        if (slot >= 0) {
+          float a = atan2f(ey[bi] - vpy, ex[bi] - vpx);
+          ppx[slot] = vpx; ppy[slot] = vpy; pvx[slot] = fcosf(a) * 150.0f; pvy[slot] = fsinf(a) * 150.0f; plife[slot] = 150; pw[slot] = 4; phc[slot] = 0;
+        }
+      }
+      // ---- V5.34 FOUET : coup horizontal devant toi, degats a toute la zone
+      if (uWl[4] > 0 && whT <= 0.0f) {
+        whT = 1.35f - 0.12f * uWl[4];
+        int wdir = faceR ? 1 : -1;
+        int len = 55 + 7 * uWl[4];
+        float x0 = (wdir > 0) ? vpx + 4 : vpx - 4 - len;
+        int wdmg = 12 + 4 * uWl[4];
+        int wHits = 0;
+        for (int j = 0; j < ne; j++) {
+          if (ex[j] >= x0 && ex[j] <= x0 + len && ey[j] >= vpy - 13 && ey[j] <= vpy + 13) { ehp[j] -= wdmg; wHits++; }
+        }
+        if (wHits > 0 && uWl[4] >= 5) { // LARME CRUELLE : le fouet vole la vie
+          hp += wHits; if (hp > maxHp) hp = maxHp;
+        }
+        whFxT = 0.15f; whFxDir = wdir;
+      }
+      // ---- V5.34 EAU BENITE : zone qui brule le sol sous un ennemi
+      if (uWl[7] > 0 && waT <= 0.0f) {
+        waT = 3.6f - 0.35f * uWl[7];
+        int zs = -1;
+        for (int j = 0; j < VS_NZ; j++) { if (zlt[j] <= 0.0f) { zs = j; break; } }
+        if (zs >= 0) {
+          if (ne > 0) { int v = rnd(ne); zlx[zs] = ex[v]; zly[zs] = ey[v]; }
+          else { zlx[zs] = vpx + rnd(120) - 60; zly[zs] = vpy + rnd(120) - 60; }
+          zlt[zs] = (uWl[7] >= 5) ? 4.0f : 2.5f; // LA BORRA : dure plus longtemps
+          zlr[zs] = 16 + 3 * uWl[7] + ((uWl[7] >= 5) ? 10 : 0);
+          zld[zs] = (int)((9 + 3 * uWl[7]) * ((uWl[7] >= 5) ? 1.5f : 1.0f));
+        }
+      }
+      for (int z = 0; z < VS_NZ; z++) { // zones actives : degats par seconde
+        if (zlt[z] <= 0.0f) continue;
+        zlt[z] -= dt;
+        for (int j = 0; j < ne; j++) {
+          float ddx = ex[j] - zlx[z], ddy = ey[j] - zly[z];
+          if (ddx * ddx + ddy * ddy < zlr[z] * zlr[z]) ehp[j] -= (int)(zld[z] * dt + 0.5f);
+        }
+      }
+      // ---- projectiles (5 sortes : baguette 0, couteau 1, hache 2, croix 3, feu 4)
       for (int i = 0; i < VS_NP; i++) {
         if (plife[i] <= 0) continue;
-        plife[i]--; ppx[i] += pvx[i] * dt; ppy[i] += pvy[i] * dt;
-        if (ppx[i] < -4 || ppx[i] > SW + 4 || ppy[i] < -4 || ppy[i] > SH + 4) { plife[i] = 0; continue; }
+        plife[i]--; phc[i]--;
+        if (pw[i] == 2) pvy[i] += 300.0f * dt; // hache : gravite
+        if (pw[i] == 3 && plife[i] < 70) { // croix : ralentit puis revient vers toi
+          pvx[i] *= (1.0f - 2.4f * dt); pvy[i] *= (1.0f - 2.4f * dt);
+          float ddx = vpx - ppx[i], ddy = vpy - ppy[i];
+          float n = sqrtf(ddx * ddx + ddy * ddy); if (n < 1.0f) n = 1.0f;
+          pvx[i] += ddx / n * 500.0f * dt; pvy[i] += ddy / n * 500.0f * dt;
+          if (n < 6.0f) { plife[i] = 0; continue; }
+        }
+        ppx[i] += pvx[i] * dt; ppy[i] += pvy[i] * dt;
+        if (ppx[i] < -6 || ppx[i] > SW + 6 || ppy[i] < -6 || ppy[i] > SH + 6) { plife[i] = 0; continue; }
+        if (phc[i] > 0) continue; // cooldown apres un coup (projectiles qui percent)
         for (int j = 0; j < ne; j++) {
           float ddx = ex[j] - ppx[i], ddy = ey[j] - ppy[i];
-          int rr = VS_RAD[etp[j]] + 2;
+          int rr = VS_RAD[etp[j]] + ((pw[i] == 4) ? 5 : 2);
           if (ddx * ddx + ddy * ddy < rr * rr) {
-            plife[i] = 0; ehp[j] -= dmg;
-            if (ehp[j] <= 0) { // ennemi tue : ame (XP) la ou il est tombe
-              kills++;
-              int gs = -1;
-              for (int g = 0; g < VS_NG; g++) { if (gxp[g] == 0) { gs = g; break; } }
-              if (gs < 0) gs = 0; // plus de place : on ecrase la premiere ame
-              gx[gs] = ex[j]; gy[gs] = ey[j]; gxp[gs] = (uint8_t)VS_XP[etp[j]];
-              if (gxp[gs] == 0) gxp[gs] = 1;
-              if (etp[j] == 4) { hp += 20; if (hp > maxHp) hp = maxHp; } // le boss soigne
-              ne--;
-              ex[j] = ex[ne]; ey[j] = ey[ne]; ehp[j] = ehp[ne]; etp[j] = etp[ne]; ew[j] = ew[ne];
-              j--; if (j < -1) j = -1;
-            }
-            break;
+            int pd = dmg;
+            if (pw[i] == 1) pd = 8 + 3 * uWl[3];
+            if (pw[i] == 2) pd = 20 + 6 * uWl[5];
+            if (pw[i] == 3) pd = (12 + 4 * uWl[6]) * ((uWl[6] >= 5) ? 2 : 1); // EPEE CELESTE : x2
+            if (pw[i] == 4) pd = 26 + 10 * uWl[8];
+            ehp[j] -= pd;
+            bool pierce = (pw[i] == 1 && uWl[3] >= 5) || (pw[i] == 4 && uWl[8] >= 5); // MILLE LAMES / FEU DE L'ENFER
+            if (pierce) phc[i] = 7;
+            else { plife[i] = 0; break; }
           }
         }
       }
@@ -7531,6 +7704,7 @@ static void vsGame() {
         float ddx = vpx - ex[i], ddy = vpy - ey[i];
         float n = sqrtf(ddx * ddx + ddy * ddy); if (n < 1.0f) n = 1.0f;
         float s = VS_SPD[etp[i]];
+        if (esp[i] == 1) s *= 1.4f; // RAPIDE
         if (etp[i] == 0) { // chauve-souris : ondule
           ew[i] += dt * 6.0f;
           float w = fsinf(ew[i]) * 30.0f;
@@ -7538,16 +7712,18 @@ static void vsGame() {
           ey[i] += (ddy / n * s + ddx / n * w) * dt;
         } else { ex[i] += ddx / n * s * dt; ey[i] += ddy / n * s * dt; }
         // contact : degats au joueur (immunite 0.6 s apres un coup)
-        int rr = VS_RAD[etp[i]] + 5;
+        int rr = VS_RAD[etp[i]] + 5 + ((esp[i] == 3) ? 2 : 0);
         ddx = vpx - ex[i]; ddy = vpy - ey[i];
-        if (invT <= 0.0f && ddx * ddx + ddy * ddy < rr * rr) { hp -= VS_DMG[etp[i]]; invT = 0.6f; if (hp <= 0) { hp = 0; dead = true; } }
+        int edmg = VS_DMG[etp[i]] + ((esp[i] == 2) ? 3 : 0) + ((esp[i] == 3) ? 5 : 0);
+        if (invT <= 0.0f && ddx * ddx + ddy * ddy < rr * rr) { hp -= edmg; invT = 0.6f; if (hp <= 0) { hp = 0; dead = true; } }
       }
-      // ---- V5.33 POUVOIRS : orbes qui orbitent (type Bible), aura de contact (Ail), foudre periodique
-      if (uOrb > 0) { // ORBES : cercles blancs autour de toi, blessent au contact
-        float orbDmg = (14.0f + 5.0f * uOrb) * dt;
-        for (int k = 0; k < uOrb; k++) {
-          float a = orbA + k * 6.2831853f / uOrb;
-          float oX = vpx + fcosf(a) * (20.0f + 3.0f * uOrb), oY = vpy + fsinf(a) * (20.0f + 3.0f * uOrb);
+      // ---- POUVOIRS : orbes (Bible), aura (Ail), foudre (Anneau), spirale epique (Haches)
+      if (uWl[0] > 0) { // ORBES : cercles blancs autour de toi, blessent au contact
+        float orbDmg = (14.0f + 5.0f * uWl[0]) * dt * ((uWl[0] >= 5) ? 2.0f : 1.0f); // VESPERES : x2
+        float orbR = 20.0f + 3.0f * uWl[0] + ((uWl[0] >= 5) ? 8.0f : 0.0f);
+        for (int k = 0; k < uWl[0]; k++) {
+          float a = orbA + k * 6.2831853f / uWl[0];
+          float oX = vpx + fcosf(a) * orbR, oY = vpy + fsinf(a) * orbR;
           for (int j = 0; j < ne; j++) {
             float ddx = ex[j] - oX, ddy = ey[j] - oY;
             int rr2 = VS_RAD[etp[j]] + 5;
@@ -7555,36 +7731,57 @@ static void vsGame() {
           }
         }
       }
-      if (uAura > 0) { // AURA : la zone autour de toi brule en continu
-        float auraR = 24.0f + 4.0f * uAura;
-        float auraDmg = (6.0f + 4.0f * uAura) * dt;
+      if (uWl[5] >= 5) { // SPIRALE MORTELLE : les haches epiques tournent autour de toi
+        float axDmg = (20.0f + 6.0f * uWl[5]) * dt * 1.2f;
+        for (int k = 0; k < 3; k++) {
+          float a = orbA * 0.7f + k * 6.2831853f / 3;
+          float oX = vpx + fcosf(a) * (32.0f + 2.0f * uWl[5]), oY = vpy + fsinf(a) * (32.0f + 2.0f * uWl[5]);
+          for (int j = 0; j < ne; j++) {
+            float ddx = ex[j] - oX, ddy = ey[j] - oY;
+            int rr2 = VS_RAD[etp[j]] + 6;
+            if (ddx * ddx + ddy * ddy < rr2 * rr2) ehp[j] -= (int)(axDmg + 0.5f);
+          }
+        }
+      }
+      if (uWl[2] > 0) { // AURA : la zone autour de toi brule en continu
+        float auraR = 24.0f + 4.0f * uWl[2];
+        float auraDmg = (6.0f + 4.0f * uWl[2]) * dt;
+        bool any = false;
         for (int j = 0; j < ne; j++) {
           float ddx = ex[j] - vpx, ddy = ey[j] - vpy;
-          if (ddx * ddx + ddy * ddy < auraR * auraR) ehp[j] -= (int)(auraDmg + 0.5f);
+          if (ddx * ddx + ddy * ddy < auraR * auraR) { ehp[j] -= (int)(auraDmg + 0.5f); any = true; }
+        }
+        if (uWl[2] >= 5 && any) { // DEVOREUR D'AMES : l'aura soigne tant qu'elle brule
+          healT += dt;
+          if (healT >= 2.5f) { healT = 0.0f; hp += 2; if (hp > maxHp) hp = maxHp; }
         }
       }
-      if (uFdr > 0) { // FOUDRE : frappe un ennemi au hasard toutes les ~4 s
+      if (uWl[1] > 0) { // FOUDRE : frappe un (ou deux) ennemi(s) au hasard
         foudT -= dt;
         if (foudT <= 0.0f && ne > 0) {
-          foudT = 4.5f - 0.6f * uFdr;
-          int victim = rnd(ne);
-          ehp[victim] -= 22 + 12 * uFdr;
-          foudX = ex[victim]; foudY = ey[victim]; foudFxT = 0.28f;
+          foudT = 4.5f - 0.6f * uWl[1] - ((uWl[1] >= 5) ? 1.0f : 0.0f); // BOUCLE TONNERRE : -1 s
+          int nZ = (uWl[1] >= 5) ? 2 : 1;
+          for (int z2 = 0; z2 < nZ; z2++) {
+            int victim = rnd(ne);
+            ehp[victim] -= 22 + 12 * uWl[1];
+            if (z2 == 0) { foudX = ex[victim]; foudY = ey[victim]; foudFxT = 0.28f; }
+          }
         }
       }
-      // ---- nettoyage des ennemis tues par les pouvoirs
+      // ---- nettoyage des ennemis tues (toutes sources de degats confondues)
       for (int j = ne - 1; j >= 0; j--) {
-        if (ehp[j] <= 0) {
-          kills++;
-          int gs = -1;
-          for (int g = 0; g < VS_NG; g++) { if (gxp[g] == 0) { gs = g; break; } }
-          if (gs < 0) gs = 0;
-          gx[gs] = ex[j]; gy[gs] = ey[j]; gxp[gs] = (uint8_t)VS_XP[etp[j]];
-          if (gxp[gs] == 0) gxp[gs] = 1;
-          if (etp[j] == 4) { hp += 20; if (hp > maxHp) hp = maxHp; }
-          ne--;
-          ex[j] = ex[ne]; ey[j] = ey[ne]; ehp[j] = ehp[ne]; etp[j] = etp[ne]; ew[j] = ew[ne];
-        }
+        if (ehp[j] > 0) continue;
+        kills++;
+        int gs = -1;
+        for (int g = 0; g < VS_NG; g++) { if (gxp[g] == 0) { gs = g; break; } }
+        if (gs < 0) gs = 0;
+        gx[gs] = ex[j]; gy[gs] = ey[j];
+        gxp[gs] = (uint8_t)(VS_XP[etp[j]] * ((esp[j] == 3) ? 3 : 1)); // GEANT : triple ame
+        if (gxp[gs] == 0) gxp[gs] = 1;
+        if (etp[j] == 4) { hp += 20; if (hp > maxHp) hp = maxHp; } // le boss soigne
+        if (etp[j] == 4) { chOn = true; chX = ex[j]; chY = ey[j]; } // V5.35 : ... et lache un COFFRE
+        ne--;
+        ex[j] = ex[ne]; ey[j] = ey[ne]; ehp[j] = ehp[ne]; etp[j] = etp[ne]; ew[j] = ew[ne]; esp[j] = esp[ne];
       }
       // ---- NOVA active (touche OK) : onde de choc qui blesse et repousse autour de toi
       if (keyOK && !prevOK2 && novaT <= 0.0f) {
@@ -7614,16 +7811,48 @@ static void vsGame() {
         if (d < mag && d > 0.5f) { float pull = 190.0f * dt / (d * 0.05f + 1.0f); if (pull > d) pull = d; gx[i] += ddx / d * pull; gy[i] += ddy / d * pull; d = sqrtf((vpx - gx[i]) * (vpx - gx[i]) + (vpy - gy[i]) * (vpy - gy[i])); }
         if (d < 7.0f) { xp += gxp[i]; gxp[i] = 0; }
       }
-      // ---- level up ?
+      // ---- V5.35 : coffre du boss : le ramasser monte un pouvoir d'un niveau (evolution instantanee si NV5 !)
+      if (chOn) {
+        float cdx = vpx - chX, cdy = vpy - chY;
+        if (cdx * cdx + cdy * cdy < 12.0f * 12.0f) {
+          chOn = false;
+          int cand[9], nc = 0;
+          for (int w = 0; w < 9; w++) { if (uWl[w] < 5) { cand[nc] = w; nc++; } }
+          waitRelease(); bool pOK5 = false;
+          while (true) { // revelation du contenu du coffre
+            pollKeys();
+            if (keyOK && !pOK5) { waitRelease(); break; }
+            pOK5 = keyOK;
+            bgPanel();
+            drawTextC(16, "COFFRE DU BOSS !", C_GOLD);
+            char c1[40];
+            if (nc > 0) {
+              int w = cand[rnd(nc)];
+              uWl[w]++;
+              if (uWl[w] >= 5) { snprintf(c1, 40, "%s EVOLUE !", VS_EPN[w]); drawTextC(48, c1, C_YEL); drawTextC(70, VS_EPD[w], C_GRE); }
+              else { snprintf(c1, 40, "%s : NIVEAU %d", VS_UPN[w + 7], uWl[w]); drawTextC(48, c1, C_WHT); }
+            } else { // tous les pouvoirs sont epiques : petit lot de secours
+              maxHp += 10; hp = maxHp; uDmg++;
+              drawTextC(48, "PV MAX +10, SOIN, +1 DEGATS", C_WHT);
+            }
+            drawTextC(170, "OK POUR CONTINUER", C_GRE);
+            blit(); Ion::Timing::msleep(30);
+          }
+        }
+      }
+      // ---- level up ? (choix de 3 bonus, les pouvoirs montent jusqu'a NV5 = forme epique)
       while (xp >= xpNeed) {
         xp -= xpNeed; lvl++; xpNeed = 4 + lvl * 3;
-        // choix de 3 bonus differents parmi ceux encore disponibles
-        int pool[10], pn = 0; // V5.33 : les pouvoirs (orbes, foudre, aura) entrent dans le tirage
-        for (int i = 0; i < 10; i++) {
-          if (i == 4 && uMul >= 4) continue;   // projectiles : max 5
-          if (i == 7 && uOrb >= 4) continue;   // orbes : max 4
-          if (i == 8 && uFdr >= 3) continue;   // foudre : max 3
-          if (i == 9 && uAura >= 3) continue;  // aura : max 3
+        int pool[16], pn = 0;
+        for (int i = 0; i < 16; i++) {
+          if (i == 0 && uDmg >= 5) continue;
+          if (i == 1 && uRate >= 5) continue;
+          if (i == 2 && uSpd >= 3) continue;
+          if (i == 3 && uHp >= 5) continue;
+          if (i == 4 && uMul >= 4) continue;
+          if (i == 5 && uMag >= 3) continue;
+          if (i == 6 && uReg >= 3) continue;
+          if (i >= 7 && uWl[i - 7] >= 5) continue; // pouvoir deja epique
           pool[pn++] = i;
         }
         int ch[3];
@@ -7646,8 +7875,14 @@ static void vsGame() {
           drawTextC(16, "NIVEAU SUPERIEUR !", C_YEL);
           char lb[24]; snprintf(lb, 24, "NIVEAU %d", lvl); drawTextC(40, lb, C_WHT);
           for (int i = 0; i < nch; i++) {
+            char sbuf[28];
+            if (ch[i] >= 7) { // pouvoir : on affiche le niveau vise
+              int nl = uWl[ch[i] - 7] + 1;
+              if (nl >= 5) snprintf(sbuf, 28, "%s NV5 EPIC !", VS_UPN[ch[i]]);
+              else snprintf(sbuf, 28, "%s NV%d", VS_UPN[ch[i]], nl);
+            } else snprintf(sbuf, 28, "%s", VS_UPN[ch[i]]);
             rRect(SW / 2 - 110, 62 + i * 34, 220, 28, 6, sel == i ? C_YEL : KDColor::RGB24(0x3A3A4A));
-            drawTextC(70 + i * 34, VS_UPN[ch[i]], sel == i ? C_BLK : C_WHT);
+            drawTextC(70 + i * 34, sbuf, sel == i ? C_BLK : C_WHT);
           }
           drawTextC(180, "OK POUR CHOISIR", C_GRE);
           blit(); Ion::Timing::msleep(30);
@@ -7660,9 +7895,24 @@ static void vsGame() {
         else if (c == 4) uMul++;
         else if (c == 5) uMag++;
         else if (c == 6) uReg++;
-        else if (c == 7) uOrb++;
-        else if (c == 8) uFdr++;
-        else uAura++;
+        else { // un pouvoir monte d'un niveau
+          int w = c - 7;
+          uWl[w]++;
+          if (uWl[w] >= 5) { // ---- FORME EPIQUE DEBLOQUEE : petit ecran de revelation
+            waitRelease(); bool pOK3 = false;
+            while (true) {
+              pollKeys();
+              if (keyOK && !pOK3) { waitRelease(); break; }
+              pOK3 = keyOK;
+              bgPanel();
+              drawTextC(14, "FORME EPIQUE !", C_YEL);
+              char e1[40]; snprintf(e1, 40, "%s", VS_EPN[w]); drawTextC(44, e1, C_WHT);
+              char e2[48]; snprintf(e2, 48, "%s", VS_EPD[w]); drawTextC(76, e2, C_GRE);
+              drawTextC(170, "OK POUR CONTINUER", C_GRE);
+              blit(); Ion::Timing::msleep(30);
+            }
+          }
+        }
       }
       // ---- pause (RETOUR)
       if (keyBack && !prevBk) {
@@ -7672,8 +7922,7 @@ static void vsGame() {
           if (keyOK && !pOK3) { waitRelease(); break; }
           if (keyBack && !pBk3) { waitRelease(); return; }
           pOK3 = keyOK; pBk3 = keyBack;
-          bgPanel();
-          drawTextC(60, "PAUSE", C_YEL);
+          bgPanel(); drawTextC(60, "PAUSE", C_YEL);
           drawTextC(100, "OK REPRENDRE", C_WHT);
           drawTextC(130, "RETOUR QUITTER", C_GRE);
           blit(); Ion::Timing::msleep(30);
@@ -7696,40 +7945,62 @@ static void vsGame() {
     char tb[16]; snprintf(tb, 16, "T:%d", (int)gameTime); drawText(148, 10, tb, C_YEL);
     char kb[16]; snprintf(kb, 16, "N%d K%d", lvl, kills); drawText(212, 10, kb, C_WHT);
     if (bossMsgT > 0 && ((int)(bossMsgT * 6) & 1) == 0) drawTextC(28, "UN BOSS ARRIVE !", C_RED);
+    // zones eau benite : flaques bleue qui brulent
+    for (int z = 0; z < VS_NZ; z++) {
+      if (zlt[z] <= 0.0f) continue;
+      fCirc((int)zlx[z], (int)zly[z], zlr[z], KDColor::RGB24(0x22325E));
+      fRing((int)zlx[z], (int)zly[z], zlr[z], KDColor::RGB24(0x4A8AC8));
+      fCirc((int)zlx[z], (int)zly[z], 3, C_CYN);
+    }
     // ennemis
     for (int i = 0; i < ne; i++) {
       int t = etp[i]; KDColor c = VS_COL[t];
+      int rx = (int)ex[i], ry = (int)ey[i];
+      if (esp[i] > 0 && t != 4) fRing(rx, ry, VS_RAD[t] + 3, VS_MCOL[esp[i]]); // V5.34 : halo des ennemis speciaux
       if (t == 4) { // boss : gros cercle, yeux, barre de vie
-        oCirc((int)ex[i], (int)ey[i], 12, c, KDColor::RGB24(0x6D0000));
-        fRect((int)ex[i] - 5, (int)ey[i] - 4, 3, 3, C_WHT); fRect((int)ex[i] + 2, (int)ey[i] - 4, 3, 3, C_WHT);
+        oCirc(rx, ry, 12, c, KDColor::RGB24(0x6D0000));
+        fRect(rx - 5, ry - 4, 3, 3, C_WHT); fRect(rx + 2, ry - 4, 3, 3, C_WHT);
         int bw = ehp[i] * 28 / (VS_HP0[4] + (bossN - 1) * 160);
         if (bw < 0) bw = 0;
         if (bw > 28) bw = 28;
-        fRect((int)ex[i] - 14, (int)ey[i] - 20, 28, 3, KDColor::RGB24(0x3A0A0A));
-        fRect((int)ex[i] - 14, (int)ey[i] - 20, bw, 3, C_RED);
+        fRect(rx - 14, ry - 20, 28, 3, KDColor::RGB24(0x3A0A0A));
+        fRect(rx - 14, ry - 20, bw, 3, C_RED);
       } else if (t == 0) { // chauve-souris : corps + ailes qui battent
-        fRect((int)ex[i] - 7, (int)ey[i] - 2 + ((int)(gameTime * 10) & 1), 4, 2, KDColor::RGB24(0x6A1FA0));
-        fRect((int)ex[i] + 3, (int)ey[i] - 2 - ((int)(gameTime * 10) & 1), 4, 2, KDColor::RGB24(0x6A1FA0));
-        fCirc((int)ex[i], (int)ey[i], 3, c);
+        fRect(rx - 7, ry - 2 + ((int)(gameTime * 10) & 1), 4, 2, KDColor::RGB24(0x6A1FA0));
+        fRect(rx + 3, ry - 2 - ((int)(gameTime * 10) & 1), 4, 2, KDColor::RGB24(0x6A1FA0));
+        fCirc(rx, ry, 3 + ((esp[i] == 3) ? 2 : 0), c);
       } else if (t == 2) { // zombie : cercle + yeux rouges
-        fCirc((int)ex[i], (int)ey[i], 5, c);
-        fRect((int)ex[i] - 3, (int)ey[i] - 2, 2, 2, C_RED); fRect((int)ex[i] + 1, (int)ey[i] - 2, 2, 2, C_RED);
+        fCirc(rx, ry, 5 + ((esp[i] == 3) ? 2 : 0), c);
+        fRect(rx - 3, ry - 2, 2, 2, C_RED); fRect(rx + 1, ry - 2, 2, 2, C_RED);
       } else if (t == 3) { // fantome : cercle + franges
-        fCirc((int)ex[i], (int)ey[i], 4, c);
-        fRect((int)ex[i] - 4, (int)ey[i] + 3, 2, 2, c); fRect((int)ex[i], (int)ey[i] + 4, 2, 2, c); fRect((int)ex[i] + 2, (int)ey[i] + 3, 2, 2, c);
-        fRect((int)ex[i] - 2, (int)ey[i] - 2, 2, 2, KDColor::RGB24(0x0A5A6A));
+        fCirc(rx, ry, 4 + ((esp[i] == 3) ? 2 : 0), c);
+        fRect(rx - 4, ry + 3, 2, 2, c); fRect(rx, ry + 4, 2, 2, c); fRect(rx + 2, ry + 3, 2, 2, c);
+        fRect(rx - 2, ry - 2, 2, 2, KDColor::RGB24(0x0A5A6A));
       } else { // squelette : cercle blanc + yeux noirs
-        fCirc((int)ex[i], (int)ey[i], 4, c);
-        fRect((int)ex[i] - 2, (int)ey[i] - 2, 2, 2, C_BLK); fRect((int)ex[i], (int)ey[i] - 2, 2, 2, C_BLK);
+        fCirc(rx, ry, 4 + ((esp[i] == 3) ? 2 : 0), c);
+        fRect(rx - 2, ry - 2, 2, 2, C_BLK); fRect(rx, ry - 2, 2, 2, C_BLK);
       }
     }
-    // ---- V5.33 : rendu des pouvoirs
-    if (uAura > 0) fRing((int)vpx, (int)vpy, (int)(24.0f + 4.0f * uAura), KDColor::RGB24(0x9ADBA0)); // aura : cercle pale vert
-    if (uOrb > 0) for (int k = 0; k < uOrb; k++) { // orbes : cercles blancs qui tournent
-      float a = orbA + k * 6.2831853f / uOrb;
-      int oX = (int)(vpx + fcosf(a) * (20.0f + 3.0f * uOrb)), oY = (int)(vpy + fsinf(a) * (20.0f + 3.0f * uOrb));
-      fCirc(oX, oY, 4, C_WHT);
+    // ---- rendu des pouvoirs
+    if (uWl[2] > 0) fRing((int)vpx, (int)vpy, (int)(24.0f + 4.0f * uWl[2]), KDColor::RGB24(0x9ADBA0)); // aura : cercle pale vert
+    if (uWl[0] > 0) for (int k = 0; k < uWl[0]; k++) { // orbes : cercles blancs qui tournent
+      float orbR = 20.0f + 3.0f * uWl[0] + ((uWl[0] >= 5) ? 8.0f : 0.0f);
+      float a = orbA + k * 6.2831853f / uWl[0];
+      int oX = (int)(vpx + fcosf(a) * orbR), oY = (int)(vpy + fsinf(a) * orbR);
+      fCirc(oX, oY, (uWl[0] >= 5) ? 5 : 4, (uWl[0] >= 5) ? C_GOLD : C_WHT);
       fCirc(oX - 1, oY - 1, 1, KDColor::RGB24(0xB0B0D0));
+    }
+    if (uWl[5] >= 5) for (int k = 0; k < 3; k++) { // SPIRALE : haches orange en orbite
+      float a = orbA * 0.7f + k * 6.2831853f / 3;
+      int oX = (int)(vpx + fcosf(a) * (32.0f + 2.0f * uWl[5])), oY = (int)(vpy + fsinf(a) * (32.0f + 2.0f * uWl[5]));
+      fCirc(oX, oY, 4, C_ORG); fRect(oX - 1, oY - 4, 2, 3, KDColor::RGB24(0x8A4A10));
+    }
+    if (whFxT > 0.0f) { // fouet : trait horizontal jaune qui claque
+      int len = 55 + 7 * uWl[4];
+      int x0 = (whFxDir > 0) ? (int)vpx + 4 : (int)vpx - 4 - len;
+      fRect(x0, (int)vpy - 2, len, 4, C_YEL);
+      fRect(x0, (int)vpy - 5, len, 1, KDColor::RGB24(0x9A7A00));
+      fRect(x0, (int)vpy + 4, len, 1, KDColor::RGB24(0x9A7A00));
     }
     if (foudFxT > 0.0f) { // foudre : eclaire jaune qui descend + impact
       int bx2 = (int)foudX, by2 = (int)foudY;
@@ -7743,6 +8014,14 @@ static void vsGame() {
       if (nr - 6 > 2) fRing((int)vpx, (int)vpy, nr - 6, KDColor::RGB24(0x9A7A00));
     }
     if (novaT <= 0.0f && (((int)(gameTime * 2) & 1) == 0)) drawText(4, 30, "OK NOVA !", C_YEL); // prete : ca clignote
+    if (chOn) { // V5.35 : coffre du boss : boite doree qui scintille
+      int fx = (int)chX, fy = (int)chY;
+      int gl = (((int)gameTime * 4) & 1);
+      rRect(fx - 6, fy - 4, 12, 9, 2, C_GOLD);
+      fRect(fx - 6, fy - 1, 12, 1, KDColor::RGB24(0x8A6D00));
+      if (gl) px(fx - 4, fy - 6, C_WHT);
+      px(fx + 4, fy + 6, KDColor::RGB24(0xFFE082));
+    }
     // ames (XP) : petites etoiles bleues
     for (int i = 0; i < VS_NG; i++) {
       if (gxp[i] == 0) continue;
@@ -7750,8 +8029,16 @@ static void vsGame() {
       fRect((int)gx[i] - sz, (int)gy[i] - sz, sz * 2, sz * 2, C_CYN);
       px((int)gx[i], (int)gy[i] - sz - 1, C_WHT); px((int)gx[i], (int)gy[i] + sz, C_WHT);
     }
-    // projectiles : eclats jaunes
-    for (int i = 0; i < VS_NP; i++) if (plife[i] > 0) { fRect((int)ppx[i] - 1, (int)ppy[i] - 1, 3, 3, C_YEL); px((int)ppx[i], (int)ppy[i], C_WHT); }
+    // projectiles : eclat selon son type (baguette, couteau, hache, croix, feu)
+    for (int i = 0; i < VS_NP; i++) {
+      if (plife[i] <= 0) continue;
+      int x2 = (int)ppx[i], y2 = (int)ppy[i];
+      if (pw[i] == 0) { fRect(x2 - 1, y2 - 1, 3, 3, C_YEL); px(x2, y2, C_WHT); }
+      else if (pw[i] == 1) { fRect(x2 - 2, y2, 5, 1, C_WHT); px(x2 + 2, y2, C_YEL); } // couteau
+      else if (pw[i] == 2) { fCirc(x2, y2, 3, C_ORG); fRect(x2 - 1, y2 - 3, 2, 2, KDColor::RGB24(0x8A4A10)); } // hache
+      else if (pw[i] == 3) { fRect(x2 - 4, y2 - 1, 9, 2, C_GOLD); fRect(x2 - 1, y2 - 4, 2, 9, C_GOLD); } // croix
+      else { fCirc(x2, y2, 4, KDColor::RGB24(0xFF8327)); fCirc(x2, y2, 2, C_YEL); } // feu
+    }
     // joueur (clignote s'il est blesse) + visee
     bool flash = (invT > 0.0f) && (((int)(invT * 12) & 1) == 0);
     if (!flash) {
@@ -7770,8 +8057,7 @@ static void vsGame() {
       if (recL) vsBestLvl = lvl;
       vsKillsT += kills;
       saveAcc();
-      waitRelease();
-      bool pOK4 = false, pBk4 = false;
+      waitRelease(); bool pOK4 = false, pBk4 = false;
       while (true) {
         pollKeys();
         if (keyOK && !pOK4) { // rejouer
@@ -7779,12 +8065,14 @@ static void vsGame() {
           ne = 0;
           for (int i = 0; i < VS_NG; i++) gxp[i] = 0;
           for (int i = 0; i < VS_NP; i++) plife[i] = 0;
+          for (int i = 0; i < VS_NZ; i++) zlt[i] = 0.0f;
+          for (int i = 0; i < 9; i++) uWl[i] = 0;
           vpx = SW / 2.0f; vpy = 130.0f;
           maxHp = 100; hp = 100; lvl = 1; xp = 0; xpNeed = 7; kills = 0; bossN = 0;
           uDmg = uRate = uSpd = uHp = uMul = uMag = uReg = 0;
-          uOrb = uFdr = uAura = 0;
           fireT = invT = regT = gameTime = spawnT = bossMsgT = 0.0f; bossNext = 60;
-          orbA = foudT = novaT = novaFxT = foudFxT = 0.0f; prevOK2 = false;
+          orbA = foudT = novaT = novaFxT = foudFxT = knT = whT = axT = crT = waT = fiT = whFxT = healT = 0.0f; prevOK2 = false;
+          chOn = false; pickChar = true; // V5.35 : nouveau perso au rejouer, coffre efface
           dead = false; lastMs = (int)Ion::Timing::millis();
           break;
         }
@@ -7809,48 +8097,50 @@ static void vsGame() {
 }
 
 
-// ======================= TOWER DEFENSE MINI (V5.33) ===================
-// 3 CARTES a liberer (pres, grottes, volcan) : survis 20 vagues par carte
-// pour ouvrir la suivante. FLECHES: curseur, OK: menu de la tour (acheter,
-// ameliorer, choisir la SPECIALISATION NV3, vendre), RETOUR: lancer la vague
-// en avance (+15$). Boss toutes les 5 vagues. Les tours tirent seules.
+// ======================= TOWER DEFENSE MINI (V5.34) ===================
+// 5 CARTES a liberer (pres, grottes, volcan, desert, crypte) : survis
+// 20 vagues par carte pour ouvrir la suivante. 5 TOURS dont les V5.34
+// TESLA (arc en chaine) et POISON (degats continus). FLECHES: curseur,
+// OK: menu de la tour (acheter, ameliorer, SPECIALISATION NV3, vendre),
+// RETOUR: lancer la vague en avance (+15$). Boss toutes les 5 vagues.
 static void tdGame() {
   enum { TD_GC = 10, TD_GR = 5, TD_CS = 30, TD_GX = 10, TD_GY = 28 }; // grille 10x5, cases de 30 px
   enum { TD_NE = 30, TD_NP = 40, TD_LASTWAVE = 20 }; // quotas memoire + vague finale
   // ---- V5.33 : 3 cartes, chacune son chemin (le point de depart et la base ne bougent pas)
-  static const int TD_NW[3] = { 7, 7, 8 };
-  static const int TD_WC[3][8] = { { 0, 0, 4, 4, 8, 8, 9, 9 }, { 0, 9, 9, 0, 0, 9, 9, 9 }, { 0, 2, 2, 5, 5, 8, 8, 9 } };
-  static const int TD_WR[3][8] = { { 0, 4, 4, 0, 0, 4, 4, 4 }, { 0, 0, 2, 2, 4, 4, 4, 4 }, { 0, 0, 4, 4, 0, 0, 4, 4 } };
-  static const char *TD_MN[3] = { "LES PRES", "LES GROTTES", "LE VOLCAN" };
-  static const KDColor TD_MPC[3] = { KDColor::RGB24(0x4E4234), KDColor::RGB24(0x4A3A5A), KDColor::RGB24(0x5A2A1A) }; // couleur du chemin
-  static const float TD_MHP[3] = { 1.0f, 1.45f, 2.0f }; // PV ennemis par carte
-  static float tex[TD_NE], tey[TD_NE], tspd[TD_NE], tslw[TD_NE];
+  static const int TD_NW[5] = { 7, 7, 8, 5, 6 };
+  static const int TD_WC[5][8] = { { 0, 0, 4, 4, 8, 8, 9, 9 }, { 0, 9, 9, 0, 0, 9, 9, 9 }, { 0, 2, 2, 5, 5, 8, 8, 9 }, { 0, 0, 4, 4, 9, 0, 0, 0 }, { 0, 9, 9, 0, 0, 6, 0, 0 } };
+  static const int TD_WR[5][8] = { { 0, 4, 4, 0, 0, 4, 4, 4 }, { 0, 0, 2, 2, 4, 4, 4, 4 }, { 0, 0, 4, 4, 0, 0, 4, 4 }, { 0, 4, 4, 0, 0, 0, 0, 0 }, { 0, 0, 4, 4, 2, 2, 0, 0 } };
+  static const char *TD_MN[5] = { "LES PRES", "LES GROTTES", "LE VOLCAN", "LE DESERT", "LA CRYPTE" };
+  static const KDColor TD_MPC[5] = { KDColor::RGB24(0x4E4234), KDColor::RGB24(0x4A3A5A), KDColor::RGB24(0x5A2A1A), KDColor::RGB24(0x6A5A2A), KDColor::RGB24(0x3A2A4A) }; // couleur du chemin
+  static const float TD_MHP[5] = { 1.0f, 1.45f, 2.0f, 2.6f, 3.4f }; // PV ennemis par carte
+  static float tex[TD_NE], tey[TD_NE], tspd[TD_NE], tslw[TD_NE], tdot[TD_NE], tdotD[TD_NE]; // V5.34 : tdot = poison en cours
+  static float zx1[3], zy1[3], zx2[3], zy2[3]; static float zapT = 0.0f; // V5.34 : rendu des arcs tesla
   static int thp[TD_NE], twp[TD_NE]; static uint8_t ttp[TD_NE];
   static float pjx[TD_NP], pjy[TD_NP], pvx2[TD_NP], pvy2[TD_NP];
   static int plife2[TD_NP], psp2[TD_NP], pjd[TD_NP];
   static uint8_t tdT[50], tdL[50], tdS[50]; static float tdCd[50]; // tdS : specialisation NV3 (0=A, 1=B)
   static bool onPath[50]; // cellules occupees par le chemin
-  static const int TD_EHP[4]  = { 30, 18, 90, 380 };   // PV de base : normal, rapide, tank, boss
-  static const int TD_ESP[4]  = { 24, 44, 14, 9 };     // vitesse (px/s)
-  static const int TD_ERW[4]  = { 8, 10, 22, 60 };     // or a la mort
-  static const int TD_ERD[4]  = { 4, 3, 5, 9 };        // rayon
-  static const KDColor TD_ECOL[4] = { KDColor::RGB24(0x3DDC55), KDColor::RGB24(0xFFC928), KDColor::RGB24(0x9A9AA8), KDColor::RGB24(0xB44BFF) };
-  // ---- tours : 1=fleche, 2=canon, 3=glace ; la specialisation NV3 change les regles
-  static const int TD_TPR[4] = { 0, 50, 90, 70 };      // prix d'achat
-  static const int TD_TRG[4] = { 0, 60, 55, 50 };      // portee
-  static const int TD_TDM[4] = { 0, 7, 16, 3 };        // degats de base
-  static const int TD_TDM2[4] = { 0, 5, 9, 2 };       // degats gagnes par niveau
-  static const float TD_TRT[4] = { 0, 0.45f, 1.0f, 0.7f }; // cadence (s)
-  static const KDColor TD_TCOL[4] = { C_WHT, KDColor::RGB24(0x35D4E8), KDColor::RGB24(0xFF8327), KDColor::RGB24(0xA8D8F0) };
-  static const char *TD_TN[4] = { "", "FLECHE", "CANON", "GLACE" };
-  static const char *TD_TDESC[4] = { "", "RAPIDE", "ZONE", "RALENTIT" };
-  static const char *TD_SPN[3][2] = { { "MITRAILLE", "SNIPE" }, { "MORTIER", "BOMBE LOURDE" }, { "POLE NORD", "BROUILLARD" } }; // specialisations NV3
-  static const char *TD_SPD[3][2] = { { "CADENCE X2, -30% DG", "PORTEE+40, +50% DG" }, { "ZONE XXL, +30% RYTHME", "DEGATS X2, PETITE ZONE" }, { "GEL 4 S, DG X2", "GELE EN ZONE" } };
+  static const int TD_EHP[5]  = { 30, 18, 90, 380, 40 };   // PV de base : normal, rapide, tank, boss, volant
+  static const int TD_ESP[5]  = { 24, 44, 14, 9, 34 };     // vitesse (px/s)
+  static const int TD_ERW[5]  = { 8, 10, 22, 60, 20 };     // or a la mort
+  static const int TD_ERD[5]  = { 4, 3, 5, 9, 5 };         // rayon
+  static const KDColor TD_ECOL[5] = { KDColor::RGB24(0x3DDC55), KDColor::RGB24(0xFFC928), KDColor::RGB24(0x9A9AA8), KDColor::RGB24(0xB44BFF), KDColor::RGB24(0xFF6AF0) };
+  // ---- tours V5.34 : 1=fleche, 2=canon, 3=glace, 4=tesla, 5=poison ; la specialisation NV3 change les regles
+  static const int TD_TPR[6] = { 0, 50, 90, 70, 120, 100 };    // prix d'achat
+  static const int TD_TRG[6] = { 0, 60, 55, 50, 45, 65 };     // portee
+  static const int TD_TDM[6] = { 0, 7, 16, 3, 12, 4 };        // degats de base
+  static const int TD_TDM2[6] = { 0, 5, 9, 2, 5, 2 };         // degats gagnes par niveau
+  static const float TD_TRT[6] = { 0, 0.45f, 1.0f, 0.7f, 0.9f, 1.1f }; // cadence (s)
+  static const KDColor TD_TCOL[6] = { C_WHT, KDColor::RGB24(0x35D4E8), KDColor::RGB24(0xFF8327), KDColor::RGB24(0xA8D8F0), KDColor::RGB24(0xB44BFF), KDColor::RGB24(0x76C420) };
+  static const char *TD_TN[6] = { "", "FLECHE", "CANON", "GLACE", "TESLA", "POISON" };
+  static const char *TD_TDESC[6] = { "", "RAPIDE", "ZONE", "RALENTIT", "ARC EN CHAINE", "POISONNE" };
+  static const char *TD_SPN[5][2] = { { "MITRAILLE", "SNIPE" }, { "MORTIER", "BOMBE LOURDE" }, { "POLE NORD", "BROUILLARD" }, { "CHAINE X4", "SURCHARGE" }, { "MIASMES", "VENIN LENT" } }; // specialisations NV3
+  static const char *TD_SPD[5][2] = { { "CADENCE X2, -30% DG", "PORTEE+40, +50% DG" }, { "ZONE XXL, +30% RYTHME", "DEGATS X2, PETITE ZONE" }, { "GEL 4 S, DG X2", "GELE EN ZONE" }, { "TOUCHE 4 CIBLES EN CHAINE", "DEGATS X2 SUR UNE CIBLE" }, { "POISON +50%, PLUS LONG", "POISON + RALENTIT" } };
   waitRelease();
   // ---- V5.33 : ecran de choix de la carte (debloquees selon ta progression sauvegardee)
   int maxMap = tdMapMax;
   if (maxMap < 1) maxMap = 1;
-  if (maxMap > 3) maxMap = 3;
+  if (maxMap > 5) maxMap = 5;
   int map = 1;
   if (maxMap > 1) {
     int sel = maxMap; bool pU2 = false, pD2 = false, pOK2 = false, pBk2 = false;
@@ -7867,8 +8157,8 @@ static void tdGame() {
       drawTextC(42, "SURVIS 20 VAGUES POUR OUVRIR LA SUIVANTE", C_GRE);
       for (int i = 1; i <= maxMap; i++) {
         char sbuf[40]; snprintf(sbuf, 40, "CARTE %d : %s", i, TD_MN[i - 1]);
-        rRect(SW / 2 - 130, 62 + i * 34, 260, 28, 6, sel == i ? C_YEL : KDColor::RGB24(0x3A3A4A));
-        drawTextC(69 + i * 34, sbuf, sel == i ? C_BLK : C_WHT);
+        rRect(SW / 2 - 130, 48 + i * 28, 260, 24, 6, sel == i ? C_YEL : KDColor::RGB24(0x3A3A4A));
+        drawTextC(55 + i * 28, sbuf, sel == i ? C_BLK : C_WHT);
       }
       drawTextC(186, "OK JOUER  RETOUR MENU", C_GRE);
       blit(); Ion::Timing::msleep(30);
@@ -7878,14 +8168,14 @@ static void tdGame() {
   int money = 120, lives = 10, wave = 0, kills = 0, spawnLeft = 0, bossLeft = 0, ne = 0;
   int ccx = 1, ccy = 3;
   float spawnT2 = 0.0f, interT = 6.0f;
-  bool inWave = false, over = false, won = false;
+  bool inWave = false, over = false, won = false, endless = false; // V5.35 : mode infini apres les 20 vagues
   bool pL2 = false, pR2 = false, pU2 = false, pD2 = false, pOK2 = false, pBk2 = false;
   int lastMs = (int)Ion::Timing::millis();
   while (true) { // ================= boucle principale =================
     if (fresh) { // (re)demarrage d'une partie sur la carte choisie
       fresh = false;
       money = 120; lives = 10; wave = 0; kills = 0; spawnLeft = 0; bossLeft = 0; ne = 0;
-      ccx = 1; ccy = 3; spawnT2 = 0.0f; interT = 6.0f; inWave = false; over = false; won = false;
+      ccx = 1; ccy = 3; spawnT2 = 0.0f; interT = 6.0f; inWave = false; over = false; won = false; endless = false;
       for (int i = 0; i < 50; i++) { tdT[i] = 0; tdL[i] = 0; tdS[i] = 0; tdCd[i] = 0.0f; onPath[i] = false; }
       for (int i = 0; i < TD_NP; i++) plife2[i] = 0;
       for (int w = 0; w < TD_NW[map - 1] - 1; w++) { // trace le chemin de la carte : chaque segment marque ses cellules
@@ -7915,7 +8205,7 @@ static void tdGame() {
         while (true) {
           pollKeys();
           if (kUp && !pU2 && sel > 1) sel--;
-          if (kDown && !pD2 && sel < 3) sel++;
+          if (kDown && !pD2 && sel < 5) sel++;
           pU2 = kUp; pD2 = kDown;
           if (keyOK && !pOK2) { // achat si assez d'or
             waitRelease();
@@ -7925,14 +8215,14 @@ static void tdGame() {
           if (keyBack && !pBk2) { waitRelease(); break; }
           pOK2 = keyOK; pBk2 = keyBack;
           bgPanel();
-          drawTextC(16, "CHOISIR UNE TOUR", C_YEL);
-          for (int i = 1; i <= 3; i++) {
+          drawTextC(12, "CHOISIR UNE TOUR", C_YEL);
+          for (int i = 1; i <= 5; i++) {
             char sbuf[40]; snprintf(sbuf, 40, "%s : %s  %d$", TD_TN[i], TD_TDESC[i], TD_TPR[i]);
-            rRect(SW / 2 - 130, 50 + i * 34, 260, 28, 6, sel == i ? C_YEL : KDColor::RGB24(0x3A3A4A));
-            drawTextC(57 + i * 34, sbuf, sel == i ? C_BLK : C_WHT);
+            rRect(SW / 2 - 130, 30 + i * 30, 260, 26, 6, sel == i ? C_YEL : KDColor::RGB24(0x3A3A4A));
+            drawTextC(37 + i * 30, sbuf, sel == i ? C_BLK : C_WHT);
           }
-          char mbuf[24]; snprintf(mbuf, 24, "TON OR : %d$", money); drawTextC(170, mbuf, C_GOLD);
-          drawTextC(192, "OK ACHETER  RETOUR ANNULE", C_GRE);
+          char mbuf[24]; snprintf(mbuf, 24, "TON OR : %d$", money); drawTextC(184, mbuf, C_GOLD);
+          drawTextC(202, "OK ACHETER  RETOUR ANNULE", C_GRE);
           blit(); Ion::Timing::msleep(30);
         }
       } else if (tdT[cur] > 0) { // ---- V5.33 : menu de la tour posee (ameliorer / specialiser NV3 / vendre)
@@ -8026,17 +8316,35 @@ static void tdGame() {
           if (ne < TD_NE) {
             int t = 0;
             if (bossLeft > 0 && spawnLeft < 3) { t = 3; bossLeft--; }
+            else if (wave >= 8 && rnd(100) < 15) t = 4; // V5.35 : ennemi VOLANT, ignore le chemin
             else if (wave >= 4 && rnd(5) == 0) t = 2;
             else if (wave >= 2 && rnd(100) < 35) t = 1;
             tex[ne] = TD_GX + TD_WC[map - 1][0] * TD_CS + TD_CS / 2.0f; tey[ne] = TD_GY + TD_WR[map - 1][0] * TD_CS + TD_CS / 2.0f;
-            twp[ne] = 1; ttp[ne] = (uint8_t)t; tslw[ne] = 0.0f;
+            twp[ne] = 1; ttp[ne] = (uint8_t)t; tslw[ne] = 0.0f; tdot[ne] = 0.0f; tdotD[ne] = 0.0f;
             tspd[ne] = TD_ESP[t] * (1.0f + wave * 0.03f + (map - 1) * 0.08f);
             thp[ne] = (int)(TD_EHP[t] * (1.0f + (wave - 1) * 0.22f) * TD_MHP[map - 1]); ne++;
           }
         }
       }
-      for (int i = 0; i < ne; i++) { // avancee le long du chemin
+      for (int i = 0; i < ne; i++) { // avancee le long du chemin (les VOLANTS foncent droit sur la base)
+        if (tdot[i] > 0.0f) { // V5.34 : le poison fait perdre des PV en continu
+          tdot[i] -= dt;
+          thp[i] -= (int)(tdotD[i] * dt + 0.5f);
+        }
         float sp = tspd[i]; if (tslw[i] > 0.0f) { tslw[i] -= dt; sp *= 0.5f; }
+        if (ttp[i] == 4) { // V5.35 : volant : ligne droite vers la base, hors chemin
+          float bx2 = TD_GX + TD_WC[map - 1][TD_NW[map - 1] - 1] * TD_CS + TD_CS / 2.0f;
+          float by2 = TD_GY + TD_WR[map - 1][TD_NW[map - 1] - 1] * TD_CS + TD_CS / 2.0f;
+          float ddx = bx2 - tex[i], ddy = by2 - tey[i];
+          float n = sqrtf(ddx * ddx + ddy * ddy); if (n < 1.0f) n = 1.0f;
+          if (n <= sp * dt + 1.0f) { // il atteint la base !
+            lives--; tex[i] = bx2; tey[i] = by2;
+            ne--; tex[i] = tex[ne]; tey[i] = tey[ne]; tspd[i] = tspd[ne]; tslw[i] = tslw[ne];
+            thp[i] = thp[ne]; twp[i] = twp[ne]; ttp[i] = ttp[ne]; tdot[i] = tdot[ne]; tdotD[i] = tdotD[ne];
+            i--; if (lives <= 0) { lives = 0; over = true; }
+          } else { tex[i] += ddx / n * sp * dt; tey[i] += ddy / n * sp * dt; }
+          continue;
+        }
         float cx2 = TD_GX + TD_WC[map - 1][twp[i]] * TD_CS + TD_CS / 2.0f;
         float cy2 = TD_GY + TD_WR[map - 1][twp[i]] * TD_CS + TD_CS / 2.0f;
         float ddx = cx2 - tex[i], ddy = cy2 - tey[i];
@@ -8074,14 +8382,34 @@ static void tdGame() {
         }
         if (bi >= 0) {
           tdCd[c] = rate;
-          float a = atan2f(tey[bi] - cy2, tex[bi] - cx2);
-          int slot = -1;
-          for (int j = 0; j < TD_NP; j++) { if (plife2[j] <= 0) { slot = j; break; } }
-          if (slot >= 0) {
-            pjx[slot] = cx2; pjy[slot] = cy2; pvx2[slot] = fcosf(a) * 200.0f; pvy2[slot] = fsinf(a) * 200.0f;
-            plife2[slot] = 90; psp2[slot] = type * 10 + spc + 1; // encode type + specialisation
-            pjd[slot] = dmg;
-            // splash du canon encode dans psp2%10 == 2 ; les valeurs : 20+x = canon A, 21+x... trop fin, on stocke ailleurs :
+          if (type == 4) { // TESLA : arc instantane, rebondit de cible en cible
+            int nCh = (spc == 0) ? 4 : 1; // CHAINE X4
+            int zdm = (spc == 1) ? dmg * 2 : dmg; // SURCHARGE
+            int curT = bi;
+            float lastX = (float)cx2, lastY = (float)cy2;
+            for (int z2 = 0; z2 < nCh && curT >= 0; z2++) {
+              thp[curT] -= zdm;
+              if (z2 < 3) { zx1[z2] = lastX; zy1[z2] = lastY; zx2[z2] = tex[curT]; zy2[z2] = tey[curT]; }
+              lastX = tex[curT]; lastY = tey[curT];
+              int nxt = -1; float bdd = 45.0f * 45.0f;
+              for (int j = 0; j < ne; j++) {
+                if (j == curT) continue;
+                float ddx = tex[j] - lastX, ddy = tey[j] - lastY;
+                float d2 = ddx * ddx + ddy * ddy;
+                if (d2 < bdd) { bdd = d2; nxt = j; }
+              }
+              curT = nxt;
+            }
+            zapT = 0.12f;
+          } else {
+            float a = atan2f(tey[bi] - cy2, tex[bi] - cx2);
+            int slot = -1;
+            for (int j = 0; j < TD_NP; j++) { if (plife2[j] <= 0) { slot = j; break; } }
+            if (slot >= 0) {
+              pjx[slot] = cx2; pjy[slot] = cy2; pvx2[slot] = fcosf(a) * 200.0f; pvy2[slot] = fsinf(a) * 200.0f;
+              plife2[slot] = 90; psp2[slot] = type * 10 + spc + 1; // encode type + specialisation
+              pjd[slot] = dmg;
+            }
           }
         }
       }
@@ -8119,6 +8447,11 @@ static void tdGame() {
               if (ddx * ddx + ddy * ddy < rr * rr) {
                 thp[j] -= pjd[i];
                 if (kind == 2) tslw[j] = ((kind == 2 && spc == 0) ? 4.0f : 2.0f); // glace : 2 s, POLE NORD : 4 s
+                if (kind == 4) { // POISON : degats continus, + ralenti avec VENIN LENT
+                  tdot[j] = (spc == 0) ? 4.5f : 3.0f; // MIASMES : duree accrue
+                  tdotD[j] = (float)pjd[i] * ((spc == 0) ? 1.5f : 1.0f);
+                  if (spc == 1) tslw[j] = 1.2f;
+                }
                 break;
               }
             }
@@ -8135,7 +8468,7 @@ static void tdGame() {
       }
       if (inWave && spawnLeft == 0 && ne == 0) { // vague nettoyee : bonus, ou VICTOIRE a la 20e
         inWave = false; money += 30 + wave * 5;
-        if (wave >= TD_LASTWAVE) { won = true; if (map < 3 && map >= tdMapMax) tdMapMax = map + 1; }
+        if (!endless && wave >= TD_LASTWAVE) { won = true; if (map < 5 && map >= tdMapMax) tdMapMax = map + 1; }
         else interT = 8.0f;
       }
     }
@@ -8145,7 +8478,7 @@ static void tdGame() {
     char mb[24]; snprintf(mb, 24, "OR:%d", money); drawText(8, 8, mb, C_GOLD);
     char lb2[20]; snprintf(lb2, 20, "PV:%d", lives); drawText(90, 8, lb2, C_RED);
     char wb[24]; snprintf(wb, 24, "V%d/20", wave); drawText(150, 8, wb, C_WHT);
-    char mpb[24]; snprintf(mpb, 24, "%d/3", map); drawText(230, 8, mpb, C_GRE);
+    char mpb[24]; snprintf(mpb, 24, "%d/5", map); drawText(230, 8, mpb, C_GRE);
     for (int gy = 0; gy < TD_GR; gy++) for (int gx = 0; gx < TD_GC; gx++) { // grille
       int pxl = TD_GX + gx * TD_CS, pyl = TD_GY + gy * TD_CS;
       bool onP = onPath[gy * TD_GC + gx];
@@ -8171,6 +8504,11 @@ static void tdGame() {
       int t = ttp[i];
       fCirc((int)tex[i], (int)tey[i], TD_ERD[t], TD_ECOL[t]);
       if (t == 3) { fRect((int)tex[i] - 4, (int)tey[i] - 3, 2, 2, C_WHT); fRect((int)tex[i] + 2, (int)tey[i] - 3, 2, 2, C_WHT); }
+      if (t == 4) { // V5.35 : le volant a des ailes qui battent
+        int wf = ((int)Ion::Timing::millis() / 100) & 1;
+        fRect((int)tex[i] - 7, (int)tey[i] - 2 + wf, 4, 2, KDColor::RGB24(0xD0A0E0));
+        fRect((int)tex[i] + 3, (int)tey[i] - 2 - wf, 4, 2, KDColor::RGB24(0xD0A0E0));
+      }
       int maxhp = (int)(TD_EHP[t] * (1.0f + (wave - 1) * 0.22f) * TD_MHP[map - 1]);
       if (maxhp < 1) maxhp = 1;
       int bw = 12 * thp[i] / maxhp;
@@ -8179,10 +8517,18 @@ static void tdGame() {
       fRect((int)tex[i] - 6, (int)tey[i] - TD_ERD[t] - 7, 12, 2, KDColor::RGB24(0x3A0A0A));
       fRect((int)tex[i] - 6, (int)tey[i] - TD_ERD[t] - 7, bw, 2, C_RED);
       if (tslw[i] > 0.0f) fRect((int)tex[i] - 2, (int)tey[i] + TD_ERD[t] + 1, 4, 2, KDColor::RGB24(0xA8D8F0));
+      if (tdot[i] > 0.0f) fRect((int)tex[i] - 2, (int)tey[i] + TD_ERD[t] + 4, 4, 2, KDColor::RGB24(0x76C420)); // V5.34 : empoisonne
+    }
+    if (zapT > 0.0f) { // V5.34 : arcs tesla qui zigzaguent
+      zapT -= 0.016f;
+      for (int z2 = 0; z2 < 3; z2++) {
+        if (zx1[z2] == zx2[z2] && zy1[z2] == zy2[z2]) continue;
+        fRect((int)zx1[z2] - 1, (int)zy1[z2] - 1, (int)zx2[z2] - (int)zx1[z2] + 2, 2, C_YEL);
+      }
     }
     for (int i = 0; i < TD_NP; i++) if (plife2[i] > 0) { // projectiles
       int kind = psp2[i] / 10 - 1;
-      fRect((int)pjx[i] - 1, (int)pjy[i] - 1, 3, 3, kind == 0 ? C_CYN : (kind == 1 ? C_ORG : KDColor::RGB24(0xA8D8F0)));
+      fRect((int)pjx[i] - 1, (int)pjy[i] - 1, 3, 3, kind == 0 ? C_CYN : (kind == 1 ? C_ORG : (kind == 4 ? KDColor::RGB24(0x76C420) : KDColor::RGB24(0xA8D8F0))));
     }
     int ux = TD_GX + ccx * TD_CS, uy = TD_GY + ccy * TD_CS; // curseur
     fRect(ux, uy, TD_CS - 1, 2, C_YEL); fRect(ux, uy + TD_CS - 3, TD_CS - 1, 2, C_YEL);
@@ -8198,11 +8544,13 @@ static void tdGame() {
     char b2[40];
     if (won) snprintf(b2, 40, "CARTE TERMINEE !");
     else if (inWave) {
-      snprintf(b2, 40, "V%d/20 : %d ENNEMIS", wave, spawnLeft + ne);
+      if (endless) snprintf(b2, 40, "INFINI V%d : %d ENNEMIS", wave, spawnLeft + ne);
+      else snprintf(b2, 40, "V%d/20 : %d ENNEMIS", wave, spawnLeft + ne);
       drawText(8, 206, b2, C_YEL);
       if (bossLeft > 0) drawText(240, 206, "BOSS !", KDColor::RGB24(0xB44BFF));
     } else {
-      snprintf(b2, 40, "VAGUE %d/20 DANS %d S", wave + 1, (int)interT + 1);
+      if (endless) snprintf(b2, 40, "VAGUE %d (INFINI) DANS %d S", wave + 1, (int)interT + 1);
+      else snprintf(b2, 40, "VAGUE %d/20 DANS %d S", wave + 1, (int)interT + 1);
       drawText(8, 206, b2, C_GRE);
       drawText(170, 206, "RETOUR: LANCER +15$", C_GOLD);
     }
@@ -8214,18 +8562,22 @@ static void tdGame() {
       tdWavesT += wave; tdKillsT += kills;
       saveAcc();
       waitRelease();
-      bool pOK3 = false, pBk3 = false;
+      bool pOK3 = false, pBk3 = false, pE3 = false;
       while (true) {
         pollKeys();
         if (keyOK && !pOK3) { waitRelease(); fresh = true; break; } // rejouer la carte
+        if (kExp && !pE3 && won) { // V5.35 : MODE INFINI apres la victoire
+          waitRelease(); endless = true; won = false; inWave = false; interT = 6.0f; break;
+        }
         if (keyBack && !pBk3) { waitRelease(); return; }
-        pOK3 = keyOK; pBk3 = keyBack;
+        pOK3 = keyOK; pBk3 = keyBack; pE3 = kExp;
         bgPanel();
         if (won) {
           drawTextC(16, "CARTE REUSSIE !", C_YEL);
           char v1[40]; snprintf(v1, 40, "LES 20 VAGUES DE %s", TD_MN[map - 1]); drawTextC(42, v1, C_WHT);
-          if (map >= 3) drawTextC(62, "TU AS FINI LES 3 CARTES !!", C_YEL);
+          if (map >= 5) drawTextC(62, "TU AS FINI LES 5 CARTES !!", C_YEL);
           else { char v2[40]; snprintf(v2, 40, "CARTE %d DEBLOQUEE !", map + 1); drawTextC(62, v2, C_YEL); }
+          drawTextC(82, "EXE : CONTINUER EN INFINI", C_CYN);
         } else {
           drawTextC(16, "LA BASE EST TOMEE...", C_RED);
           char e1[40]; snprintf(e1, 40, "VAGUE ATTEINTE : %d/20", wave); drawTextC(48, e1, recW ? C_YEL : C_WHT);
@@ -8330,7 +8682,10 @@ static void otDraw(uint8_t *b, int ccx, int ccy, int *pm, int np, const char *ms
   for (int i = 0; i < 64; i++) { if (b[i] == 1) bl++; else if (b[i] == 2) wh++; }
   fRect(0, 208, SW, SH - 208, KDColor::RGB24(0x10161E));
   char sb[32]; snprintf(sb, 32, "NOIR %d - %d BLANC", bl, wh); drawText(6, 212, sb, C_WHT);
-  char tb2[32]; snprintf(tb2, 32, "NV IA %d", lvlN); drawText(240, 212, tb2, C_GRE);
+      char tb2[32]; // V5.34 : en mode 2 joueurs, plus de niveau d'IA
+      if (lvlN > 0) snprintf(tb2, 32, "NV IA %d", lvlN);
+      else snprintf(tb2, 32, "MODE 2 JOUEURS");
+      drawText(240, 212, tb2, C_GRE);
   drawTextC(6, msg, mc); // message d'etat en haut, au-dessus du plateau
   blit();
 }
@@ -8339,7 +8694,29 @@ static void otGame() {
   static const int OT_DEPTHS[3] = { 0, 1, 4 }; // 0 = IA aleatoire (vraiment facile), 1 = gourmande, 4 = rusée
   waitRelease();
   int lvl = 0;
-  { // ---- choix du niveau de l'IA
+  bool duo = false; // V5.34 : mode deux joueurs cote a cote (chacun son tour)
+  { // ---- V5.34 : choix du mode : solo contre l'IA, ou deux joueurs
+    static const char *OT_MD[2] = { "SOLO (CONTRE L'IA)", "DEUX JOUEURS" };
+    int sel = 0; bool pU2 = false, pD2 = false, pOK2 = false, pBk2 = false;
+    while (true) {
+      pollKeys();
+      if (kUp && !pU2 && sel > 0) sel--;
+      if (kDown && !pD2 && sel < 1) sel++;
+      if (keyOK && !pOK2) { waitRelease(); duo = (sel == 1); break; }
+      if (keyBack && !pBk2) { waitRelease(); return; }
+      pU2 = kUp; pD2 = kDown; pOK2 = keyOK; pBk2 = keyBack;
+      bgPanel();
+      drawTextC(16, "OTHELLO : MODE DE JEU", C_YEL);
+      drawTextC(44, "NOIR COMMENCE TOUJOURS", C_GRE);
+      for (int i = 0; i < 2; i++) {
+        rRect(SW / 2 - 130, 80 + i * 40, 260, 30, 6, sel == i ? C_YEL : KDColor::RGB24(0x3A3A4A));
+        drawTextC(87 + i * 40, OT_MD[i], sel == i ? C_BLK : C_WHT);
+      }
+      drawTextC(180, "OK POUR CHOISIR", C_GRE);
+      blit(); Ion::Timing::msleep(30);
+    }
+  }
+  if (!duo) { // ---- choix du niveau de l'IA
     static const char *OT_LV[3] = { "FACILE (IA ALEATOIRE)", "MOYEN", "DIFFICILE (IA LONGUE)" };
     int sel = 1; bool pU2 = false, pD2 = false, pOK2 = false, pBk2 = false;
     while (true) {
@@ -8382,7 +8759,14 @@ static void otGame() {
           bgPanel(); drawTextC(90, "TU PASSES !", C_YEL); drawTextC(120, "OK POUR CONTINUER", C_GRE); blit(); Ion::Timing::msleep(30); }
         turn = 2; continue;
       }
-      if (turn == 2) { // ---- tour de l'IA
+      if (turn == 2 && duo && na == 0) { // V5.34 : en duo, le BLANC passe
+        waitRelease();
+        bool pOK3 = false;
+        while (true) { pollKeys(); if (keyOK && !pOK3) { waitRelease(); break; } pOK3 = keyOK;
+          bgPanel(); drawTextC(90, "LE BLANC PASSE !", C_YEL); drawTextC(120, "OK POUR CONTINUER", C_GRE); blit(); Ion::Timing::msleep(30); }
+        turn = 1; continue;
+      }
+      if (turn == 2 && !duo) { // ---- tour de l'IA
         if (na == 0) { // l'IA passe
           waitRelease();
           bool pOK3 = false;
@@ -8414,23 +8798,26 @@ static void otGame() {
       if (keyBack && !pBk2) { waitRelease(); quit = true; break; } // abandon
       if (keyOK && !pOK2) {
         int idx = ccy * 8 + ccx;
-        if (otLegal(bo, idx, 1) > 0) { otPlay(bo, idx, 1); waitRelease(); turn = 2; }
+        if (otLegal(bo, idx, turn) > 0) { otPlay(bo, idx, turn); waitRelease(); turn = 3 - turn; } // V5.34 : duo = chacun son tour
         // coup illegal : rien, on laisse le curseur la ou il est
       }
       pL2 = kLeft; pR2 = kRight; pU2 = kUp; pD2 = kDown; pOK2 = keyOK; pBk2 = keyBack;
       if (kHome) return;
-      otDraw(bo, ccx, ccy, pm, np, "A TOI DE JOUER", C_YEL, lvl + 1);
+      otDraw(bo, ccx, ccy, (turn == 1) ? pm : ai, (turn == 1) ? np : na,
+             (turn == 1) ? "A TOI DE JOUER" : "AU BLANC DE JOUER", C_YEL, duo ? 0 : lvl + 1);
       Ion::Timing::msleep(30);
     }
     if (quit) return;
     // ---- fin de partie : denombrement et resultat
     int bl = 0, wh = 0;
     for (int i = 0; i < 64; i++) { if (bo[i] == 1) bl++; else if (bo[i] == 2) wh++; }
-    int res = (bl > wh) ? 1 : ((wh > bl) ? 2 : 0); // 1 = joueur gagne, 2 = IA gagne, 0 = nul
-    if (res == 1) otWins++;
-    else if (res == 2) otLosses++;
-    else otDraws++;
-    saveAcc();
+    int res = (bl > wh) ? 1 : ((wh > bl) ? 2 : 0); // 1 = noir gagne, 2 = blanc gagne, 0 = nul
+    if (!duo) { // V5.34 : les stats ne comptent qu'en solo
+      if (res == 1) otWins++;
+      else if (res == 2) otLosses++;
+      else otDraws++;
+      saveAcc();
+    }
     waitRelease();
     bool pOK3 = false, pBk3 = false;
     while (true) {
@@ -8441,11 +8828,14 @@ static void otGame() {
       bgPanel();
       char r1[32];
       snprintf(r1, 32, "NOIR %d - %d BLANC", bl, wh); drawTextC(40, r1, C_WHT);
-      if (res == 1) drawTextC(16, "TU AS GAGNE !", C_YEL);
-      else if (res == 2) drawTextC(16, "L'IA GAGNE...", C_RED);
+      if (res == 1) drawTextC(16, duo ? "LE NOIR GAGNE !" : "TU AS GAGNE !", C_YEL);
+      else if (res == 2) drawTextC(16, duo ? "LE BLANC GAGNE !" : "L'IA GAGNE...", C_RED);
       else drawTextC(16, "MATCH NUL", C_GRE);
-      char r2[40]; snprintf(r2, 40, "VICTOIRES %d DEFAITES %d NULS %d", otWins, otLosses, otDraws);
-      drawTextC(80, r2, C_GRE);
+      if (duo) drawTextC(80, "PARTIE A DEUX, SANS STATS", C_GRE);
+      else {
+        char r2[40]; snprintf(r2, 40, "VICTOIRES %d DEFAITES %d NULS %d", otWins, otLosses, otDraws);
+        drawTextC(80, r2, C_GRE);
+      }
       rRect(SW / 2 - 120, 176, 110, 22, 8, C_YEL); drawText(40 + (110 - textW("REJOUER")) / 2, 182, "REJOUER", C_BLK);
       rRect(SW / 2 + 10, 176, 110, 22, 8, KDColor::RGB24(0x3A3A4A)); drawText(170 + (110 - textW("MENU")) / 2, 182, "MENU", C_WHT);
       blit(); Ion::Timing::msleep(30);
@@ -8453,13 +8843,16 @@ static void otGame() {
   }
 }
 
-// ======================= DONJON ROGUELIKE MINI (V5.32) =================
+// ======================= DONJON ROGUELIKE MINI (V5.34) ================
 // Explore des donjons generes aleatoirement, bats les monstres, ramasse
 // les potions et l'or, descends le plus loin possible. Tour par tour :
-// FLECHES pour bouger/frapper, OK pour boire une potion.
+// FLECHES pour bouger/frapper (attaque a distance selon la classe),
+// OK pour boire une potion. V5.34 : 4 CLASSES (epeiste, magicien,
+// archer, voleur) + tous les 5 etages un MARCHAND sans monstres
+// (l'or sert enfin a quelque chose), boss tous les 7 etages.
 static void dgGame() {
   enum { DGW = 20, DGH = 12, DGT = 16, DGY = 14, DG_NE = 14 }; // grille 20x12, tuiles 16 px
-  static uint8_t dgMap[DGW * DGH]; // 0 sol, 1 mur, 2 escalier, 3 potion, 4 or, 5 epee
+  static uint8_t dgMap[DGW * DGH]; // 0 sol, 1 mur, 2 escalier, 3 potion, 4 or, 5 epee, 6 marchand, 7 coffre
   static int ex2[DG_NE], ey2[DG_NE], ehp2[DG_NE]; static uint8_t etp2[DG_NE];
   static bool seen[DGW * DGH]; static int dist[DGW * DGH];
   static int qx[DGW * DGH], qy[DGW * DGH];
@@ -8467,7 +8860,10 @@ static void dgGame() {
   static const int DG_EAT[4] = { 1, 2, 3, 5 };
   static const char *DG_EN[4] = { "RAT", "GELATINE", "SQUELETTE", "BOSS" };
   static const KDColor DG_ECOL[4] = { KDColor::RGB24(0x9A7A5A), KDColor::RGB24(0x3DDC55), KDColor::RGB24(0xE8E8E8), KDColor::RGB24(0xC51111) };
+  static const char *DG_RN[4] = { "EPEISTE", "MAGICIEN", "ARCHER", "VOLEUR" }; // V5.34 : les classes
+  static const char *DG_RD[4] = { "ATK5 PV24 SOLIDE", "ATK4 PV16 PORTEE 2", "ATK4 PV18 PORTEE 3", "ATK3 PV18 +50%OR ESQUIVE" };
   int px2 = 1, py2 = 1, ne = 0, hp = 20, maxHp = 20, atk = 3, pots = 1, gold = 0, floor = 1, kills = 0;
+  int role = 0, dgRange = 1, dgDodge = 0; // V5.34 : classe, portee d'attaque ; V5.35 : esquive (objets)
   bool newRun = true, genFloor = false;
   waitRelease();
   bool pU2 = false, pD2 = false, pL2 = false, pR2 = false, pOK2 = false, pBk2 = false;
@@ -8478,6 +8874,33 @@ static void dgGame() {
       newRun = false;
       px2 = 1; py2 = 1; ne = 0; hp = 20; maxHp = 20; atk = 3; pots = 1; gold = 0; floor = 1; kills = 0;
       snprintf(log1, 40, "ETAGE 1 : TROUVE L'ESCALIER");
+      // ---- V5.34 : choix de la classe (chaque partie, on repart du bon pied)
+      waitRelease();
+      int rsel = 0; bool pU3 = false, pD3 = false, pOK3 = false, pBk3 = false;
+      while (true) {
+        pollKeys();
+        if (kUp && !pU3 && rsel > 0) rsel--;
+        if (kDown && !pD3 && rsel < 3) rsel++;
+        pU3 = kUp; pD3 = kDown;
+        if (keyOK && !pOK3) { waitRelease(); break; }
+        pOK3 = keyOK; pBk3 = keyBack;
+        bgPanel();
+        drawTextC(10, "CHOISIS TON HEROS", C_YEL);
+        for (int i = 0; i < 4; i++) {
+          rRect(SW / 2 - 130, 32 + i * 38, 260, 32, 6, rsel == i ? C_YEL : KDColor::RGB24(0x3A3A4A));
+          drawTextC(39 + i * 38, DG_RN[i], rsel == i ? C_BLK : C_WHT);
+          drawTextC(55 + i * 38, DG_RD[i], rsel == i ? C_BLK : C_GRE);
+        }
+        drawTextC(194, "OK POUR CHOISIR", C_GRE);
+        blit(); Ion::Timing::msleep(30);
+      }
+      role = rsel;
+      if (role == 0) { maxHp = 24; atk = 5; dgRange = 1; }
+      else if (role == 1) { maxHp = 16; atk = 4; dgRange = 2; }
+      else if (role == 2) { maxHp = 18; atk = 4; dgRange = 3; }
+      else { maxHp = 18; atk = 3; dgRange = 1; }
+      hp = maxHp;
+      dgDodge = (role == 3) ? 25 : 0; // V5.35 : base d'esquive du voleur
       genFloor = true;
     }
     if (genFloor) { // ---- generation de l'etage (murs aleatoires, tout est toujours atteignable)
@@ -8518,8 +8941,21 @@ static void dgGame() {
         int x = 1 + rnd(DGW - 2), y = 1 + rnd(DGH - 2);
         if (seen[y * DGW + x] && dgMap[y * DGW + x] == 0) dgMap[y * DGW + x] = 5;
       }
+      if (rnd(100) < 55) { // V5.35 : un coffre magique, 55% du temps
+        int x = 1 + rnd(DGW - 2), y = 1 + rnd(DGH - 2);
+        if (seen[y * DGW + x] && dgMap[y * DGW + x] == 0) dgMap[y * DGW + x] = 7;
+      }
       int nEn = 3 + floor; if (nEn > DG_NE) nEn = DG_NE; // les monstres
-      if (floor % 5 == 0) nEn = DG_NE; // etage du boss : pack complet, le boss clot la generation
+      bool shopF = (floor % 5 == 0); // V5.34 : tous les 5 etages : boutique, AUCUN monstre
+      if (floor % 7 == 0) nEn = DG_NE; // etage du boss : pack complet
+      if (shopF) {
+        nEn = 0;
+        int guard2 = 0; // le marchand s'installe sur une case atteignable
+        while (guard2++ < 300) {
+          int x = 1 + rnd(DGW - 2), y = 1 + rnd(DGH - 2);
+          if (seen[y * DGW + x] && dgMap[y * DGW + x] == 0) { dgMap[y * DGW + x] = 6; break; }
+        }
+      }
       placed = 0; guard = 0;
       while (placed < nEn && guard++ < 600) {
         int x = 1 + rnd(DGW - 2), y = 1 + rnd(DGH - 2);
@@ -8530,7 +8966,7 @@ static void dgGame() {
         int t = 0;
         if (floor >= 2 && rnd(100) < 40) t = 1;
         if (floor >= 3 && rnd(100) < 25) t = 2;
-        if (floor % 5 == 0 && placed == nEn - 1) t = 3;
+        if (floor % 7 == 0 && placed == nEn - 1) t = 3;
         ex2[placed] = x; ey2[placed] = y; etp2[placed] = (uint8_t)t;
         ehp2[placed] = DG_EHP[t] + (floor - 1) * (t == 3 ? 8 : 1); placed++;
       }
@@ -8552,12 +8988,69 @@ static void dgGame() {
       else snprintf(log1, 40, pots > 0 ? "PV AU MAXIMUM" : "PLUS DE POTIONS !");
       acted = false;
     }
-    if (nx != px2 || ny != py2) { // ---- deplacement ou attaque au corps a corps
+    if (nx != px2 || ny != py2) { // ---- deplacement, attaque au corps a corps ou tir a distance
+      if (dgMap[ny * DGW + nx] == 6) { // V5.34 : le marchand : boutique si on lui parle
+        waitRelease();
+        bool shOK = false, shBk = false, shU = false, shD = false;
+        int ssel = 0;
+        static const char *DG_SH[4] = { "POTION : 12 OR", "+1 ATK : 35 OR", "+5 PV MAX : 30 OR", "SOIN COMPLET : 25 OR" };
+        while (true) {
+          pollKeys();
+          if (kUp && !shU && ssel > 0) ssel--;
+          if (kDown && !shD && ssel < 3) ssel++;
+          shU = kUp; shD = kDown;
+          if (keyOK && !shOK) { // achat si l'or suffit
+            waitRelease();
+            if (ssel == 0 && gold >= 12) { gold -= 12; pots++; snprintf(log1, 40, "ACHAT : +1 POTION"); }
+            else if (ssel == 1 && gold >= 35) { gold -= 35; atk++; snprintf(log1, 40, "ACHAT : ATK %d", atk); }
+            else if (ssel == 2 && gold >= 30) { gold -= 30; maxHp += 5; hp += 5; if (hp > maxHp) hp = maxHp; snprintf(log1, 40, "ACHAT : PV MAX %d", maxHp); }
+            else if (ssel == 3 && gold >= 25) { gold -= 25; hp = maxHp; snprintf(log1, 40, "ACHAT : SOIGNE !"); }
+            else snprintf(log1, 40, "PAS ASSEZ D'OR !");
+          }
+          if (keyBack && !shBk) { waitRelease(); break; }
+          shOK = keyOK; shBk = keyBack;
+          bgPanel();
+          drawTextC(12, "LE MARCHAND", C_YEL);
+          char orb[24]; snprintf(orb, 24, "TON OR : %d", gold); drawTextC(36, orb, C_GOLD);
+          for (int i = 0; i < 4; i++) {
+            rRect(SW / 2 - 130, 54 + i * 32, 260, 26, 6, ssel == i ? C_YEL : KDColor::RGB24(0x3A3A4A));
+            drawTextC(61 + i * 32, DG_SH[i], ssel == i ? C_BLK : C_WHT);
+          }
+          drawTextC(190, "OK ACHETER  RETOUR PARTIR", C_GRE);
+          blit(); Ion::Timing::msleep(30);
+        }
+      } else {
       int tgt = -1;
       for (int i = 0; i < ne; i++) if (ex2[i] == nx && ey2[i] == ny) { tgt = i; break; }
-      if (tgt >= 0) { // frappe le monstre
-        ehp2[tgt] -= atk;
-        snprintf(log1, 40, "TU FRAPPES LE %s : -%d", DG_EN[etp2[tgt]], atk);
+      bool ranged = false;
+      if (tgt < 0 && dgRange > 1) { // V5.34 : tir a distance (magicien, archer) si aligne et sans mur
+        int sxx = (nx > px2) ? 1 : ((nx < px2) ? -1 : 0), syy = (ny > py2) ? 1 : ((ny < py2) ? -1 : 0);
+        for (int step = 1; step <= dgRange; step++) {
+          int cx3 = px2 + sxx * step, cy3 = py2 + syy * step;
+          if (cx3 < 0 || cy3 < 0 || cx3 >= DGW || cy3 >= DGH) break;
+          if (dgMap[cy3 * DGW + cx3] == 1) break; // un mur bloque le tir
+          int rt = -1;
+          for (int i = 0; i < ne; i++) if (ex2[i] == cx3 && ey2[i] == cy3) { rt = i; break; }
+          if (rt >= 0) { tgt = rt; ranged = true; break; } // touche : on reste sur place
+        }
+      }
+      if (tgt >= 0) { // frappe le monstre (de pres ou de loin)
+        int a2 = atk;
+        bool crit = (role == 0 && rnd(100) < 20); // V5.35 : EPEISTE : 20% de coup critique x2
+        if (crit) a2 *= 2;
+        ehp2[tgt] -= a2;
+        if (role == 1 || role == 2) { // V5.35 : MAGICIEN/ARCHER : effet de zone sur un ennemi colle a la cible
+          for (int i2 = 0; i2 < ne; i2++) {
+            if (i2 == tgt || ehp2[i2] <= 0) continue;
+            int ax = (ex2[i2] > ex2[tgt] ? ex2[i2] - ex2[tgt] : ex2[tgt] - ex2[i2]);
+            int ay = (ey2[i2] > ey2[tgt] ? ey2[i2] - ey2[tgt] : ey2[tgt] - ey2[i2]);
+            if (ax + ay == 1) { ehp2[i2] -= (role == 1) ? (atk + 1) / 2 : atk; break; }
+          }
+        }
+        if (role == 3) { gold += 2; } // V5.35 : VOLEUR : il pique 2 or a chaque frappe
+        if (crit) snprintf(log1, 40, "CRITIQUE ! %s : -%d", DG_EN[etp2[tgt]], a2);
+        else if (ranged) snprintf(log1, 40, "TON TIR : LE %s -%d", DG_EN[etp2[tgt]], a2);
+        else snprintf(log1, 40, "TU FRAPPES LE %s : -%d", DG_EN[etp2[tgt]], a2);
         if (ehp2[tgt] <= 0) {
           kills++;
           snprintf(log1, 40, "%s MORT !", DG_EN[etp2[tgt]]);
@@ -8569,14 +9062,24 @@ static void dgGame() {
         if (dgMap[py2 * DGW + px2] == 2) { // ---- ESCALIER : etage suivant
           floor++;
           hp += 4; if (hp > maxHp) hp = maxHp;
-          gold += 10;
+          gold += (role == 3) ? 15 : 10; // le voleur ramasse plus en descandant
           genFloor = true;
-          snprintf(log1, 40, "DESCENTE A L'ETAGE %d", floor);
+          if (floor % 5 == 0) snprintf(log1, 40, "ETAGE %d : MARCHAND !", floor); // V5.34
+          else snprintf(log1, 40, "DESCENTE A L'ETAGE %d", floor);
           pL2 = kLeft; pR2 = kRight; pU2 = kUp; pD2 = kDown; pOK2 = keyOK; pBk2 = keyBack;
           continue; // regenere avant de rendre (saute le tour des monstres)
         } else if (dgMap[py2 * DGW + px2] == 3) { dgMap[py2 * DGW + px2] = 0; pots++; snprintf(log1, 40, "POTION RAMASSEE"); }
-        else if (dgMap[py2 * DGW + px2] == 4) { dgMap[py2 * DGW + px2] = 0; gold += 25; snprintf(log1, 40, "+25 OR !"); }
+        else if (dgMap[py2 * DGW + px2] == 4) { dgMap[py2 * DGW + px2] = 0; gold += (role == 3) ? 38 : 25; snprintf(log1, 40, "+%d OR !", (role == 3) ? 38 : 25); } // voleur : +50%
         else if (dgMap[py2 * DGW + px2] == 5) { dgMap[py2 * DGW + px2] = 0; atk++; snprintf(log1, 40, "EPEE : ATK %d", atk); }
+        else if (dgMap[py2 * DGW + px2] == 7) { // V5.35 : coffre : objet magique au hasard
+          dgMap[py2 * DGW + px2] = 0;
+          int it = rnd(4);
+          if (it == 0) { maxHp += 4; hp += 4; if (hp > maxHp) hp = maxHp; snprintf(log1, 40, "AMULETTE : PV MAX %d", maxHp); }
+          else if (it == 1) { atk++; snprintf(log1, 40, "ANNEAU DE FORCE : ATK %d", atk); }
+          else if (it == 2) { if (dgRange < 3) dgRange++; snprintf(log1, 40, "BATON : PORTEE %d", dgRange); }
+          else { dgDodge += 10; if (dgDodge > 45) dgDodge = 45; snprintf(log1, 40, "BOTTES : ESQUIVE %d%%", dgDodge); }
+        }
+      }
       }
     }
     pL2 = kLeft; pR2 = kRight; pU2 = kUp; pD2 = kDown; pOK2 = keyOK; pBk2 = keyBack;
@@ -8585,9 +9088,13 @@ static void dgGame() {
         int dx = px2 - ex2[i], dy = py2 - ey2[i];
         int adx = (dx > 0) ? dx : -dx, ady = (dy > 0) ? dy : -dy;
         if (adx + ady == 1) { // adjacent : il frappe
+          if (rnd(100) < dgDodge) { // V5.35 : esquive (voleur + bottes)
+            snprintf(log1, 40, "ESQUIVE DU %s !", DG_EN[etp2[i]]);
+          } else {
           hp -= DG_EAT[etp2[i]];
           snprintf(log1, 40, "LE %s TE FRAPPE : -%d", DG_EN[etp2[i]], DG_EAT[etp2[i]]);
           if (hp <= 0) { hp = 0; break; }
+          }
         } else { // sinon il s'approche : axe le plus long d'abord, l'autre en secours
           int sx = (dx > 0) ? 1 : -1, sy = (dy > 0) ? 1 : -1;
           int tx = ex2[i], ty = ey2[i];
@@ -8663,6 +9170,16 @@ static void dgGame() {
       } else if (t == 3) { fRect(pxl + 6, pyl + 3, 4, 6, C_RED); fRect(pxl + 5, pyl + 9, 6, 4, KDColor::RGB24(0xC51111)); px(pxl + 7, pyl + 4, KDColor::RGB24(0xFF9A9A)); } // potion + reflet
       else if (t == 4) { fCirc(pxl + 8, pyl + 8, 4, C_GOLD); px(pxl + 7, pyl + 7, C_WHT); } // or + etincelle
       else if (t == 5) { fRect(pxl + 7, pyl + 2, 2, 9, C_WHT); fRect(pxl + 5, pyl + 9, 6, 2, C_WHT); fRect(pxl + 6, pyl + 11, 4, 3, KDColor::RGB24(0x8A6D00)); } // epee
+      else if (t == 6) { // V5.34 : le marchand encapuchonne et son etal d'or
+        fRect(pxl + 3, pyl + 6, 10, 8, KDColor::RGB24(0x8A5A10));
+        fCirc(pxl + 8, pyl + 5, 4, C_ORG);
+        px(pxl + 7, pyl + 5, C_BLK); px(pxl + 9, pyl + 5, C_BLK);
+        fRect(pxl + 5, pyl + 13, 6, 2, C_GOLD);
+      } else if (t == 7) { // V5.35 : coffre magique
+        rRect(pxl + 3, pyl + 5, 10, 8, 2, KDColor::RGB24(0x6A4A20));
+        fRect(pxl + 3, pyl + 5, 10, 2, C_GOLD);
+        px(pxl + 7, pyl + 9, C_YEL); px(pxl + 8, pyl + 9, C_YEL);
+      }
     }
     for (int i = 0; i < ne; i++) { // monstres V5.33 : contour sombre + detail par type
       int pxl = ex2[i] * DGT, pyl = DGY + ey2[i] * DGT;
@@ -8696,6 +9213,7 @@ static void dgGame() {
     fRect(0, 0, SW, 14, KDColor::RGB24(0x10161E)); fRect(0, 14, SW, 2, C_BTND); // HUD haut
     char h1[48]; snprintf(h1, 48, "PV%d ATK%d P%d OR%d E%d", hp, atk, pots, gold, floor);
     drawText(6, 3, h1, C_WHT);
+    drawText(212, 3, DG_RN[role], C_GRE); // V5.34 : ta classe, toujours visible
     int hbw = 90 * hp / maxHp;
     if (hbw < 0) hbw = 0;
     if (hbw > 90) hbw = 90; // V5.33 : barre PV colorée
@@ -8747,9 +9265,9 @@ static int launcherScreen() {
       drawText(114 + 49 - textW("AMONG") / 2, 30 + 62, "AMONG", C_WHT); drawText(114 + 49 - textW("US") / 2, 30 + 74, "US", C_GRE);
       drawText(222 + 49 - textW("VAMPIRE") / 2, 30 + 62, "VAMPIRE", C_WHT); drawText(222 + 49 - textW("MINI") / 2, 30 + 74, "MINI", C_GRE);
       drawText(6 + 49 - textW("TOWER") / 2, 114 + 62, "TOWER", C_WHT); drawText(6 + 49 - textW("DEF") / 2, 114 + 74, "DEF", C_GRE);
-      drawText(114 + 49 - textW("OTHELLO") / 2, 114 + 62, "OTHELLO", C_WHT); drawText(114 + 49 - textW("VS IA") / 2, 114 + 74, "VS IA", C_GRE);
+      drawText(114 + 49 - textW("OTHELLO") / 2, 114 + 62, "OTHELLO", C_WHT); drawText(114 + 49 - textW("IA OU AMI") / 2, 114 + 74, "IA OU AMI", C_GRE);
       drawText(222 + 49 - textW("DONJON") / 2, 114 + 62, "DONJON", C_WHT); drawText(222 + 49 - textW("ROGUE") / 2, 114 + 74, "ROGUE", C_GRE);
-      static const char *HINTS[6] = { "COMBAT 3V3 ARCADE", "IMPOSTEUR OU EQUIPAGE ?", "SURVIS AUX VAGUES !", "DEFENDS TA BASE !", "REVERSI CONTRE L'IA", "DESCENDS LE DONJON !" };
+      static const char *HINTS[6] = { "COMBAT 3V3 ARCADE", "IMPOSTEUR OU EQUIPAGE ?", "SURVIS AUX VAGUES !", "DEFENDS TA BASE !", "REVERSI VS IA OU AMI", "DESCENDS LE DONJON !" };
       drawTextC(212, HINTS[sel], C_GRE);
     }
     pL = kLeft; pR = kRight; pU = kUp; pD = kDown; pOK = keyOK; pB = keyBack;
