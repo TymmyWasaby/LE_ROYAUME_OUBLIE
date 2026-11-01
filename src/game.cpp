@@ -6180,6 +6180,8 @@ static void drawHat(int x, int y, int h, KDColor c) { // V5.30 : petit chapeau a
     fRect(x - 1, y - 15, 3, 2, c);
   }
 }
+static int auDoorC[8]; static int auDoorN = 0; // V5.30 : portes fermees (overlay, la carte n'est pas modifiee) — V5.32 : deplace ici car auDoorTrapAt l'utilise
+static char auCell(int cx, int cy); // V5.32 : prototype — auDoorTrapAt/auDoorSabotage l'utilisent avant sa definition
 static int auDoorTrapAt(int vcx, int vcy) { // V5.32 IA : ferme les portes AUTOUR de la proie (renvoie 1 si piege pose)
   auDoorN = 0;
   for (int r = 1; r <= 4; r++) {
@@ -6280,7 +6282,6 @@ struct AuBot {
 static AuBot auB[AU_MAXBOT];
 static int auBotN = 5;      // V5.26 : nombre de PNJ (5 a 14, joueurs 6 a 15)
 static float auBodyX[16], auBodyY[16]; static uint32_t auBodyC[16]; static int auBodyN = 0;
-static int auDoorC[8]; static int auDoorN = 0; // V5.30 : portes fermees (overlay, la carte n'est pas modifiee)
 static int auHats[AU_MAXBOT + 1]; // V5.30 : chapeaux (0 rien, 1 cone, 2 casquette, 3 haut-de-forme, 4 antenne)
 static bool auMeImp = false; // V5.32 : le joueur est-il imposteur ? (interdit de voter contre un complice)
 static bool auVotable(int s) { // V5.32 : un imposteur ne peut JAMAIS voter contre son complice
@@ -6581,7 +6582,7 @@ static void amongUsGame() {
   auVitXc = AU_VITX[mapSel]; auVitYc = AU_VITY[mapSel];
   auWallC = AU_WALLC[mapSel]; auFlooC = AU_FLOOC[mapSel];
   auBodyN = 0; auTaskBar = 0.0f;
-  float px = AU_SPAWX[mapSel] * 8.0f + 4.0f, py = AU_SPAWY[mapSel] * 8.0f + 4.0f;
+  float auPx = AU_SPAWX[mapSel] * 8.0f + 4.0f, auPy = AU_SPAWY[mapSel] * 8.0f + 4.0f;
   int playerDir = 1, pTasks[4], pTaskI = 0;
   float pTaskProg = 0.0f, killCd = 6.0f, ventCd = 0.0f, gTime = 0.0f, meetT = 0.0f, introT = 3.0f;
   float lightT = 0.0f, sabCd = 0.0f, fixProg = 0.0f; // V5.26 : sabotage lumieres
@@ -6607,7 +6608,7 @@ static void amongUsGame() {
     b.alive = true; b.panic = false; b.witness = false; b.flee = 0; b.stuck = 0;
     b.accuse = -1; b.ghost = false; b.imp = false; b.taskI = 0; b.t = 0; b.pi = 0; b.pn = 0;
     b.spdF = 0.85f + rnd(4) * 0.1f;
-    b.x = px; b.y = py;
+    b.x = auPx; b.y = auPy;
     for (int tries = 0; tries < 40; tries++) { // spawn sur une case atteignable
       int c = rnd(AUW * AUH);
       if (auPar[c] != -2) { b.x = (c % AUW) * 8.0f + 4.0f; b.y = (c / AUW) * 8.0f + 4.0f; break; }
@@ -6680,14 +6681,14 @@ static void amongUsGame() {
       if (dx < 0) playerDir = 0;
       if (dx > 0) playerDir = 1;
       if (pGhost) { // le fantome traverse TOUT (mais pas la carte)
-        px += dx; py += dy;
-        if (px < 4) px = 4;
-        if (px > AUW * 8 - 4) px = AUW * 8 - 4;
-        if (py < 4) py = 4;
-        if (py > AUH * 8 - 4) py = AUH * 8 - 4;
+        auPx += dx; auPy += dy;
+        if (auPx < 4) auPx = 4;
+        if (auPx > AUW * 8 - 4) auPx = AUW * 8 - 4;
+        if (auPy < 4) auPy = 4;
+        if (auPy > AUH * 8 - 4) auPy = AUH * 8 - 4;
       } else {
-        if (dx && auFree(px + dx, py)) px += dx;
-        if (dy && auFree(px, py + dy)) py += dy;
+        if (dx && auFree(auPx + dx, auPy)) auPx += dx;
+        if (dy && auFree(auPx, auPy + dy)) auPy += dy;
       }
       if (kMinus && !pMn) auZoom = (auZoom < 1.0f) ? 1.0f : 0.5f; // zoom arriere
       // ---- OK : TUER (imposteur), TACHE (equipage), BOUTON D'URGENCE ----
@@ -6697,7 +6698,7 @@ static void amongUsGame() {
             float bd = 1e9; int bi = -1;
             for (int i = 0; i < auBotN; i++) {
               if (!auB[i].alive || auB[i].imp) continue; // V5.28 : JAMAIS son complice imposteur
-              float ddx = auB[i].x - px, ddy = auB[i].y - py;
+              float ddx = auB[i].x - auPx, ddy = auB[i].y - auPy;
               float d2 = ddx * ddx + ddy * ddy;
               if (d2 < bd) { bd = d2; bi = i; }
             }
@@ -6710,9 +6711,9 @@ static void amongUsGame() {
               }
               auKills++; killCd = 10.0f;
               fxT = 0.5f; fxType = 1; fxX = auB[bi].x; fxY = auB[bi].y; // V5.29 : ANIMATION de kill
-              for (int w = 0; w < auBotN; w++) { // TEMOIN a moins de 48 px : il accuse LE KILLEUR
+              for (int w = 0; w < auBotN; w++) { // TEMOIN a moins de 48 auPx : il accuse LE KILLEUR
                 if (!auB[w].alive || auB[w].imp) continue; // V5.28 : un imposteur ne panique JAMAIS
-                float wx = auB[w].x - px, wy = auB[w].y - py;
+                float wx = auB[w].x - auPx, wy = auB[w].y - auPy;
                 if (wx * wx + wy * wy < 48 * 48) { auB[w].witness = true; auB[w].accuse = AU_MAXBOT; auPanicTo(auB[w]); }
               }
               bool anyAlive = false;
@@ -6722,28 +6723,28 @@ static void amongUsGame() {
           }
         } else if (!meImp && pTaskI < 4) { // FAIRE SA TACHE
           float tx = AU_TX[pTasks[pTaskI]] * 8.0f + 4.0f, ty = AU_TY[pTasks[pTaskI]] * 8.0f + 4.0f;
-          float ddx = tx - px, ddy = ty - py;
+          float ddx = tx - auPx, ddy = ty - auPy;
           if (ddx * ddx + ddy * ddy < 13 * 13) {
             if (pTasks[pTaskI] % 3 == 0) { // V5.26 : une tache sur trois = CABLAGE
               if (!pOK && auWiringGame(pTasks[pTaskI])) {
                 pTaskI++; auTaskBar += 1.0f / totalTasks;
-                fxT = 0.45f; fxType = 2; fxX = px; fxY = py; // V5.29 : ANIMATION tache ok
+                fxT = 0.45f; fxType = 2; fxX = auPx; fxY = auPy; // V5.29 : ANIMATION tache ok
               }
             } else {
               pTaskProg += dt / 4.0f;
               if (pTaskProg >= 1.0f) { pTaskProg = 0; pTaskI++; auTaskBar += 1.0f / totalTasks;
-                fxT = 0.45f; fxType = 2; fxX = px; fxY = py; } // V5.29 : ANIMATION tache ok
+                fxT = 0.45f; fxType = 2; fxX = auPx; fxY = auPy; } // V5.29 : ANIMATION tache ok
             }
           } else { pTaskProg = 0; }
         }
         // BOUTON D'URGENCE (equipage vivant, pas en reunion)
         if (!meImp && !pGhost && !pOK && meetT <= 0) {
-          float bdx = auBtnX - px, bdy = auBtnY - py;
+          float bdx = auBtnX - auPx, bdy = auBtnY - auPy;
           if (bdx * bdx + bdy * bdy < 14 * 14) meetT = 12.0f;
         }
         // REPARER LES LUMIERES (salle des vitals) quand sabotage actif
         if (!meImp && !pGhost && lightT > 0) {
-          float fdx = auVitXc * 8.0f + 4.0f - px, fdy = auVitYc * 8.0f + 4.0f - py;
+          float fdx = auVitXc * 8.0f + 4.0f - auPx, fdy = auVitYc * 8.0f + 4.0f - auPy;
           if (fdx * fdx + fdy * fdy < 13 * 13) {
             fixProg += dt / 2.0f;
             if (fixProg >= 1.0f) { fixProg = 0; lightT = 0; }
@@ -6751,8 +6752,8 @@ static void amongUsGame() {
         } else fixProg = 0;
         // V5.30 : reparer l'OXYGENE — 2 POINTS (vitals + bouton), tache a deux par excellence
         if (!meImp && !pGhost && o2T > 0) {
-          float adx = auVitXc * 8.0f + 4.0f - px, ady = auVitYc * 8.0f + 4.0f - py;
-          float bdx2 = auBtnX - px, bdy2 = auBtnY - py;
+          float adx = auVitXc * 8.0f + 4.0f - auPx, ady = auVitYc * 8.0f + 4.0f - auPy;
+          float bdx2 = auBtnX - auPx, bdy2 = auBtnY - auPy;
           if (o2FixA == 0 && adx * adx + ady * ady < 13 * 13) {
             o2ProgA += dt / 2.0f;
             if (o2ProgA >= 1.0f) { o2ProgA = 0; o2FixA = 1; if (o2FixB) o2T = 0; }
@@ -6766,16 +6767,16 @@ static void amongUsGame() {
       if (meImp && !pGhost && kExp && !pExp && ventCd <= 0) {
         for (int i = 0; i < 5; i++) {
           float vx = AU_VX[i] * 8.0f + 4.0f, vy = AU_VY[i] * 8.0f + 4.0f;
-          float ddx = vx - px, ddy = vy - py;
+          float ddx = vx - auPx, ddy = vy - auPy;
           if (ddx * ddx + ddy * ddy < 11 * 11) {
             int j = (i + 1 + rnd(4)) % 5;
-            px = AU_VX[j] * 8.0f + 4.0f; py = AU_VY[j] * 8.0f + 4.0f;
+            auPx = AU_VX[j] * 8.0f + 4.0f; auPy = AU_VY[j] * 8.0f + 4.0f;
             ventCd = 1.2f; break;
           }
         }
       }
       if (!meImp && !pGhost && kExp) { // V5.29 : plus de cameras, EXE = VITALS
-        float vdx = auVitXc * 8.0f + 4.0f - px, vdy = auVitYc * 8.0f + 4.0f - py;
+        float vdx = auVitXc * 8.0f + 4.0f - auPx, vdy = auVitYc * 8.0f + 4.0f - auPy;
         if (vdx * vdx + vdy * vdy < 14 * 14) auVitalsOverlay();
       }
       // ---- DIV : SABOTAGE DES LUMIERES (imposteur joueur) ----
@@ -6786,7 +6787,7 @@ static void amongUsGame() {
           auDoorSabotage();
           for (int k = 0; k < auDoorN; k++) { // jamais sur TA case ni celle d'un bot
             int dc = auDoorC[k];
-            bool onMe = ((int)(px / 8.0f) == dc % AUW && (int)(py / 8.0f) == dc / AUW);
+            bool onMe = ((int)(auPx / 8.0f) == dc % AUW && (int)(auPy / 8.0f) == dc / AUW);
             bool onBot = false;
             for (int q = 0; q < auBotN; q++) if (auB[q].alive && (int)(auB[q].x / 8.0f) == dc % AUW && (int)(auB[q].y / 8.0f) == dc / AUW) onBot = true;
             if (onMe || onBot) { auDoorC[k] = auDoorC[auDoorN - 1]; auDoorN--; k--; }
@@ -6819,7 +6820,7 @@ static void amongUsGame() {
     // ---- qui traine pres de chaque corps ? ----
     for (int c = 0; c < auBodyN; c++)
       for (int v = 0; v <= auBotN; v++) {
-        float vx0 = (v == auBotN) ? px : auB[v].x, vy0 = (v == auBotN) ? py : auB[v].y;
+        float vx0 = (v == auBotN) ? auPx : auB[v].x, vy0 = (v == auBotN) ? auPy : auB[v].y;
         bool va = (v == auBotN) ? !pGhost : auB[v].alive;
         if (!va) continue;
         float ddx = auBodyX[c] - vx0, ddy = auBodyY[c] - vy0;
@@ -6893,7 +6894,7 @@ static void amongUsGame() {
               auDoorSabotage();
               for (int k = 0; k < auDoorN; k++) { // jamais sur TA case ni celle d'un bot
                 int dc = auDoorC[k];
-                bool onMe = ((int)(px / 8.0f) == dc % AUW && (int)(py / 8.0f) == dc / AUW);
+                bool onMe = ((int)(auPx / 8.0f) == dc % AUW && (int)(auPy / 8.0f) == dc / AUW);
                 bool onBot = false;
                 for (int q = 0; q < auBotN; q++) if (auB[q].alive && (int)(auB[q].x / 8.0f) == dc % AUW && (int)(auB[q].y / 8.0f) == dc / AUW) onBot = true;
                 if (onMe || onBot) { auDoorC[k] = auDoorC[auDoorN - 1]; auDoorN--; k--; }
@@ -6931,13 +6932,13 @@ static void amongUsGame() {
               if (d2 < bd) { bd = d2; vic = v; }
             }
             if (!meImp && !pGhost) {
-              float ddx = px - b.x, ddy = py - b.y;
+              float ddx = auPx - b.x, ddy = auPy - b.y;
               float d2 = ddx * ddx + ddy * ddy;
               if (d2 < bd) { bd = d2; vicIsPlayer = true; }
             }
-            // victime isolee (pas de temoin a 70 px) ?
+            // victime isolee (pas de temoin a 70 auPx) ?
             if (vic >= 0 || vicIsPlayer) {
-              float vx0 = vicIsPlayer ? px : auB[vic].x, vy0 = vicIsPlayer ? py : auB[vic].y;
+              float vx0 = vicIsPlayer ? auPx : auB[vic].x, vy0 = vicIsPlayer ? auPy : auB[vic].y;
               bool isolated = true;
               for (int w = 0; w < auBotN; w++) {
                 if (w == i || !auB[w].alive || w == vic) continue;
@@ -6945,7 +6946,7 @@ static void amongUsGame() {
                 if (wx * wx + wy * wy < 70 * 70) { isolated = false; break; }
               }
               if (!vicIsPlayer && !pGhost) {
-                float wx = px - vx0, wy = py - vy0;
+                float wx = auPx - vx0, wy = auPy - vy0;
                 if (wx * wx + wy * wy < 70 * 70) isolated = false;
               }
               if (!vicIsPlayer && !isolated && bd < 50 * 50 && doorT <= 0 && o2T <= 0 && lightT <= 0 && rnd(100) < 25) {
@@ -7164,7 +7165,7 @@ static void amongUsGame() {
     float z = auZoom; // 1.0 ou 0.5 (zoom arriere)
     float ts = 8.0f * z;
     float vpW = SW / z, vpH = (SH - 40) / z;
-    float camX = px - vpW / 2, camY = py - vpH / 2;
+    float camX = auPx - vpW / 2, camY = auPy - vpH / 2;
     if (camX < 0) camX = 0;
     if (camX > AUW * 8 - vpW) camX = AUW * 8 - vpW;
     if (camY < 0) camY = 0;
@@ -7218,9 +7219,9 @@ static void amongUsGame() {
     if (lightT > 0) fRing((int)((auVitXc * 8 + 4 - camX) * z), (int)((auVitYc * 8 + 4 - camY) * z), (int)(8 * z), KDColor::RGB24(0xF07D0D));
     // cadavres (visibles seulement dans le champ de vision)
     for (int c = 0; c < auBodyN; c++) {
-      float d = (auBodyX[c] - px) * (auBodyX[c] - px) + (auBodyY[c] - py) * (auBodyY[c] - py);
+      float d = (auBodyX[c] - auPx) * (auBodyX[c] - auPx) + (auBodyY[c] - auPy) * (auBodyY[c] - auPy);
       if (!pGhost && d > visR * visR) continue;
-      if (!pGhost && !auClearLine(px, py, auBodyX[c], auBodyY[c])) continue;
+      if (!pGhost && !auClearLine(auPx, auPy, auBodyX[c], auBodyY[c])) continue;
       drawCorpse((auBodyX[c] - camX) * z, (auBodyY[c] - camY) * z, KDColor::RGB24(auBodyC[c]));
     }
     // PNJ vivants
@@ -7232,19 +7233,19 @@ static void amongUsGame() {
         }
         continue;
       }
-      float d = (b.x - px) * (b.x - px) + (b.y - py) * (b.y - py);
-      if (!pGhost && (d > visR * visR || !auClearLine(px, py, b.x, b.y))) continue;
+      float d = (b.x - auPx) * (b.x - auPx) + (b.y - auPy) * (b.y - auPy);
+      if (!pGhost && (d > visR * visR || !auClearLine(auPx, auPy, b.x, b.y))) continue;
       drawBean((b.x - camX) * z, (b.y - camY) * z, KDColor::RGB24(AU_BOTC[i]), false);
       drawHat((int)((b.x - camX) * z), (int)((b.y - camY) * z), auHats[i], KDColor::RGB24(AU_BOTC[i])); // V5.30 : son chapeau
       if (meImp && !pGhost && b.imp) fRing((int)((b.x - camX) * z), (int)((b.y - camY) * z + 10), 7, KDColor::RGB24(0xC51111)); // V5.28 : MARQUE DE RECONNAISSANCE entre imposteurs
     }
     // joueur
     if (pGhost) {
-      fRing((int)((px - camX) * z), (int)((py - camY) * z), (int)(6.0f * z), C_WHT);
-      fCirc((int)((px - camX) * z), (int)((py - camY) * z - 2), (int)(2.0f * z), C_WHT);
+      fRing((int)((auPx - camX) * z), (int)((auPy - camY) * z), (int)(6.0f * z), C_WHT);
+      fCirc((int)((auPx - camX) * z), (int)((auPy - camY) * z - 2), (int)(2.0f * z), C_WHT);
     } else {
-      drawBean((px - camX) * z, (py - camY) * z, meImp ? KDColor::RGB24(0xC51111) : KDColor::RGB24(0x38FEDC), (playerDir == 0));
-      drawHat((int)((px - camX) * z), (int)((py - camY) * z), auHats[auBotN], meImp ? KDColor::RGB24(0xC51111) : KDColor::RGB24(0x38FEDC)); // V5.30 : TON chapeau
+      drawBean((auPx - camX) * z, (auPy - camY) * z, meImp ? KDColor::RGB24(0xC51111) : KDColor::RGB24(0x38FEDC), (playerDir == 0));
+      drawHat((int)((auPx - camX) * z), (int)((auPy - camY) * z), auHats[auBotN], meImp ? KDColor::RGB24(0xC51111) : KDColor::RGB24(0x38FEDC)); // V5.30 : TON chapeau
     }
     // ---- POLYGONE DE VISION (raycast arrete par les murs) ----
     if (!pGhost) {
@@ -7254,12 +7255,12 @@ static void amongUsGame() {
         float c = fcosf(ang), s = fsinf(ang);
         float d = 5.0f;
         while (d < visR) {
-          if (auSolidPx(px + c * d, py + s * d)) break;
+          if (auSolidPx(auPx + c * d, auPy + s * d)) break;
           d += 5.0f;
         }
         if (d > visR) d = visR;
-        ray[r][0] = (px + c * d - camX) * z;
-        ray[r][1] = (py + s * d - camY) * z;
+        ray[r][0] = (auPx + c * d - camX) * z;
+        ray[r][1] = (auPy + s * d - camY) * z;
       }
       for (int r = 0; r < 40; r++) {
         int r2 = (r + 1) % 40;
@@ -7290,15 +7291,15 @@ static void amongUsGame() {
     }
     if (!meImp && pTaskI < 4) { // V5.30 : FLECHE jaune qui pointe vers ta tache en cours
       float ttx = AU_TX[pTasks[pTaskI]] * 8.0f + 4.0f, tty = AU_TY[pTasks[pTaskI]] * 8.0f + 4.0f;
-      float adx3 = ttx - px, ady3 = tty - py;
+      float adx3 = ttx - auPx, ady3 = tty - auPy;
       float adl = sqrtf(adx3 * adx3 + ady3 * ady3);
       if (adl > 26.0f) {
         float ux3 = adx3 / adl, uy3 = ady3 / adl;
-        int ax3 = (int)((px - camX + ux3 * 13.0f) * z), ay3 = (int)((py - camY + uy3 * 13.0f) * z);
+        int ax3 = (int)((auPx - camX + ux3 * 13.0f) * z), ay3 = (int)((auPy - camY + uy3 * 13.0f) * z);
         px(ax3, ay3, C_YEL); // pointe
         px(ax3 - (int)(uy3 * 3), ay3 + (int)(ux3 * 3), C_YEL); // ailes de la fleche
         px(ax3 + (int)(uy3 * 3), ay3 - (int)(ux3 * 3), C_YEL);
-        px((int)((px - camX + ux3 * 10.0f) * z), (int)((py - camY + uy3 * 10.0f) * z), C_YEL);
+        px((int)((auPx - camX + ux3 * 10.0f) * z), (int)((auPy - camY + uy3 * 10.0f) * z), C_YEL);
       }
     }
     // ================== HUD ==================
@@ -7315,7 +7316,7 @@ static void amongUsGame() {
     // V5.26b : COMPAS DE TACHE — direction et distance de la prochaine tache
     if (!meImp && pTaskI < 4) {
       int tcx = AU_TX[pTasks[pTaskI]], tcy = AU_TY[pTasks[pTaskI]];
-      int dcx = tcx - (int)(px / 8.0f), dcy = tcy - (int)(py / 8.0f);
+      int dcx = tcx - (int)(auPx / 8.0f), dcy = tcy - (int)(auPy / 8.0f);
       int dist = (int)sqrtf((float)(dcx * dcx + dcy * dcy));
       const char *dir = "O";
       if (dcy <= -abs(dcx) && abs(dcy) > 0) dir = "N";
@@ -7429,7 +7430,8 @@ static void vsGame() {
   while (true) { // ================= boucle principale =================
     int nowMs = (int)Ion::Timing::millis();
     float dt = (nowMs - lastMs) / 1000.0f; lastMs = nowMs;
-    if (dt > 0.05f) dt = 0.05f; if (dt <= 0.0f) dt = 0.0001f;
+    if (dt > 0.05f) dt = 0.05f;
+    if (dt <= 0.0f) dt = 0.0001f;
     if (!dead) {
       gameTime += dt; invT -= dt; regT += dt; bossMsgT -= dt;
       // ---- deplacement joueur (fleches, vitesse selon bonus)
@@ -7440,8 +7442,10 @@ static void vsGame() {
         float n = sqrtf(dx * dx + dy * dy); vpx += dx / n * spd * dt; vpy += dy / n * spd * dt;
         if (dx > 0.0f) faceR = true; else if (dx < 0.0f) faceR = false;
       }
-      if (vpx < 6) vpx = 6; if (vpx > SW - 6) vpx = SW - 6;
-      if (vpy < 34) vpy = 34; if (vpy > SH - 8) vpy = SH - 8;
+      if (vpx < 6) vpx = 6;
+      if (vpx > SW - 6) vpx = SW - 6;
+      if (vpy < 34) vpy = 34;
+      if (vpy > 214) vpy = 214; // l'ecran reel fait 222 px de haut
       // ---- regen
       if (uReg > 0 && regT >= 2.0f) { regT -= 2.0f; hp += uReg; if (hp > maxHp) hp = maxHp; }
       // ---- apparitions (rythme croissant) + boss toutes les 60 s
@@ -7614,7 +7618,9 @@ static void vsGame() {
       if (t == 4) { // boss : gros cercle, yeux, barre de vie
         oCirc((int)ex[i], (int)ey[i], 12, c, KDColor::RGB24(0x6D0000));
         fRect((int)ex[i] - 5, (int)ey[i] - 4, 3, 3, C_WHT); fRect((int)ex[i] + 2, (int)ey[i] - 4, 3, 3, C_WHT);
-        int bw = ehp[i] * 28 / (VS_HP0[4] + (bossN - 1) * 160); if (bw < 0) bw = 0; if (bw > 28) bw = 28;
+        int bw = ehp[i] * 28 / (VS_HP0[4] + (bossN - 1) * 160);
+        if (bw < 0) bw = 0;
+        if (bw > 28) bw = 28;
         fRect((int)ex[i] - 14, (int)ey[i] - 20, 28, 3, KDColor::RGB24(0x3A0A0A));
         fRect((int)ex[i] - 14, (int)ey[i] - 20, bw, 3, C_RED);
       } else if (t == 0) { // chauve-souris : corps + ailes qui battent
@@ -7752,7 +7758,8 @@ static void tdGame() {
     }
     int nowMs = (int)Ion::Timing::millis();
     float dt = (nowMs - lastMs) / 1000.0f; lastMs = nowMs;
-    if (dt > 0.05f) dt = 0.05f; if (dt <= 0.0f) dt = 0.0001f;
+    if (dt > 0.05f) dt = 0.05f;
+    if (dt <= 0.0f) dt = 0.0001f;
     pollKeys();
     // ---- curseur sur la grille
     if (kLeft && !pL2 && ccx > 0) ccx--;
@@ -7940,7 +7947,9 @@ static void tdGame() {
       fCirc((int)tex[i], (int)tey[i], TD_ERD[t], TD_ECOL[t]);
       if (t == 3) { fRect((int)tex[i] - 4, (int)tey[i] - 3, 2, 2, C_WHT); fRect((int)tex[i] + 2, (int)tey[i] - 3, 2, 2, C_WHT); } // yeux du boss
       int maxhp = (int)(TD_EHP[t] * (1.0f + (wave - 1) * 0.25f)); if (maxhp < 1) maxhp = 1;
-      int bw = 12 * thp[i] / maxhp; if (bw < 0) bw = 0; if (bw > 12) bw = 12;
+      int bw = 12 * thp[i] / maxhp;
+      if (bw < 0) bw = 0;
+      if (bw > 12) bw = 12;
       fRect((int)tex[i] - 6, (int)tey[i] - TD_ERD[t] - 7, 12, 2, KDColor::RGB24(0x3A0A0A));
       fRect((int)tex[i] - 6, (int)tey[i] - TD_ERD[t] - 7, bw, 2, C_RED);
       if (tslw[i] > 0.0f) fRect((int)tex[i] - 2, (int)tey[i] + TD_ERD[t] + 1, 4, 2, KDColor::RGB24(0xA8D8F0)); // marqueur de gel
@@ -8427,7 +8436,9 @@ static void dgGame() {
       fCirc(pxl + 8, pyl + 8, r, DG_ECOL[etp2[i]]);
       fRect(pxl + 5, pyl + 6, 2, 2, C_RED); fRect(pxl + 9, pyl + 6, 2, 2, C_RED); // yeux
       int mx = DG_EHP[etp2[i]] + (floor - 1) * (etp2[i] == 3 ? 8 : 1); if (mx < 1) mx = 1;
-      int bw = 10 * ehp2[i] / mx; if (bw < 0) bw = 0; if (bw > 10) bw = 10;
+      int bw = 10 * ehp2[i] / mx;
+      if (bw < 0) bw = 0;
+      if (bw > 10) bw = 10;
       fRect(pxl + 3, pyl + 1, 10, 2, KDColor::RGB24(0x3A0A0A));
       fRect(pxl + 3, pyl + 1, bw, 2, C_RED);
     }
