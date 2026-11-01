@@ -6043,8 +6043,40 @@ static uint32_t auWallC, auFlooC;
 // couleurs des 14 PNJ possibles (le joueur reste cyan/rouge)
 static const uint32_t AU_BOTC[AU_MAXBOT] = {0x132ED1,0x117F2D,0xED54BA,0xF07D0D,0xF5C518,0x3F474E,0xD6E0F0,0x6B2FBB,0x8A5C22,0x50EF39,0x6B2B3C,0x8397A7,0xE8A15C,0xF0E7A8};
 static const char *AU_NAMES[AU_MAXBOT] = {"BLEU","VERT","ROSE","ORANGE","JAUNE","NOIR","BLANC","VIOLET","MARRON","LIME","BORDEAUX","GRIS","PECHE","BANANE"};
+static void drawHat(int x, int y, int h, KDColor c) { // V5.30 : petit chapeau au-dessus du bean
+  if (h == 0) return; // tete nue
+  if (h == 1) { // cone
+    fRect(x - 1, y - 11, 3, 2, c);
+    fRect(x, y - 13, 1, 2, c);
+  } else if (h == 2) { // casquette
+    fRect(x - 5, y - 10, 10, 3, c);
+    fRect(x + 3, y - 8, 3, 2, c);
+  } else if (h == 3) { // haut-de-forme
+    fRect(x - 4, y - 12, 8, 5, c);
+    fRect(x - 6, y - 8, 12, 2, c);
+  } else { // antenne
+    fRect(x, y - 13, 1, 4, C_WHT);
+    fRect(x - 1, y - 15, 3, 2, c);
+  }
+}
+static void auDoorSabotage() { // V5.30 : ferme un point de pincement de couloir (3 cases)
+  auDoorN = 0;
+  for (int tries = 0; tries < 60 && auDoorN == 0; tries++) {
+    int cx = rnd(AUW), cy = rnd(AUH);
+    if (auCell(cx, cy) == '#') continue;
+    int walls = (auCell(cx - 1, cy) == '#') + (auCell(cx + 1, cy) == '#') + (auCell(cx, cy - 1) == '#') + (auCell(cx, cy + 1) == '#');
+    if (walls < 2) continue; // pas un pincement
+    int ddx2 = (auCell(cx - 1, cy) != '#' || auCell(cx + 1, cy) != '#') ? 1 : 0; // axe du couloir
+    int ddy2 = 1 - ddx2;
+    for (int k = -1; k <= 1; k++) {
+      int X = cx + ddx2 * k, Y = cy + ddy2 * k;
+      if (auDoorN < 8 && X >= 0 && Y >= 0 && X < AUW && Y < AUH && auCell(X, Y) != '#') auDoorC[auDoorN++] = Y * AUW + X;
+    }
+  }
+}
 static char auCell(int cx, int cy) {
   if (cx < 0 || cy < 0 || cx >= AUW || cy >= AUH) return '#';
+  if (auDoorN > 0) for (int k = 0; k < auDoorN; k++) if (auDoorC[k] == cy * AUW + cx) return '#'; // V5.30 : porte fermee
   return AU_MAP[cy][cx];
 }
 static bool auSolidPx(float x, float y) { return auCell((int)(x / 8.0f), (int)(y / 8.0f)) == '#'; }
@@ -6106,6 +6138,8 @@ struct AuBot {
 static AuBot auB[AU_MAXBOT];
 static int auBotN = 5;      // V5.26 : nombre de PNJ (5 a 14, joueurs 6 a 15)
 static float auBodyX[16], auBodyY[16]; static uint32_t auBodyC[16]; static int auBodyN = 0;
+static int auDoorC[8]; static int auDoorN = 0; // V5.30 : portes fermees (overlay, la carte n'est pas modifiee)
+static int auHats[AU_MAXBOT + 1]; // V5.30 : chapeaux (0 rien, 1 cone, 2 casquette, 3 haut-de-forme, 4 antenne)
 static int auBodySus[16];
 static float auTaskBar = 0.0f;
 
@@ -6250,6 +6284,7 @@ static int auVoteScreen() { // renvoie l'index du bot vote, -1 si passer/annuler
       int cx = bx + 28, cy = by + 22;
       if (auB[i].alive) {
         drawBean(cx, cy, KDColor::RGB24(AU_BOTC[i]), false);
+        drawHat(cx, cy, auHats[i], KDColor::RGB24(AU_BOTC[i])); // V5.30 : son chapeau sur l'ecran de vote
         drawText(bx + 4, by + 44, AU_NAMES[i], (i == sel) ? C_YEL : KDColor::RGB24(0xD6E0F0));
       } else {
         drawCorpse(cx, cy, KDColor::RGB24(AU_BOTC[i]));
@@ -6382,6 +6417,7 @@ static void amongUsGame() {
   }
   // ================== MISE EN PLACE ==================
   auBotN = players - 1;
+  for (int i = 0; i <= auBotN; i++) auHats[i] = rnd(5); // V5.30 : chapeaux au hasard (le dernier = joueur)
   AU_MAP = AU_MAPS[mapSel];
   AU_TX = AU_TXS[mapSel]; AU_TY = AU_TYS[mapSel];
   AU_VX = AU_VXS[mapSel]; AU_VY = AU_VYS[mapSel];
@@ -6393,6 +6429,8 @@ static void amongUsGame() {
   int playerDir = 1, pTasks[4], pTaskI = 0;
   float pTaskProg = 0.0f, killCd = 6.0f, ventCd = 0.0f, gTime = 0.0f, meetT = 0.0f, introT = 3.0f;
   float lightT = 0.0f, sabCd = 0.0f, fixProg = 0.0f; // V5.26 : sabotage lumieres
+  float doorT = 0.0f, o2T = 0.0f, o2ProgA = 0.0f, o2ProgB = 0.0f; // V5.30 : portes + oxygene
+  int o2FixA = 0, o2FixB = 0; // V5.30 : les 2 points de reparation O2
   bool gSus = false, pGhost = false, doTally = false;
   int myVote = -1;
   float auZoom = 1.0f;
@@ -6468,6 +6506,8 @@ static void amongUsGame() {
     ventCd -= dt; if (ventCd < 0) ventCd = 0;
     sabCd -= dt; if (sabCd < 0) sabCd = 0;
     lightT -= dt; if (lightT < 0) lightT = 0;
+    if (doorT > 0) { doorT -= dt; if (doorT <= 0) { auDoorN = 0; for (int q = 0; q < auBotN; q++) auB[q].pn = 0; } } // V5.30 : les portes se rouvrent, les bots recalculent
+    if (o2T > 0) { o2T -= dt; if (o2T <= 0) { endScreen = 6; } } // V5.30 : oxygene epuise = victoire imposteur
     visR = (lightT > 0 && !meImp) ? (45.0f + ((int)(gTime * 5.0f) % 2) * 10.0f) : 100.0f; // V5.29 : vision qui GRESILLE pendant le sabotage
     if (meetT > 0) { // REUNION : tout le monde attend le vote
       meetT -= dt;
@@ -6552,6 +6592,18 @@ static void amongUsGame() {
             if (fixProg >= 1.0f) { fixProg = 0; lightT = 0; }
           } else fixProg = 0;
         } else fixProg = 0;
+        // V5.30 : reparer l'OXYGENE — 2 POINTS (vitals + bouton), tache a deux par excellence
+        if (!meImp && !pGhost && o2T > 0) {
+          float adx = auVitXc * 8.0f + 4.0f - px, ady = auVitYc * 8.0f + 4.0f - py;
+          float bdx2 = auBtnX - px, bdy2 = auBtnY - py;
+          if (o2FixA == 0 && adx * adx + ady * ady < 13 * 13) {
+            o2ProgA += dt / 2.0f;
+            if (o2ProgA >= 1.0f) { o2ProgA = 0; o2FixA = 1; if (o2FixB) o2T = 0; }
+          } else if (o2FixB == 0 && bdx2 * bdx2 + bdy2 * bdy2 < 13 * 13) {
+            o2ProgB += dt / 2.0f;
+            if (o2ProgB >= 1.0f) { o2ProgB = 0; o2FixB = 1; if (o2FixA) o2T = 0; }
+          }
+        }
       } else fixProg = 0;
       // ---- EXE : ventilos (imposteur) / VITALS (equipage) ----
       if (meImp && !pGhost && kExp && !pExp && ventCd <= 0) {
@@ -6570,7 +6622,23 @@ static void amongUsGame() {
         if (vdx * vdx + vdy * vdy < 14 * 14) auVitalsOverlay();
       }
       // ---- DIV : SABOTAGE DES LUMIERES (imposteur joueur) ----
-      if (meImp && !pGhost && kDiv && !pDiv && sabCd <= 0) { lightT = 25.0f; sabCd = 35.0f; }
+      if (meImp && !pGhost && kDiv && !pDiv && sabCd <= 0) { // V5.30 : sabotage ALEATOIRE parmi 3
+        int s = rnd(3);
+        if (s == 0) lightT = 25.0f;
+        else if (s == 1) {
+          auDoorSabotage();
+          for (int k = 0; k < auDoorN; k++) { // jamais sur TA case ni celle d'un bot
+            int dc = auDoorC[k];
+            bool onMe = ((int)(px / 8.0f) == dc % AUW && (int)(py / 8.0f) == dc / AUW);
+            bool onBot = false;
+            for (int q = 0; q < auBotN; q++) if (auB[q].alive && (int)(auB[q].x / 8.0f) == dc % AUW && (int)(auB[q].y / 8.0f) == dc / AUW) onBot = true;
+            if (onMe || onBot) { auDoorC[k] = auDoorC[auDoorN - 1]; auDoorN--; k--; }
+          }
+          doorT = 10.0f;
+        }
+        else { o2T = 30.0f; o2FixA = 0; o2FixB = 0; }
+        sabCd = 35.0f;
+      }
     }
     // ---- VOTE (+) : reunion instantanee avec interface de choix ----
     if (kPlus && !pPlus && !endScreen && !pGhost) {
@@ -6656,7 +6724,22 @@ static void amongUsGame() {
           else continue;
         }
         if (b.imp && b.flee <= 0) { // IMPOSTEUR PNJ
-          if (lightT <= 0 && rnd(2000) == 0) { lightT = 25.0f; } // sabotage spontane
+          if (lightT <= 0 && doorT <= 0 && o2T <= 0 && rnd(1500) == 0) { // V5.30 : sabotage spontane varie
+            int s = rnd(3);
+            if (s == 0) lightT = 25.0f;
+            else if (s == 1) {
+              auDoorSabotage();
+              for (int k = 0; k < auDoorN; k++) { // jamais sur TA case ni celle d'un bot
+                int dc = auDoorC[k];
+                bool onMe = ((int)(px / 8.0f) == dc % AUW && (int)(py / 8.0f) == dc / AUW);
+                bool onBot = false;
+                for (int q = 0; q < auBotN; q++) if (auB[q].alive && (int)(auB[q].x / 8.0f) == dc % AUW && (int)(auB[q].y / 8.0f) == dc / AUW) onBot = true;
+                if (onMe || onBot) { auDoorC[k] = auDoorC[auDoorN - 1]; auDoorN--; k--; }
+              }
+              doorT = 10.0f;
+            }
+            else { o2T = 30.0f; o2FixA = 0; o2FixB = 0; }
+          }
           if (b.state == 4) { // V5.27 IA : EMBUSCADE en couloir (jamais longtemps)
             if (b.t <= 0) b.state = 0;
             else continue; // immobile, il guette
@@ -6721,6 +6804,25 @@ static void amongUsGame() {
             if (auBotArrived(b)) { b.taskI++; b.t = 2.0f + rnd(30) * 0.1f; }
           }
         } else if (!b.imp) { // CREW PNJ
+          if (o2T > 0) { // V5.30 : OXYGENE — le crew file au point pas encore repare
+            float ax = auVitXc * 8.0f + 4.0f, ay = auVitYc * 8.0f + 4.0f;
+            float tx2 = ax, ty2 = ay;
+            if (o2FixA) { tx2 = auBtnX; ty2 = auBtnY; }
+            else if (!o2FixB) {
+              float dA = (b.x - ax) * (b.x - ax) + (b.y - ay) * (b.y - ay);
+              float dB = (b.x - auBtnX) * (b.x - auBtnX) + (b.y - auBtnY) * (b.y - auBtnY);
+              if (dB < dA) { tx2 = auBtnX; ty2 = auBtnY; }
+            }
+            if (b.pn == 0 || b.dx != tx2 || b.dy != ty2) auSetDest(b, tx2, ty2);
+            if (auBotArrived(b)) {
+              if (tx2 == auBtnX && ty2 == auBtnY) { if (!o2FixB) o2FixB = 1; }
+              else { if (!o2FixA) o2FixA = 1; }
+              if (o2FixA && o2FixB) o2T = 0;
+              b.t = 1.0f;
+            }
+            auBotWalk(b, dt, 55.0f * b.spdF);
+            continue;
+          }
           if (lightT > 0) { // sabotage actif : le plus proche va reparer
             float myd = (b.x - auVitXc * 8.0f - 4.0f) * (b.x - auVitXc * 8.0f - 4.0f) + (b.y - auVitYc * 8.0f - 4.0f) * (b.y - auVitYc * 8.0f - 4.0f);
             bool iGo = true;
@@ -6891,6 +6993,16 @@ static void amongUsGame() {
       fRing((int)((vx + 4) * z), (int)((vy + 4) * z), (int)(5 * z), meImp && !pGhost ? KDColor::RGB24(0x888899) : C_GRE);
     }
     fRect((auBtnX - 6 - camX) * z, (auBtnY - 6 - camY) * z, 12 * z, 12 * z, KDColor::RGB24(0xC51111));
+    for (int k = 0; k < auDoorN; k++) { // V5.30 : PORTES fermees en rouge sombre
+      int dc = auDoorC[k];
+      fRect((int)((dc % AUW) * 8.0f - camX) * z, (int)((dc / AUW) * 8.0f - camY) * z, ts, ts, KDColor::RGB24(0x8A2B2B));
+      fRect((int)((dc % AUW) * 8.0f - camX) * z + z, (int)((dc / AUW) * 8.0f - camY) * z + z, ts - 2 * z, ts - 2 * z, KDColor::RGB24(0xB04040));
+    }
+    if (o2T > 0) { // V5.30 : les 2 points de reparation O2 (vert = repare, rouge clignotant = a faire)
+      KDColor oc = ((int)(gTime * 3.0f)) % 2 ? KDColor::RGB24(0xC51111) : KDColor::RGB24(0x601010);
+      oCirc((int)((auVitXc * 8 + 4 - camX) * z), (int)((auVitYc * 8 + 4 - camY) * z), (int)(6 * z), KDColor::RGB24(o2FixA ? 0x2FBF71 : 0xC51111), o2FixA ? KDColor::RGB24(0x1B4D2E) : oc);
+      oCirc((int)((auBtnX - camX) * z), (int)((auBtnY - camY) * z), (int)(6 * z), KDColor::RGB24(o2FixB ? 0x2FBF71 : 0xC51111), o2FixB ? KDColor::RGB24(0x1B4D2E) : oc);
+    }
     fCirc((int)((auVitXc * 8 + 4 - camX) * z), (int)((auVitYc * 8 + 4 - camY) * z), (int)(5 * z), KDColor::RGB24(0x38FEDC));
     if (lightT > 0) fRing((int)((auVitXc * 8 + 4 - camX) * z), (int)((auVitYc * 8 + 4 - camY) * z), (int)(8 * z), KDColor::RGB24(0xF07D0D));
     // cadavres (visibles seulement dans le champ de vision)
@@ -6912,6 +7024,7 @@ static void amongUsGame() {
       float d = (b.x - px) * (b.x - px) + (b.y - py) * (b.y - py);
       if (!pGhost && (d > visR * visR || !auClearLine(px, py, b.x, b.y))) continue;
       drawBean((b.x - camX) * z, (b.y - camY) * z, KDColor::RGB24(AU_BOTC[i]), false);
+      drawHat((int)((b.x - camX) * z), (int)((b.y - camY) * z), auHats[i], KDColor::RGB24(AU_BOTC[i])); // V5.30 : son chapeau
       if (meImp && !pGhost && b.imp) fRing((int)((b.x - camX) * z), (int)((b.y - camY) * z + 10), 7, KDColor::RGB24(0xC51111)); // V5.28 : MARQUE DE RECONNAISSANCE entre imposteurs
     }
     // joueur
@@ -6920,6 +7033,7 @@ static void amongUsGame() {
       fCirc((int)((px - camX) * z), (int)((py - camY) * z - 2), (int)(2.0f * z), C_WHT);
     } else {
       drawBean((px - camX) * z, (py - camY) * z, meImp ? KDColor::RGB24(0xC51111) : KDColor::RGB24(0x38FEDC), (playerDir == 0));
+      drawHat((int)((px - camX) * z), (int)((py - camY) * z), auHats[auBotN], meImp ? KDColor::RGB24(0xC51111) : KDColor::RGB24(0x38FEDC)); // V5.30 : TON chapeau
     }
     // ---- POLYGONE DE VISION (raycast arrete par les murs) ----
     if (!pGhost) {
@@ -6963,6 +7077,19 @@ static void amongUsGame() {
         drawTextC(56, "+1 TACHE !", ((int)(fxT * 8.0f)) % 2 ? C_YEL : C_WHT);
       }
     }
+    if (!meImp && pTaskI < 4) { // V5.30 : FLECHE jaune qui pointe vers ta tache en cours
+      float ttx = AU_TX[pTasks[pTaskI]] * 8.0f + 4.0f, tty = AU_TY[pTasks[pTaskI]] * 8.0f + 4.0f;
+      float adx3 = ttx - px, ady3 = tty - py;
+      float adl = sqrtf(adx3 * adx3 + ady3 * ady3);
+      if (adl > 26.0f) {
+        float ux3 = adx3 / adl, uy3 = ady3 / adl;
+        int ax3 = (int)((px - camX + ux3 * 13.0f) * z), ay3 = (int)((py - camY + uy3 * 13.0f) * z);
+        px(ax3, ay3, C_YEL); // pointe
+        px(ax3 - (int)(uy3 * 3), ay3 + (int)(ux3 * 3), C_YEL); // ailes de la fleche
+        px(ax3 + (int)(uy3 * 3), ay3 - (int)(ux3 * 3), C_YEL);
+        px((int)((px - camX + ux3 * 10.0f) * z), (int)((py - camY + uy3 * 10.0f) * z), C_YEL);
+      }
+    }
     // ================== HUD ==================
     fRect(0, SH - 40, SW, 40, KDColor::RGB24(0x1B1B25));
     // barre de taches globale
@@ -6993,6 +7120,11 @@ static void amongUsGame() {
       drawTextC(16, "REUNION ! VOTE (+)", ((int)(gTime * 4.0f)) % 2 ? KDColor::RGB24(0xF07D0D) : C_WHT); // V5.29 : banniere qui clignote
       drawNum(296, 16, (int)meetT + 1, C_YEL);
     }
+    if (o2T > 0) { // V5.30 : compte a rebours OXYGENE en gros
+      char obuf[36];
+      snprintf(obuf, 36, "OXYGENE : %ds - REPARER 2 POINTS !", (int)o2T + 1);
+      drawTextC(42, obuf, ((int)(gTime * 4.0f)) % 2 ? KDColor::RGB24(0xC51111) : C_WHT);
+    }
     if (lightT > 0) {
       drawTextC(28, "LUMIERES SABOTEES !", ((int)(gTime * 3.0f)) % 2 ? KDColor::RGB24(0xF07D0D) : C_WHT); // V5.29 : alerte clignotante
       if (((int)(gTime * 3.0f)) % 2) { fRect(0, 0, SW, 3, KDColor::RGB24(0xC51111)); fRect(0, SH - 43, SW, 3, KDColor::RGB24(0xC51111)); } // bordure alarme
@@ -7018,7 +7150,7 @@ static void amongUsGame() {
     Ion::Timing::msleep(30);
   }
   // ================== ECRAN DE FIN ==================
-  bool won = (endScreen == 1 && meImp) || (!meImp && (endScreen == 2 || endScreen == 3 || endScreen == 5));
+  bool won = (endScreen == 6) || (endScreen == 1 && meImp) || (!meImp && (endScreen == 2 || endScreen == 3 || endScreen == 5));
   if (won) auWins++;
   if (meImp && endScreen == 1 && (auBestS == 0 || gTime < auBestS)) auBestS = (int)gTime;
   saveAcc();
@@ -7035,6 +7167,7 @@ static void amongUsGame() {
     if (endScreen == 3) drawTextC(48, meImp ? "UN TEMOIN T'A SIGNALE !" : "L'IMPOSTEUR A ETE EJECTE", C_WHT);
     if (endScreen == 4) drawTextC(48, "ABANDON", C_WHT);
     if (endScreen == 5) drawTextC(48, "TOUT L'EQUIPAGE A FINI SES TACHES", C_WHT);
+    if (endScreen == 6) drawTextC(48, "L'OXYGENE S'EST EPUISE !", KDColor::RGB24(0xC51111));
     drawTextC(76, AU_MAPNAMES[mapSel], C_GRE);
     char sbuf[40];
     snprintf(sbuf, 40, "TA TACHE:%d/4", pTaskI); drawTextC(96, sbuf, C_WHT);
