@@ -1341,12 +1341,16 @@ struct Quest { int type; int goal; int prog; int reward; };
 static Quest quests[3];
 static int killCounter = 0, gemCounter = 0, superCounter = 0, winStreak = 0;
 static int auWins = 0, auKills = 0, auBestS = 0; // V5.18 : stats Among Us Micro (victoires, kills, meilleur temps)
+static int vsBestT = 0, vsKillsT = 0, vsBestLvl = 1; // V5.32 : stats Vampire Mini (record temps, kills totaux, meilleur niveau)
+static int tdBestW = 0, tdWavesT = 0, tdKillsT = 0; // V5.32 : stats Tower Defense (record vague, vagues totales, kills totaux)
+static int otWins = 0, otLosses = 0, otDraws = 0; // V5.32 : stats Othello (victoires, defaites, matchs nuls)
+static int rgBestF = 0, rgKillsT = 0, rgFloorsT = 0; // V5.32 : stats Donjon (record etage, kills totaux, etages totaux)
 #define SAVE_NAME "minibs.sav"
 #define SAVE_BACKUP "minibs.bak" // V5.14 : double record anti-corruption
 static int gFps60 = 0; // V5.14 : option "60 FPS" (0 = 30 fps par defaut, plus fluide a 1 mais plus gourmand)
 static int gFpsShow = 0; // V5.16 : afficher le compteur FPS en match
 static void saveAcc() {
-  uint8_t buf[782]; // V5.18 FIX CRASH : 782 octets reels (+6 stats Among Us) — le buffer restait a 776, debordement de pile au 1er lancement !
+  uint8_t buf[806]; // V5.32 : 806 octets reels (+12 stats Othello + Donjon)
   int p = 0;
   for (int i = 0; i < 55; i++) {
     buf[p++] = (uint8_t)acc.b[i].level;
@@ -1392,51 +1396,136 @@ static void saveAcc() {
   buf[p++] = (uint8_t)(auWins >> 8);  buf[p++] = (uint8_t)(auWins & 0xFF);
   buf[p++] = (uint8_t)(auKills >> 8); buf[p++] = (uint8_t)(auKills & 0xFF);
   buf[p++] = (uint8_t)(auBestS >> 8); buf[p++] = (uint8_t)(auBestS & 0xFF);
+  buf[p++] = (uint8_t)(vsBestT >> 8); buf[p++] = (uint8_t)(vsBestT & 0xFF); // V5.32 : stats Vampire Mini
+  buf[p++] = (uint8_t)(vsKillsT >> 8); buf[p++] = (uint8_t)(vsKillsT & 0xFF);
+  buf[p++] = (uint8_t)(vsBestLvl >> 8); buf[p++] = (uint8_t)(vsBestLvl & 0xFF); // V5.32 : stats Tower Defense
+  buf[p++] = (uint8_t)(tdBestW >> 8);  buf[p++] = (uint8_t)(tdBestW & 0xFF);
+  buf[p++] = (uint8_t)(tdWavesT >> 8); buf[p++] = (uint8_t)(tdWavesT & 0xFF);
+  buf[p++] = (uint8_t)(tdKillsT >> 8); buf[p++] = (uint8_t)(tdKillsT & 0xFF); // V5.32 : stats Othello
+  buf[p++] = (uint8_t)(otWins >> 8);   buf[p++] = (uint8_t)(otWins & 0xFF);
+  buf[p++] = (uint8_t)(otLosses >> 8); buf[p++] = (uint8_t)(otLosses & 0xFF);
+  buf[p++] = (uint8_t)(otDraws >> 8);  buf[p++] = (uint8_t)(otDraws & 0xFF);
+  buf[p++] = (uint8_t)(rgBestF >> 8);  buf[p++] = (uint8_t)(rgBestF & 0xFF); // V5.32 : stats Donjon
+  buf[p++] = (uint8_t)(rgKillsT >> 8); buf[p++] = (uint8_t)(rgKillsT & 0xFF);
+  buf[p++] = (uint8_t)(rgFloorsT >> 8); buf[p++] = (uint8_t)(rgFloorsT & 0xFF);
   ef_write(SAVE_NAME, buf, (uint32_t)p);
   ef_write(SAVE_BACKUP, buf, (uint32_t)p); // V5.14 : sauvegarde de secours anti-corruption
   // V5.18 : methode NumPlay — on copie TOUTE la sauvegarde dans un SCRIPT PYTHON
   // (minibs_saves.py). Installer un .nwa efface les fichiers de l'app mais PAS les
   // scripts Python : la progression revient toute seule apres une reinstal/update.
-  static char py[1760];
+  // V5.31 : UNE LIGNE PAR JEU dans le python : a = Brawl (776 octets), b = Among Us (6 octets).
+  // Les futurs jeux prendront c, d, e... 24 lignes dispo. AUCUN nom de jeu dans le fichier.
+  static char py[1800];
   int q = 0;
-  const char *pre = "# Sauvegarde Brawl MicroStars + Among Us Micro (ne pas supprimer)\ns = \"";
-  while (pre[q]) { py[q] = pre[q]; q++; }
-  for (int i = 0; i < p; i++) {
+  const char *pre = "# Ne pas modifier\n";
+  while (*pre) { py[q++] = *pre++; }
+  const char *la = "a = \"";
+  while (*la) { py[q++] = *la++; }
+  for (int i = 0; i < p && i < 776; i++) {
+    py[q++] = "0123456789ABCDEF"[(buf[i] >> 4) & 15];
+    py[q++] = "0123456789ABCDEF"[buf[i] & 15];
+  }
+  py[q++] = '"'; py[q++] = '\n';
+  const char *lb = "b = \"";
+  while (*lb) { py[q++] = *lb++; }
+  for (int i = 776; i < p && i < 782; i++) {
+    py[q++] = "0123456789ABCDEF"[(buf[i] >> 4) & 15];
+    py[q++] = "0123456789ABCDEF"[buf[i] & 15];
+  }
+  py[q++] = '"'; py[q++] = '\n';
+  const char *lc = "c = \""; // V5.32 : ligne c = Vampire Mini (6 octets)
+  while (*lc) { py[q++] = *lc++; }
+  for (int i = 782; i < p && i < 788; i++) {
+    py[q++] = "0123456789ABCDEF"[(buf[i] >> 4) & 15];
+    py[q++] = "0123456789ABCDEF"[buf[i] & 15];
+  }
+  py[q++] = '"'; py[q++] = '\n';
+  const char *ld = "d = \""; // V5.32 : ligne d = Tower Defense (6 octets)
+  while (*ld) { py[q++] = *ld++; }
+  for (int i = 788; i < p && i < 794; i++) {
+    py[q++] = "0123456789ABCDEF"[(buf[i] >> 4) & 15];
+    py[q++] = "0123456789ABCDEF"[buf[i] & 15];
+  }
+  py[q++] = '"'; py[q++] = '\n';
+  const char *le = "e = \""; // V5.32 : ligne e = Othello (6 octets)
+  while (*le) { py[q++] = *le++; }
+  for (int i = 794; i < p && i < 800; i++) {
+    py[q++] = "0123456789ABCDEF"[(buf[i] >> 4) & 15];
+    py[q++] = "0123456789ABCDEF"[buf[i] & 15];
+  }
+  py[q++] = '"'; py[q++] = '\n';
+  const char *lf = "f = \""; // V5.32 : ligne f = Donjon (6 octets)
+  while (*lf) { py[q++] = *lf++; }
+  for (int i = 800; i < p; i++) {
     py[q++] = "0123456789ABCDEF"[(buf[i] >> 4) & 15];
     py[q++] = "0123456789ABCDEF"[buf[i] & 15];
   }
   py[q++] = '"'; py[q++] = '\n'; py[q] = 0;
   ef_write("minibs_saves.py", (const uint8_t *)py, (uint32_t)q);
 }
+static int pyHex(const uint8_t *f, uint32_t flen, char var, uint8_t *out, int maxB) { // V5.31 : decode la ligne 'var = "HEX"'
+  for (uint32_t i = 0; i + 5 < flen; i++) {
+    if (f[i] == (uint8_t)var && f[i + 1] == ' ' && f[i + 2] == '=' && f[i + 3] == ' ' && f[i + 4] == '"') {
+      int n = 0;
+      uint32_t j = i + 5;
+      while (j + 1 < flen && f[j] != '"' && n < maxB) {
+        int h1 = (f[j] >= '0' && f[j] <= '9') ? f[j] - '0' : (f[j] >= 'A' && f[j] <= 'F') ? f[j] - 'A' + 10 : -1;
+        int h2 = (f[j + 1] >= '0' && f[j + 1] <= '9') ? f[j + 1] - '0' : (f[j + 1] >= 'A' && f[j + 1] <= 'F') ? f[j + 1] - 'A' + 10 : -1;
+        if (h1 < 0 || h2 < 0) return n;
+        out[n++] = (uint8_t)((h1 << 4) | h2);
+        j += 2;
+      }
+      return n;
+    }
+  }
+  return 0;
+}
 static bool loadAcc() {
   uint32_t len = 0;
   const uint8_t *buf = ef_read(SAVE_NAME, &len);
   // V5.14 : double record anti-corruption — si le record principal est perdu/corrompu, on tente la copie de secours
-  bool bad = !buf || (len != 231 && len != 331 && len != 361 && len != 433 && len != 444 && len != 445 && len != 776 && len != 782);
+  bool bad = !buf || (len != 231 && len != 331 && len != 361 && len != 433 && len != 444 && len != 445 && len != 776 && len != 782 && len != 788 && len != 794 && len != 800 && len != 806);
   if (bad) {
     buf = ef_read(SAVE_BACKUP, &len);
-    bad = !buf || (len != 231 && len != 331 && len != 361 && len != 433 && len != 444 && len != 445 && len != 776 && len != 782);
+    bad = !buf || (len != 231 && len != 331 && len != 361 && len != 433 && len != 444 && len != 445 && len != 776 && len != 782 && len != 788 && len != 794 && len != 800 && len != 806);
   }
   // V5.18 : DERNIER recours (methode NumPlay) — la copie PYTHON de la sauvegarde.
   // minibs_saves.py survit a la reinstal de l'app : on decode son hex et on relit tout.
   if (bad) {
-    static uint8_t pyBuf[782];
+    static uint8_t pyBuf[806];
     uint32_t plen = 0;
     const uint8_t *py = ef_read("minibs_saves.py", &plen);
     if (py && plen > 10) {
-      int st = 0, d = 0;
-      for (uint32_t i = 0; i < plen && d < 782 * 2; i++) {
-        uint8_t c = py[i];
-        if (st == 0) { if (c == '"') st = 1; continue; } // cherche le debut de la chaine
-        if (c == '"') break;                            // fin de la chaine hex
-        int hv = (c >= '0' && c <= '9') ? c - '0' : (c >= 'A' && c <= 'F') ? c - 'A' + 10 : -1;
-        if (hv < 0) break;                              // caractere inattendu : stop
-        if (d % 2 == 0) pyBuf[d / 2] = (uint8_t)(hv << 4); else pyBuf[d / 2] |= (uint8_t)hv;
-        d++;
-      }
-      if (d >= 2) {
-        buf = pyBuf; len = (uint32_t)(d / 2);
-        bad = (len != 231 && len != 331 && len != 361 && len != 433 && len != 444 && len != 445 && len != 776 && len != 782);
+      int nA = pyHex(py, plen, 'a', pyBuf, 776);       // V5.31 : ligne a = Brawl
+      int nB = pyHex(py, plen, 'b', pyBuf + 776, 6);   // V5.31 : ligne b = Among Us
+      int nC = pyHex(py, plen, 'c', pyBuf + 782, 6);   // V5.32 : ligne c = Vampire Mini
+      int nD = pyHex(py, plen, 'd', pyBuf + 788, 6);   // V5.32 : ligne d = Tower Defense
+      int nE = pyHex(py, plen, 'e', pyBuf + 794, 6);  // V5.32 : ligne e = Othello
+      int nF = pyHex(py, plen, 'f', pyBuf + 800, 6);  // V5.32 : ligne f = Donjon
+      if (nA >= 776) { // nouveau format multi-lignes : une ligne par jeu
+        buf = pyBuf;
+        if (nB < 6) len = 776;
+        else if (nC < 6) len = 782;
+        else if (nD < 6) len = 788;
+        else if (nE < 6) len = 794;
+        else if (nF < 6) len = 800;
+        else len = 806;
+        bad = false;
+      } else { // ancien format historique (s = "...") : compatibilite
+        int st = 0, d = 0;
+        for (uint32_t i = 0; i < plen && d < 806 * 2; i++) {
+          uint8_t c = py[i];
+          if (st == 0) { if (c == '"') st = 1; continue; } // cherche le debut de la chaine
+          if (c == '"') break;                            // fin de la chaine hex
+          int hv = (c >= '0' && c <= '9') ? c - '0' : (c >= 'A' && c <= 'F') ? c - 'A' + 10 : -1;
+          if (hv < 0) break;                              // caractere inattendu : stop
+          if (d % 2 == 0) pyBuf[d / 2] = (uint8_t)(hv << 4); else pyBuf[d / 2] |= (uint8_t)hv;
+          d++;
+        }
+        if (d >= 2) {
+          buf = pyBuf; len = (uint32_t)(d / 2);
+          bad = (len != 231 && len != 331 && len != 361 && len != 433 && len != 444 && len != 445 && len != 776 && len != 782 && len != 788 && len != 794 && len != 800 && len != 806);
+        }
       }
     }
   }
@@ -1482,7 +1571,7 @@ static bool loadAcc() {
   winStreak   = (buf[p] << 8) | buf[p + 1];
   if (winStreak < 0) winStreak = 0;
   // ---- V5.10 : carriere, skins, emotes (absents des vieilles sauvegardes) ----
-  if (len == 433 || len == 444 || len == 445 || len == 776 || len == 782) { // V5.18 FIX : 776/782 sinon la carriere etait sautee et le reste DECALE !
+  if (len == 433 || len == 444 || len == 445 || len == 776 || len == 782 || len == 788 || len == 794 || len == 800 || len == 806) { // V5.18 FIX : 776/782 sinon la carriere etait sautee et le reste DECALE !
     p += 2;
     acc.matches = (buf[p] << 8) | buf[p + 1]; p += 2;
     acc.wins = (buf[p] << 8) | buf[p + 1]; p += 2;
@@ -1498,29 +1587,61 @@ static bool loadAcc() {
     acc.emoteP = acc.emoteM = 0;
   }
   // ---- V5.11 : pseudo + record survie (444 = format actuel) ----
-  if (len == 444 || len == 445 || len == 776 || len == 782) { // V5.17 FIX : 776/782 sinon le pseudo etait PERDU au chargement !
+  if (len == 444 || len == 445 || len == 776 || len == 782 || len == 788 || len == 794 || len == 800 || len == 806) { // V5.17 FIX : 776/782 sinon le pseudo etait PERDU au chargement !
     for (int i = 0; i < 9; i++) acc.name[i] = (char)buf[p++];
     acc.name[8] = 0;
     acc.bestWave = (buf[p] << 8) | buf[p + 1];
     if (acc.bestWave < 0 || acc.bestWave > 999) acc.bestWave = 0;
     p += 2;
   } else { acc.name[0] = 0; acc.bestWave = 0; }
-  if (len == 445 || len == 776 || len == 782) gFps60 = (buf[p++] != 0); // V5.14 : option 60 FPS persistee
+  if (len == 445 || len == 776 || len == 782 || len == 788 || len == 794 || len == 800 || len == 806) gFps60 = (buf[p++] != 0); // V5.14 : option 60 FPS persistee
   // ---- V5.16 : stats par brawler (formats 776 et 782) ----
-  if (len == 776 || len == 782) {
+  if (len == 776 || len == 782 || len == 788 || len == 794 || len == 800 || len == 806) {
     for (int i = 0; i < 55; i++) {
       acc.pMatches[i] = buf[p++]; acc.pWins[i] = buf[p++];
       acc.pKills[i] = (buf[p] << 8) | buf[p + 1]; p += 2;
       acc.pDmg[i] = (buf[p] << 8) | buf[p + 1]; p += 2;
     }
     gFpsShow = (buf[p++] != 0);
-    if (len == 782) { // V5.18 : stats Among Us Micro en fin de sauvegarde
+    if (len >= 782) { // V5.18 : stats Among Us Micro en fin de sauvegarde
       auWins = (buf[p] << 8) | buf[p + 1]; p += 2;
       auKills = (buf[p] << 8) | buf[p + 1]; p += 2;
       auBestS = (buf[p] << 8) | buf[p + 1]; p += 2;
       if (auWins < 0) auWins = 0;
       if (auKills < 0) auKills = 0;
       if (auBestS < 0 || auBestS > 9999) auBestS = 0;
+    }
+    if (len >= 788) { // V5.32 : stats Vampire Mini en fin de sauvegarde
+      vsBestT = (buf[p] << 8) | buf[p + 1]; p += 2;
+      vsKillsT = (buf[p] << 8) | buf[p + 1]; p += 2;
+      vsBestLvl = (buf[p] << 8) | buf[p + 1]; p += 2;
+      if (vsBestT < 0 || vsBestT > 99999) vsBestT = 0;
+      if (vsKillsT < 0) vsKillsT = 0;
+      if (vsBestLvl < 1 || vsBestLvl > 999) vsBestLvl = 1;
+    }
+    if (len >= 794) { // V5.32 : stats Tower Defense en toute fin
+      tdBestW = (buf[p] << 8) | buf[p + 1]; p += 2;
+      tdWavesT = (buf[p] << 8) | buf[p + 1]; p += 2;
+      tdKillsT = (buf[p] << 8) | buf[p + 1]; p += 2;
+      if (tdBestW < 0 || tdBestW > 9999) tdBestW = 0;
+      if (tdWavesT < 0) tdWavesT = 0;
+      if (tdKillsT < 0) tdKillsT = 0;
+    }
+    if (len == 800 || len == 806) { // V5.32 : stats Othello
+      otWins = (buf[p] << 8) | buf[p + 1]; p += 2;
+      otLosses = (buf[p] << 8) | buf[p + 1]; p += 2;
+      otDraws = (buf[p] << 8) | buf[p + 1]; p += 2;
+      if (otWins < 0) otWins = 0;
+      if (otLosses < 0) otLosses = 0;
+      if (otDraws < 0) otDraws = 0;
+    }
+    if (len == 806) { // V5.32 : stats Donjon Roguelike
+      rgBestF = (buf[p] << 8) | buf[p + 1]; p += 2;
+      rgKillsT = (buf[p] << 8) | buf[p + 1]; p += 2;
+      rgFloorsT = (buf[p] << 8) | buf[p + 1]; p += 2;
+      if (rgBestF < 0 || rgBestF > 9999) rgBestF = 0;
+      if (rgKillsT < 0) rgKillsT = 0;
+      if (rgFloorsT < 0) rgFloorsT = 0;
     }
   }
   for (int i = 0; i < 9; i++) if (acc.name[i] != 0 && (acc.name[i] < ' ' || acc.name[i] > 'z')) acc.name[i] = 0; // sanity
@@ -6059,6 +6180,27 @@ static void drawHat(int x, int y, int h, KDColor c) { // V5.30 : petit chapeau a
     fRect(x - 1, y - 15, 3, 2, c);
   }
 }
+static int auDoorTrapAt(int vcx, int vcy) { // V5.32 IA : ferme les portes AUTOUR de la proie (renvoie 1 si piege pose)
+  auDoorN = 0;
+  for (int r = 1; r <= 4; r++) {
+    for (int dy2 = -r; dy2 <= r; dy2++)
+      for (int dx2 = -r; dx2 <= r; dx2++) {
+        if (abs(dx2) < r && abs(dy2) < r) continue; // on ne scanne que la bordure du rayon
+        int X = vcx + dx2, Y = vcy + dy2;
+        if (X < 1 || Y < 1 || X >= AUW - 1 || Y >= AUH - 1 || auCell(X, Y) == '#') continue;
+        int walls = (auCell(X - 1, Y) == '#') + (auCell(X + 1, Y) == '#') + (auCell(X, Y - 1) == '#') + (auCell(X, Y + 1) == '#');
+        if (walls < 2) continue; // il faut un pincement
+        int ax = (auCell(X - 1, Y) != '#' || auCell(X + 1, Y) != '#') ? 1 : 0;
+        int ay = 1 - ax;
+        for (int k = -1; k <= 1; k++) {
+          int X2 = X + ax * k, Y2 = Y + ay * k;
+          if (auDoorN < 8 && X2 >= 0 && Y2 >= 0 && X2 < AUW && Y2 < AUH && auCell(X2, Y2) != '#') auDoorC[auDoorN++] = Y2 * AUW + X2;
+        }
+        return 1; // un seul point de fermeture suffit
+      }
+  }
+  return 0;
+}
 static void auDoorSabotage() { // V5.30 : ferme un point de pincement de couloir (3 cases)
   auDoorN = 0;
   for (int tries = 0; tries < 60 && auDoorN == 0; tries++) {
@@ -6140,6 +6282,11 @@ static int auBotN = 5;      // V5.26 : nombre de PNJ (5 a 14, joueurs 6 a 15)
 static float auBodyX[16], auBodyY[16]; static uint32_t auBodyC[16]; static int auBodyN = 0;
 static int auDoorC[8]; static int auDoorN = 0; // V5.30 : portes fermees (overlay, la carte n'est pas modifiee)
 static int auHats[AU_MAXBOT + 1]; // V5.30 : chapeaux (0 rien, 1 cone, 2 casquette, 3 haut-de-forme, 4 antenne)
+static bool auMeImp = false; // V5.32 : le joueur est-il imposteur ? (interdit de voter contre un complice)
+static bool auVotable(int s) { // V5.32 : un imposteur ne peut JAMAIS voter contre son complice
+  if (s == AU_MAXBOT) return true; // PASSER (securite)
+  return (s < auBotN) && auB[s].alive && !(auMeImp && auB[s].imp);
+}
 static int auBodySus[16];
 static float auTaskBar = 0.0f;
 
@@ -6231,6 +6378,14 @@ static void auPanicTo(AuBot &b) { // il fonce au bouton pour signaler
 static void auNextTask(AuBot &b) { // sa tache suivante comme destination
   b.state = 0;
   if (b.taskI < 4) {
+    // V5.32 IA : SERIE LOGIQUE — il va a la tache la plus PROCHE d'abord (trajet naturel)
+    int bestK = b.taskI; float bdd = 1e9;
+    for (int k = b.taskI; k < 4; k++) {
+      float tx2 = AU_TX[b.tasks[k]] * 8.0f + 4.0f, ty2 = AU_TY[b.tasks[k]] * 8.0f + 4.0f;
+      float d2 = (tx2 - b.x) * (tx2 - b.x) + (ty2 - b.y) * (ty2 - b.y);
+      if (d2 < bdd) { bdd = d2; bestK = k; }
+    }
+    if (bestK != b.taskI) { int tmp = b.tasks[b.taskI]; b.tasks[b.taskI] = b.tasks[bestK]; b.tasks[bestK] = tmp; }
     // V5.28 IA : ANTI-BOUCHON — deux bots ne visent pas la meme station en meme temps
     for (int tries = 0; tries < 3 && b.taskI < 3; tries++) {
       float tx = AU_TX[b.tasks[b.taskI]] * 8.0f + 4.0f, ty = AU_TY[b.tasks[b.taskI]] * 8.0f + 4.0f;
@@ -6263,11 +6418,11 @@ static int auVoteScreen() { // renvoie l'index du bot vote, -1 si passer/annuler
   while (res == -2) {
     pollKeys();
     int col = sel % 5;
-    if (kLeft && !pL && col > 0) { int s = sel - 1; while (s != auBotN && !auB[s].alive) s--; sel = s; }
-    if (kRight && !pR && col < 4 && sel + 1 < nSlots) { int s = sel + 1; while (s != auBotN && !auB[s].alive) s++; if (s < nSlots) sel = s; }
-    if (kUp && !pU && sel >= 5) { int s = sel - 5; if (s == auBotN || auB[s].alive) sel = s; }
-    if (kDown && !pD && sel + 5 < nSlots) { int s = sel + 5; if (s == auBotN || auB[s].alive) sel = s; }
-    if (keyOK && !pO) res = (sel == auBotN) ? -1 : sel;
+    if (kLeft && !pL && col > 0) { int s = sel - 1; while (s != auBotN && !auVotable(s)) s--; sel = s; }
+    if (kRight && !pR && col < 4 && sel + 1 < nSlots) { int s = sel + 1; while (s != auBotN && !auVotable(s)) s++; if (s < nSlots) sel = s; }
+    if (kUp && !pU && sel >= 5) { int s = sel - 5; if (auVotable(s)) sel = s; }
+    if (kDown && !pD && sel + 5 < nSlots) { int s = sel + 5; if (auVotable(s)) sel = s; }
+    if (keyOK && !pO) res = (sel == auBotN) ? -1 : (auVotable(sel) ? sel : -1);
     if (keyBack && !pB) res = -1;
     pU = kUp; pD = kDown; pL = kLeft; pR = kRight; pO = keyOK; pB = keyBack;
     fRect(0, 0, SW, SH, KDColor::RGB24(0x1B1B25));
@@ -6285,6 +6440,7 @@ static int auVoteScreen() { // renvoie l'index du bot vote, -1 si passer/annuler
       if (auB[i].alive) {
         drawBean(cx, cy, KDColor::RGB24(AU_BOTC[i]), false);
         drawHat(cx, cy, auHats[i], KDColor::RGB24(AU_BOTC[i])); // V5.30 : son chapeau sur l'ecran de vote
+        if (auMeImp && auB[i].imp) fRing(cx, cy + 10, 7, KDColor::RGB24(0xC51111)); // V5.32 : complice visible mais NON votable
         drawText(bx + 4, by + 44, AU_NAMES[i], (i == sel) ? C_YEL : KDColor::RGB24(0xD6E0F0));
       } else {
         drawCorpse(cx, cy, KDColor::RGB24(AU_BOTC[i]));
@@ -6442,6 +6598,7 @@ static void amongUsGame() {
     pTasks[i] = t;
   }
   bool meImp = (rnd(100) < (100 * imps / players));
+  auMeImp = meImp; // V5.32 : l'ecran de vote saura qu'on ne vote pas contre un complice
   int impsAlive = imps;
   auBFS(AU_SPAWX[mapSel], AU_SPAWY[mapSel]); // pour repartir les spawns
   int impBotsLeft = meImp ? imps - 1 : imps;
@@ -6703,10 +6860,15 @@ static void amongUsGame() {
           float ddx = auBodyX[c] - b.x, ddy = auBodyY[c] - b.y;
           if (ddx * ddx + ddy * ddy < 44 * 44 && b.t <= 0) {
             b.t = 4.0f; // ne re-decouvre pas tout de suite
-            if (b.imp) { // un imposteur ne signale JAMAIS : il s'ecarte
-              b.flee = 4.0f;
-              int rx = rnd(AUW), ry = rnd(AUH);
-              if (auPar[ry * AUW + rx] != -2) auSetDest(b, rx * 8.0f + 4.0f, ry * 8.0f + 4.0f);
+            if (b.imp) {
+              if (auBodySus[c] != i) { // V5.32 IA : ACTING — le non-tueur panique comme un innocent au bouton
+                b.panic = true; b.state = 3;
+                auSetDest(b, auBtnX, auBtnY);
+              } else { // le TUEUR, lui, s'ecarte discretement
+                b.flee = 4.0f;
+                int rx = rnd(AUW), ry = rnd(AUH);
+                if (auPar[ry * AUW + rx] != -2) auSetDest(b, rx * 8.0f + 4.0f, ry * 8.0f + 4.0f);
+              }
             } else {
               int sus = auBodySus[c];
               if (sus == i) sus = -1;
@@ -6739,6 +6901,16 @@ static void amongUsGame() {
               doorT = 10.0f;
             }
             else { o2T = 30.0f; o2FixA = 0; o2FixB = 0; }
+          }
+          if (o2T > 0 && b.state == 0 && rnd(200) == 0) { // V5.32 IA : FAUX REPARATEUR — il se plante sur un point O2
+            b.state = 5; b.t = 6.0f + rnd(60) * 0.1f;
+            float fx2, fy2;
+            if (rnd(2)) { fx2 = auBtnX; fy2 = auBtnY; } else { fx2 = auVitXc * 8.0f + 4.0f; fy2 = auVitYc * 8.0f + 4.0f; }
+            auSetDest(b, fx2, fy2); // il fait GENRE (ne repare jamais reellement)
+          }
+          if (b.state == 5) { // V5.32 IA : reste poste sur le point, puis reprend la chasse
+            if (b.t <= 0) b.state = 0;
+            else { auBotWalk(b, dt, 55.0f * b.spdF); auBotArrived(b); continue; }
           }
           if (b.state == 4) { // V5.27 IA : EMBUSCADE en couloir (jamais longtemps)
             if (b.t <= 0) b.state = 0;
@@ -6776,6 +6948,15 @@ static void amongUsGame() {
                 float wx = px - vx0, wy = py - vy0;
                 if (wx * wx + wy * wy < 70 * 70) isolated = false;
               }
+              if (!vicIsPlayer && !isolated && bd < 50 * 50 && doorT <= 0 && o2T <= 0 && lightT <= 0 && rnd(100) < 25) {
+                // V5.32 IA : PIEGE AUX PORTES — mais SEULEMENT si un vent est a portee pour disparaitre apres
+                bool ventNear = false;
+                for (int v = 0; v < 5; v++) {
+                  float vdx2 = AU_VX[v] * 8.0f + 4.0f - vx0, vdy2 = AU_VY[v] * 8.0f + 4.0f - vy0;
+                  if (vdx2 * vdx2 + vdy2 * vdy2 < 110 * 110) { ventNear = true; break; }
+                }
+                if (ventNear && auDoorTrapAt((int)(vx0 / 8.0f), (int)(vy0 / 8.0f))) doorT = 10.0f;
+              }
               if (isolated && bd < 26 * 26) { // KILL !
                 if (vicIsPlayer) { dieT = 1.6f; break; } // V5.29 : ANIMATION de mort avant l'ecran de fin
                 auB[vic].alive = false; auB[vic].ghost = true;
@@ -6785,23 +6966,53 @@ static void amongUsGame() {
                   auBodyC[auBodyN] = AU_BOTC[vic]; auBodySus[auBodyN] = i; auBodyN++;
                 }
                 b.flee = 4.0f;
-                if (rnd(100) < 30) { // V5.26b IA : 30% de s'echapper par un VENT (comme un vrai imposteur)
+                if (rnd(100) < 30 || doorT > 0) { // V5.26b IA : 30% de s'echapper par un VENT (100% si il vient de pieger aux portes)
                   int v = rnd(5);
                   b.x = AU_VX[v] * 8.0f + 4.0f; b.y = AU_VY[v] * 8.0f + 4.0f;
                 }
-                int rx = rnd(AUW), ry = rnd(AUH);
-                if (auPar[ry * AUW + rx] != -2) auSetDest(b, rx * 8.0f + 4.0f, ry * 8.0f + 4.0f);
+                { // V5.32 IA : ALIBI — apres le kill il va se montrer pres d'une TACHE (aucun indice visuel, ca ne compte pas)
+                  int tk = rnd(12);
+                  auSetDest(b, AU_TX[tk] * 8.0f + 4.0f, AU_TY[tk] * 8.0f + 4.0f);
+                }
                 b.t = 1.5f;
               } else if (isolated && lightT <= 0 && rnd(100) < 20) { // V5.27 IA : il coupe les LUMIERES avant de frapper
                 lightT = 25.0f;
               } else if (bd < 300 * 300) { // approche
                 if (b.pn == 0 || b.dx != vx0 || b.dy != vy0) auSetDest(b, vx0, vy0);
+                // V5.32 IA : TENAILLE — un complice proche converge sur la MEME victime ( jamais l'inverse !)
+                for (int q = 0; q < auBotN; q++) {
+                  if (q == i || !auB[q].alive || !auB[q].imp || auB[q].panic || auB[q].flee > 0) continue;
+                  float cdx2 = auB[q].x - vx0, cdy2 = auB[q].y - vy0;
+                  if (cdx2 * cdx2 + cdy2 * cdy2 < 120 * 120 && (auB[q].pn == 0 || auB[q].dx != vx0 || auB[q].dy != vy0))
+                    auSetDest(auB[q], vx0, vy0);
+                }
               }
             }
           } else { // fait SEMBLANT de faire ses taches
             float tx = AU_TX[b.tasks[b.taskI]] * 8.0f + 4.0f, ty = AU_TY[b.tasks[b.taskI]] * 8.0f + 4.0f;
             if (b.pn == 0 || b.dx != tx || b.dy != ty) auSetDest(b, tx, ty);
-            if (auBotArrived(b)) { b.taskI++; b.t = 2.0f + rnd(30) * 0.1f; }
+            if (auBotArrived(b)) {
+              // V5.32 IA : COLLABORATION MORTELLE — un crew fait la tache A COTE ? il l'achève
+              int cvic = -1; float cvx = 0, cvy = 0;
+              for (int v = 0; v < auBotN; v++) {
+                if (!auB[v].alive || auB[v].imp) continue;
+                float ddx2 = auB[v].x - b.x, ddy2 = auB[v].y - b.y;
+                if (ddx2 * ddx2 + ddy2 * ddy2 < 26 * 26) { cvic = v; cvx = auB[v].x; cvy = auB[v].y; break; }
+              }
+              if (cvic >= 0 && rnd(100) < 60) {
+                auB[cvic].alive = false; auB[cvic].ghost = true;
+                if (auBodyN < 16) { auBodyX[auBodyN] = cvx; auBodyY[auBodyN] = cvy; auBodyC[auBodyN] = AU_BOTC[cvic]; auBodySus[auBodyN] = i; auBodyN++; }
+                fxT = 0.5f; fxType = 1; fxX = cvx; fxY = cvy;
+                for (int w = 0; w < auBotN; w++) { // temoins eventuels
+                  if (!auB[w].alive || auB[w].imp || w == cvic) continue;
+                  float wx2 = auB[w].x - cvx, wy2 = auB[w].y - cvy;
+                  if (wx2 * wx2 + wy2 * wy2 < 48 * 48) { auB[w].witness = true; auB[w].accuse = i; auPanicTo(auB[w]); }
+                }
+                if (rnd(100) < 30) { int v2 = rnd(5); b.x = AU_VX[v2] * 8.0f + 4.0f; b.y = AU_VY[v2] * 8.0f + 4.0f; } // vent
+                b.flee = 4.0f;
+              }
+              b.taskI++; b.t = 2.0f + rnd(30) * 0.1f;
+            }
           }
         } else if (!b.imp) { // CREW PNJ
           if (o2T > 0) { // V5.30 : OXYGENE — le crew file au point pas encore repare
@@ -7183,39 +7394,1101 @@ static void amongUsGame() {
 }
 
 
-// ------------------------- LANCEUR : 2 jeux dans l'app ----------------
+// ======================= VAMPIRE SURVIVORS MINI (V5.32) ==============
+// Survie : les ennemis arrivent par vagues croissantes, l'arme tire TOUTE
+// SEULE sur le plus proche. Ramasse les ames (XP), choisis tes bonus a
+// chaque niveau, survis le plus longtemps possible. Boss toutes les 60 s.
+static void vsGame() {
+  // ---- donnees des 5 types d'ennemis : chauve-souris, squelette, zombie, fantome, boss
+  static const float VS_SPD[5] = { 48.0f, 34.0f, 24.0f, 40.0f, 15.0f };
+  static const int  VS_HP0[5]  = { 10, 18, 32, 14, 260 };
+  static const int  VS_DMG[5]  = { 8, 10, 14, 12, 25 };
+  static const int  VS_RAD[5]  = { 3, 4, 5, 4, 12 };
+  static const int  VS_XP[5]   = { 1, 2, 3, 2, 15 };
+  static const KDColor VS_COL[5] = { KDColor::RGB24(0xB44BFF), KDColor::RGB24(0xE8E8E8),
+                                     KDColor::RGB24(0x3DDC55), KDColor::RGB24(0x35D4E8),
+                                     KDColor::RGB24(0xFF3B3B) };
+  static const char *VS_UPN[7] = { "DEGATS +35%", "CADENCE +25%", "VITESSE +15%",
+                                   "PV MAX +25", "+1 PROJECTILE", "AIMANT +40%", "REGEN +0.5/S" };
+  enum { VS_NE = 46, VS_NP = 24, VS_NG = 40 }; // quotas memoire fixes
+  static float ex[VS_NE], ey[VS_NE], ew[VS_NE]; static int ehp[VS_NE]; static uint8_t etp[VS_NE];
+  static float ppx[VS_NP], ppy[VS_NP], pvx[VS_NP], pvy[VS_NP]; static int plife[VS_NP];
+  static float gx[VS_NG], gy[VS_NG]; static uint8_t gxp[VS_NG];
+  int ne = 0;
+  // ---- joueur et stats
+  float vpx = SW / 2.0f, vpy = 130.0f;
+  int maxHp = 100, hp = 100, lvl = 1, xp = 0, xpNeed = 7, kills = 0, bossN = 0;
+  int uDmg = 0, uRate = 0, uSpd = 0, uHp = 0, uMul = 0, uMag = 0, uReg = 0;
+  float fireT = 0.0f, invT = 0.0f, regT = 0.0f, gameTime = 0.0f, spawnT = 0.0f, bossMsgT = 0.0f;
+  int bossNext = 60;
+  bool faceR = true;
+  waitRelease();
+  bool prevBk = false;
+  int lastMs = (int)Ion::Timing::millis();
+  bool dead = false;
+  while (true) { // ================= boucle principale =================
+    int nowMs = (int)Ion::Timing::millis();
+    float dt = (nowMs - lastMs) / 1000.0f; lastMs = nowMs;
+    if (dt > 0.05f) dt = 0.05f; if (dt <= 0.0f) dt = 0.0001f;
+    if (!dead) {
+      gameTime += dt; invT -= dt; regT += dt; bossMsgT -= dt;
+      // ---- deplacement joueur (fleches, vitesse selon bonus)
+      float spd = 85.0f * (1.0f + 0.15f * uSpd);
+      float dx = (kRight ? 1.0f : 0.0f) - (kLeft ? 1.0f : 0.0f);
+      float dy = (kDown ? 1.0f : 0.0f) - (kUp ? 1.0f : 0.0f);
+      if (dx != 0.0f || dy != 0.0f) {
+        float n = sqrtf(dx * dx + dy * dy); vpx += dx / n * spd * dt; vpy += dy / n * spd * dt;
+        if (dx > 0.0f) faceR = true; else if (dx < 0.0f) faceR = false;
+      }
+      if (vpx < 6) vpx = 6; if (vpx > SW - 6) vpx = SW - 6;
+      if (vpy < 34) vpy = 34; if (vpy > SH - 8) vpy = SH - 8;
+      // ---- regen
+      if (uReg > 0 && regT >= 2.0f) { regT -= 2.0f; hp += uReg; if (hp > maxHp) hp = maxHp; }
+      // ---- apparitions (rythme croissant) + boss toutes les 60 s
+      if (gameTime >= bossNext) { // BOSS !
+        bossNext += 60; bossN++;
+        if (ne < VS_NE) { int s = rnd(4); float sx = (s == 0) ? -10.0f : (s == 1) ? SW + 10.0f : (s == 2) ? rnd(SW) * 1.0f : rnd(SW) * 1.0f;
+          float sy = (s == 2) ? -10.0f : (s == 3) ? SH + 10.0f : rnd(SH) * 1.0f;
+          ex[ne] = sx; ey[ne] = sy; ew[ne] = 0; etp[ne] = 4; ehp[ne] = VS_HP0[4] + (bossN - 1) * 160; ne++; }
+        bossMsgT = 2.5f;
+      }
+      spawnT += dt;
+      float sInt = 1.1f - gameTime * 0.011f; if (sInt < 0.30f) sInt = 0.30f;
+      while (spawnT >= sInt) {
+        spawnT -= sInt;
+        if (ne < VS_NE) {
+          int t = 0; int r = rnd(100); // types deplaces selon le temps de survie
+          if (gameTime > 25 && r < 30) t = 1;
+          if (gameTime > 50 && r >= 30 && r < 50) t = 2;
+          if (gameTime > 80 && r >= 50 && r < 65) t = 3;
+          int s = rnd(4);
+          ex[ne] = (s == 0) ? -8.0f : (s == 1) ? SW + 8.0f : (s == 2) ? rnd(SW) * 1.0f : rnd(SW) * 1.0f;
+          ey[ne] = (s == 2) ? -8.0f : (s == 3) ? SH + 8.0f : rnd(SH) * 1.0f;
+          ew[ne] = rnd(628) / 100.0f; etp[ne] = (uint8_t)t;
+          ehp[ne] = (int)(VS_HP0[t] * (1.0f + gameTime / 55.0f)); ne++;
+        }
+      }
+      // ---- tir automatique sur l'ennemi le plus proche
+      fireT -= dt;
+      float fireCd = 0.75f / (1.0f + 0.25f * uRate);
+      int dmg = (int)(10 * (1.0f + 0.35f * uDmg));
+      int nproj = 1 + uMul; if (nproj > 5) nproj = 5;
+      if (fireT <= 0.0f) {
+        float best = 1e9f; int bi = -1;
+        for (int i = 0; i < ne; i++) { float ddx = ex[i] - vpx, ddy = ey[i] - vpy; float d2 = ddx * ddx + ddy * ddy; if (d2 < best) { best = d2; bi = i; } }
+        if (bi >= 0) {
+          fireT = fireCd;
+          float base = atan2f(ey[bi] - vpy, ex[bi] - vpx);
+          for (int k = 0; k < nproj; k++) {
+            int slot = -1;
+            for (int j = 0; j < VS_NP; j++) { if (plife[j] <= 0) { slot = j; break; } }
+            if (slot < 0) break;
+            float a = base + (k - (nproj - 1) / 2.0f) * 0.16f;
+            ppx[slot] = vpx; ppy[slot] = vpy; pvx[slot] = fcosf(a) * 260.0f; pvy[slot] = fsinf(a) * 260.0f; plife[slot] = 130; // 0.65 s
+          }
+        }
+      }
+      // ---- projectiles
+      for (int i = 0; i < VS_NP; i++) {
+        if (plife[i] <= 0) continue;
+        plife[i]--; ppx[i] += pvx[i] * dt; ppy[i] += pvy[i] * dt;
+        if (ppx[i] < -4 || ppx[i] > SW + 4 || ppy[i] < -4 || ppy[i] > SH + 4) { plife[i] = 0; continue; }
+        for (int j = 0; j < ne; j++) {
+          float ddx = ex[j] - ppx[i], ddy = ey[j] - ppy[i];
+          int rr = VS_RAD[etp[j]] + 2;
+          if (ddx * ddx + ddy * ddy < rr * rr) {
+            plife[i] = 0; ehp[j] -= dmg;
+            if (ehp[j] <= 0) { // ennemi tue : ame (XP) la ou il est tombe
+              kills++;
+              int gs = -1;
+              for (int g = 0; g < VS_NG; g++) { if (gxp[g] == 0) { gs = g; break; } }
+              if (gs < 0) gs = 0; // plus de place : on ecrase la premiere ame
+              gx[gs] = ex[j]; gy[gs] = ey[j]; gxp[gs] = (uint8_t)VS_XP[etp[j]];
+              if (gxp[gs] == 0) gxp[gs] = 1;
+              if (etp[j] == 4) { hp += 20; if (hp > maxHp) hp = maxHp; } // le boss soigne
+              ne--;
+              ex[j] = ex[ne]; ey[j] = ey[ne]; ehp[j] = ehp[ne]; etp[j] = etp[ne]; ew[j] = ew[ne];
+              j--; if (j < -1) j = -1;
+            }
+            break;
+          }
+        }
+      }
+      // ---- ennemis : avancent vers le joueur (+ zigzag des chauves-souris)
+      for (int i = 0; i < ne; i++) {
+        float ddx = vpx - ex[i], ddy = vpy - ey[i];
+        float n = sqrtf(ddx * ddx + ddy * ddy); if (n < 1.0f) n = 1.0f;
+        float s = VS_SPD[etp[i]];
+        if (etp[i] == 0) { // chauve-souris : ondule
+          ew[i] += dt * 6.0f;
+          float w = fsinf(ew[i]) * 30.0f;
+          ex[i] += (ddx / n * s - ddy / n * w) * dt;
+          ey[i] += (ddy / n * s + ddx / n * w) * dt;
+        } else { ex[i] += ddx / n * s * dt; ey[i] += ddy / n * s * dt; }
+        // contact : degats au joueur (immunite 0.6 s apres un coup)
+        int rr = VS_RAD[etp[i]] + 5;
+        ddx = vpx - ex[i]; ddy = vpy - ey[i];
+        if (invT <= 0.0f && ddx * ddx + ddy * ddy < rr * rr) { hp -= VS_DMG[etp[i]]; invT = 0.6f; if (hp <= 0) { hp = 0; dead = true; } }
+      }
+      // ---- ames : attirees par l'aimant, ramassees a moins de 7 px
+      float mag = 26.0f * (1.0f + 0.4f * uMag);
+      for (int i = 0; i < VS_NG; i++) {
+        if (gxp[i] == 0) continue;
+        float ddx = vpx - gx[i], ddy = vpy - gy[i];
+        float d = sqrtf(ddx * ddx + ddy * ddy);
+        if (d < mag && d > 0.5f) { float pull = 190.0f * dt / (d * 0.05f + 1.0f); if (pull > d) pull = d; gx[i] += ddx / d * pull; gy[i] += ddy / d * pull; d = sqrtf((vpx - gx[i]) * (vpx - gx[i]) + (vpy - gy[i]) * (vpy - gy[i])); }
+        if (d < 7.0f) { xp += gxp[i]; gxp[i] = 0; }
+      }
+      // ---- level up ?
+      while (xp >= xpNeed) {
+        xp -= xpNeed; lvl++; xpNeed = 4 + lvl * 3;
+        // choix de 3 bonus differents parmi ceux encore disponibles
+        int pool[7], pn = 0;
+        for (int i = 0; i < 7; i++) { if (i == 4 && uMul >= 4) continue; pool[pn++] = i; }
+        int ch[3];
+        for (int i = 0; i < 3 && i < pn; i++) {
+          int c; bool ok;
+          do { c = pool[rnd(pn)]; ok = true; for (int j = 0; j < i; j++) if (ch[j] == c) ok = false; } while (!ok);
+          ch[i] = c;
+        }
+        int nch = (pn < 3) ? pn : 3, sel = 0;
+        waitRelease(); bool pU2 = false, pD2 = false, pOK2 = false, pBk2 = false;
+        while (true) { // ecran de choix de bonus (jeu en pause)
+          pollKeys();
+          if (kUp && !pU2 && sel > 0) sel--;
+          if (kDown && !pD2 && sel < nch - 1) sel++;
+          pU2 = kUp; pD2 = kDown;
+          if (keyOK && !pOK2) { waitRelease(); break; }
+          if (keyBack && !pBk2) { waitRelease(); sel = rnd(nch); break; } // retour = bonus aleatoire
+          pOK2 = keyOK; pBk2 = keyBack;
+          bgPanel();
+          drawTextC(16, "NIVEAU SUPERIEUR !", C_YEL);
+          char lb[24]; snprintf(lb, 24, "NIVEAU %d", lvl); drawTextC(40, lb, C_WHT);
+          for (int i = 0; i < nch; i++) {
+            rRect(SW / 2 - 110, 62 + i * 34, 220, 28, 6, sel == i ? C_YEL : KDColor::RGB24(0x3A3A4A));
+            drawTextC(70 + i * 34, VS_UPN[ch[i]], sel == i ? C_BLK : C_WHT);
+          }
+          drawTextC(180, "OK POUR CHOISIR", C_GRE);
+          blit(); Ion::Timing::msleep(30);
+        }
+        int c = ch[sel];
+        if (c == 0) uDmg++; else if (c == 1) uRate++; else if (c == 2) uSpd++;
+        else if (c == 3) { uHp++; maxHp += 25; hp += 25; if (hp > maxHp) hp = maxHp; }
+        else if (c == 4) uMul++; else if (c == 5) uMag++; else uReg++;
+      }
+      // ---- pause (RETOUR)
+      if (keyBack && !prevBk) {
+        waitRelease(); bool pOK3 = false, pBk3 = false;
+        while (true) {
+          pollKeys();
+          if (keyOK && !pOK3) { waitRelease(); break; }
+          if (keyBack && !pBk3) { waitRelease(); return; }
+          pOK3 = keyOK; pBk3 = keyBack;
+          bgPanel();
+          drawTextC(60, "PAUSE", C_YEL);
+          drawTextC(100, "OK REPRENDRE", C_WHT);
+          drawTextC(130, "RETOUR QUITTER", C_GRE);
+          blit(); Ion::Timing::msleep(30);
+        }
+      }
+    }
+    prevBk = keyBack;
+    if (kHome) return;
+    // ================= rendu =================
+    fRect(0, 0, SW, SH, KDColor::RGB24(0x14101E)); // sol sombre violet
+    for (int yy = 44; yy < SH; yy += 24) for (int xx = 12; xx < SW; xx += 24) fRect(xx, yy, 2, 2, KDColor::RGB24(0x241A38)); // cailloux
+    // barre d'XP (bleu, pleine largeur) + PV (rouge) + stats
+    fRect(0, 0, SW, 5, KDColor::RGB24(0x0A0812));
+    int xw = (int)((float)SW * xp / xpNeed); if (xw > SW) xw = SW;
+    fRect(0, 0, xw, 5, C_CYN);
+    int hpw = 80 * hp / maxHp;
+    fRect(4, 12, 80, 6, KDColor::RGB24(0x3A0A0A)); fRect(4, 12, hpw, 6, C_RED);
+    drawText(90, 10, "PV", C_GRE);
+    char hb[16]; snprintf(hb, 16, "%d", hp); drawText(120, 10, hb, C_WHT);
+    char tb[16]; snprintf(tb, 16, "T:%d", (int)gameTime); drawText(148, 10, tb, C_YEL);
+    char kb[16]; snprintf(kb, 16, "N%d K%d", lvl, kills); drawText(212, 10, kb, C_WHT);
+    if (bossMsgT > 0 && ((int)(bossMsgT * 6) & 1) == 0) drawTextC(28, "UN BOSS ARRIVE !", C_RED);
+    // ennemis
+    for (int i = 0; i < ne; i++) {
+      int t = etp[i]; KDColor c = VS_COL[t];
+      if (t == 4) { // boss : gros cercle, yeux, barre de vie
+        oCirc((int)ex[i], (int)ey[i], 12, c, KDColor::RGB24(0x6D0000));
+        fRect((int)ex[i] - 5, (int)ey[i] - 4, 3, 3, C_WHT); fRect((int)ex[i] + 2, (int)ey[i] - 4, 3, 3, C_WHT);
+        int bw = ehp[i] * 28 / (VS_HP0[4] + (bossN - 1) * 160); if (bw < 0) bw = 0; if (bw > 28) bw = 28;
+        fRect((int)ex[i] - 14, (int)ey[i] - 20, 28, 3, KDColor::RGB24(0x3A0A0A));
+        fRect((int)ex[i] - 14, (int)ey[i] - 20, bw, 3, C_RED);
+      } else if (t == 0) { // chauve-souris : corps + ailes qui battent
+        fRect((int)ex[i] - 7, (int)ey[i] - 2 + ((int)(gameTime * 10) & 1), 4, 2, KDColor::RGB24(0x6A1FA0));
+        fRect((int)ex[i] + 3, (int)ey[i] - 2 - ((int)(gameTime * 10) & 1), 4, 2, KDColor::RGB24(0x6A1FA0));
+        fCirc((int)ex[i], (int)ey[i], 3, c);
+      } else if (t == 2) { // zombie : cercle + yeux rouges
+        fCirc((int)ex[i], (int)ey[i], 5, c);
+        fRect((int)ex[i] - 3, (int)ey[i] - 2, 2, 2, C_RED); fRect((int)ex[i] + 1, (int)ey[i] - 2, 2, 2, C_RED);
+      } else if (t == 3) { // fantome : cercle + franges
+        fCirc((int)ex[i], (int)ey[i], 4, c);
+        fRect((int)ex[i] - 4, (int)ey[i] + 3, 2, 2, c); fRect((int)ex[i], (int)ey[i] + 4, 2, 2, c); fRect((int)ex[i] + 2, (int)ey[i] + 3, 2, 2, c);
+        fRect((int)ex[i] - 2, (int)ey[i] - 2, 2, 2, KDColor::RGB24(0x0A5A6A));
+      } else { // squelette : cercle blanc + yeux noirs
+        fCirc((int)ex[i], (int)ey[i], 4, c);
+        fRect((int)ex[i] - 2, (int)ey[i] - 2, 2, 2, C_BLK); fRect((int)ex[i], (int)ey[i] - 2, 2, 2, C_BLK);
+      }
+    }
+    // ames (XP) : petites etoiles bleues
+    for (int i = 0; i < VS_NG; i++) {
+      if (gxp[i] == 0) continue;
+      int sz = (gxp[i] >= 3) ? 3 : 2;
+      fRect((int)gx[i] - sz, (int)gy[i] - sz, sz * 2, sz * 2, C_CYN);
+      px((int)gx[i], (int)gy[i] - sz - 1, C_WHT); px((int)gx[i], (int)gy[i] + sz, C_WHT);
+    }
+    // projectiles : eclats jaunes
+    for (int i = 0; i < VS_NP; i++) if (plife[i] > 0) { fRect((int)ppx[i] - 1, (int)ppy[i] - 1, 3, 3, C_YEL); px((int)ppx[i], (int)ppy[i], C_WHT); }
+    // joueur (clignote s'il est blesse) + visee
+    bool flash = (invT > 0.0f) && (((int)(invT * 12) & 1) == 0);
+    if (!flash) {
+      fCirc((int)vpx, (int)vpy, 5, C_YEL);
+      int ed = faceR ? 1 : -1;
+      fRect((int)vpx + ed * 1 - 1, (int)vpy - 3, 2, 2, C_BLK); fRect((int)vpx + ed * 3 - 1, (int)vpy - 3, 2, 2, C_BLK);
+      fRect((int)vpx - 2, (int)vpy + 2, 4, 1, KDColor::RGB24(0xB08000));
+    }
+    blit();
+    // ---- mort : ecran de fin + records
+    if (dead) {
+      int tS = (int)gameTime;
+      bool recT = (vsBestT == 0 || tS > vsBestT);
+      bool recL = (lvl > vsBestLvl);
+      if (recT) vsBestT = tS;
+      if (recL) vsBestLvl = lvl;
+      vsKillsT += kills;
+      saveAcc();
+      waitRelease();
+      bool pOK4 = false, pBk4 = false;
+      while (true) {
+        pollKeys();
+        if (keyOK && !pOK4) { // rejouer
+          waitRelease();
+          ne = 0;
+          for (int i = 0; i < VS_NG; i++) gxp[i] = 0;
+          for (int i = 0; i < VS_NP; i++) plife[i] = 0;
+          vpx = SW / 2.0f; vpy = 130.0f;
+          maxHp = 100; hp = 100; lvl = 1; xp = 0; xpNeed = 7; kills = 0; bossN = 0;
+          uDmg = uRate = uSpd = uHp = uMul = uMag = uReg = 0;
+          fireT = invT = regT = gameTime = spawnT = bossMsgT = 0.0f; bossNext = 60;
+          dead = false; lastMs = (int)Ion::Timing::millis();
+          break;
+        }
+        if (keyBack && !pBk4) { waitRelease(); return; }
+        pOK4 = keyOK; pBk4 = keyBack;
+        bgPanel();
+        drawTextC(16, "TU ES TOMBE...", C_RED);
+        char b1[32]; snprintf(b1, 32, "SURVIE : %d S", tS); drawTextC(48, b1, recT ? C_YEL : C_WHT);
+        if (recT) drawTextC(66, "NOUVEAU RECORD !", C_YEL);
+        char b2[32]; snprintf(b2, 32, "NIVEAU %d  KILLS %d", lvl, kills); drawTextC(88, b2, C_WHT);
+        if (recL) drawTextC(106, "NIVEAU RECORD !", C_YEL);
+        char b3[32]; snprintf(b3, 32, "RECORD : %d S", vsBestT); drawTextC(128, b3, C_GRE);
+        char b4[32]; snprintf(b4, 32, "KILLS TOTAUX : %d", vsKillsT); drawTextC(146, b4, C_GRE);
+        rRect(SW / 2 - 120, 176, 110, 22, 8, C_YEL); drawText(40 + (110 - textW("REJOUER")) / 2, 182, "REJOUER", C_BLK);
+        rRect(SW / 2 + 10, 176, 110, 22, 8, KDColor::RGB24(0x3A3A4A)); drawText(170 + (110 - textW("MENU")) / 2, 182, "MENU", C_WHT);
+        blit(); Ion::Timing::msleep(30);
+      }
+    }
+    pollKeys();
+    Ion::Timing::msleep(16); // ~60 FPS
+  }
+}
+
+
+// ======================= TOWER DEFENSE MINI (V5.32) ===================
+// Pose des tours sur la grille pour arreter les vagues : le chemin en S
+// traverse la carte, chaque ennemi qui atteint la base te coute des PV.
+// FLECHES: curseur, OK: poser ou ameliorer une tour, RETOUR: lancer la vague
+// en avance (bonus 15$). Boss toutes les 5 vagues. Les tours tirent seules.
+static void tdGame() {
+  enum { TD_GC = 10, TD_GR = 5, TD_CS = 30, TD_GX = 10, TD_GY = 28 }; // grille 10x5, cases de 30 px
+  static const int TD_WC[7] = { 0, 0, 4, 4, 8, 8, 9 }; // chemin en S : colonnes des points de passage
+  static const int TD_WR[7] = { 0, 4, 4, 0, 0, 4, 4 }; // lignes des points de passage
+  enum { TD_NE = 30, TD_NP = 40 }; // quotas memoire fixes
+  static float tex[TD_NE], tey[TD_NE], tspd[TD_NE], tslw[TD_NE];
+  static int thp[TD_NE], twp[TD_NE]; static uint8_t ttp[TD_NE];
+  static float pjx[TD_NP], pjy[TD_NP], pvx2[TD_NP], pvy2[TD_NP];
+  static int plife2[TD_NP], psp2[TD_NP], pjd[TD_NP];
+  static uint8_t tdT[50], tdL[50]; static float tdCd[50];
+  static bool onPath[50]; // cellules occupees par le chemin
+  static const int TD_EHP[4]  = { 30, 18, 90, 380 };   // PV de base : normal, rapide, tank, boss
+  static const int TD_ESP[4]  = { 24, 44, 14, 9 };     // vitesse (px/s)
+  static const int TD_ERW[4]  = { 8, 10, 22, 60 };     // or a la mort
+  static const int TD_ERD[4]  = { 4, 3, 5, 9 };        // rayon
+  static const KDColor TD_ECOL[4] = { KDColor::RGB24(0x3DDC55), KDColor::RGB24(0xFFC928), KDColor::RGB24(0x9A9AA8), KDColor::RGB24(0xB44BFF) };
+  static const int TD_TPR[4] = { 0, 50, 90, 70 };      // prix des tours
+  static const int TD_TRG[4] = { 0, 60, 55, 50 };      // portee
+  static const int TD_TDM[4] = { 0, 7, 16, 3 };        // degats de base
+  static const int TD_TDM2[4] = { 0, 5, 9, 2 };        // degats gagnes par niveau
+  static const float TD_TRT[4] = { 0, 0.45f, 1.0f, 0.7f }; // cadence (s)
+  static const KDColor TD_TCOL[4] = { C_WHT, KDColor::RGB24(0x35D4E8), KDColor::RGB24(0xFF8327), KDColor::RGB24(0xA8D8F0) };
+  static const char *TD_TN[4] = { "", "FLECHE", "CANON", "GLACE" };
+  static const char *TD_TDESC[4] = { "", "RAPIDE", "ZONE", "RALENTIT" };
+  int money = 120, lives = 10, wave = 0, kills = 0, spawnLeft = 0, bossLeft = 0, ne = 0;
+  int ccx = 1, ccy = 3;
+  float spawnT2 = 0.0f, interT = 6.0f; bool inWave = false, over = false;
+  bool pL2 = false, pR2 = false, pU2 = false, pD2 = false, pOK2 = false, pBk2 = false;
+  bool fresh = true;
+  waitRelease();
+  int lastMs = (int)Ion::Timing::millis();
+  while (true) { // ================= boucle principale =================
+    if (fresh) { // (re)demarrage d'une partie
+      fresh = false;
+      money = 120; lives = 10; wave = 0; kills = 0; spawnLeft = 0; bossLeft = 0; ne = 0;
+      ccx = 1; ccy = 3; spawnT2 = 0.0f; interT = 6.0f; inWave = false; over = false;
+      for (int i = 0; i < 50; i++) { tdT[i] = 0; tdL[i] = 0; tdCd[i] = 0.0f; onPath[i] = false; }
+      for (int w = 0; w < 6; w++) { // trace du chemin : chaque segment marque ses cellules
+        int x0 = TD_WC[w], y0 = TD_WR[w], x1 = TD_WC[w + 1], y1 = TD_WR[w + 1];
+        int sx = (x1 > x0) ? 1 : -1, sy = (y1 > y0) ? 1 : -1;
+        int x = x0, y = y0;
+        while (x != x1) { onPath[y * TD_GC + x] = true; x += sx; }
+        while (y != y1) { onPath[y * TD_GC + x] = true; y += sy; }
+      }
+      onPath[TD_WR[6] * TD_GC + TD_WC[6]] = true; // dernier point : la base
+      for (int i = 0; i < TD_NP; i++) plife2[i] = 0;
+      lastMs = (int)Ion::Timing::millis();
+    }
+    int nowMs = (int)Ion::Timing::millis();
+    float dt = (nowMs - lastMs) / 1000.0f; lastMs = nowMs;
+    if (dt > 0.05f) dt = 0.05f; if (dt <= 0.0f) dt = 0.0001f;
+    pollKeys();
+    // ---- curseur sur la grille
+    if (kLeft && !pL2 && ccx > 0) ccx--;
+    if (kRight && !pR2 && ccx < TD_GC - 1) ccx++;
+    if (kUp && !pU2 && ccy > 0) ccy--;
+    if (kDown && !pD2 && ccy < TD_GR - 1) ccy++;
+    int cur = ccy * TD_GC + ccx;
+    if (keyOK && !pOK2) {
+      waitRelease();
+      if (tdT[cur] == 0 && !onPath[cur]) { // ---- boutique de tours
+        int sel = 1;
+        while (true) {
+          pollKeys();
+          if (kUp && !pU2 && sel > 1) sel--;
+          if (kDown && !pD2 && sel < 3) sel++;
+          pU2 = kUp; pD2 = kDown;
+          if (keyOK && !pOK2) { // achat si assez d'or
+            waitRelease();
+            if (money >= TD_TPR[sel]) { money -= TD_TPR[sel]; tdT[cur] = (uint8_t)sel; tdL[cur] = 1; tdCd[cur] = 0.0f; }
+            break;
+          }
+          if (keyBack && !pBk2) { waitRelease(); break; }
+          pOK2 = keyOK; pBk2 = keyBack;
+          bgPanel();
+          drawTextC(16, "CHOISIR UNE TOUR", C_YEL);
+          for (int i = 1; i <= 3; i++) {
+            char sbuf[40]; snprintf(sbuf, 40, "%s : %s  %d$", TD_TN[i], TD_TDESC[i], TD_TPR[i]);
+            rRect(SW / 2 - 130, 50 + i * 34, 260, 28, 6, sel == i ? C_YEL : KDColor::RGB24(0x3A3A4A));
+            drawTextC(57 + i * 34, sbuf, sel == i ? C_BLK : C_WHT);
+          }
+          char mbuf[24]; snprintf(mbuf, 24, "TON OR : %d$", money); drawTextC(170, mbuf, C_GOLD);
+          drawTextC(192, "OK ACHETER  RETOUR ANNULE", C_GRE);
+          blit(); Ion::Timing::msleep(30);
+        }
+      } else if (tdT[cur] > 0) { // ---- amelioration de tour (NV1->2 : 40$, NV2->3 : 80$)
+        if (tdL[cur] < 3) {
+          int cost = 40 * tdL[cur];
+          if (money >= cost) { money -= cost; tdL[cur]++; }
+        }
+      }
+    }
+    // ---- RETOUR : lancer la vague en avance (bonus 15$) sinon decompte auto
+    if (keyBack && !pBk2 && !inWave && !over) {
+      waitRelease(); money += 15; interT = 0.0f;
+    }
+    pL2 = kLeft; pR2 = kRight; pU2 = kUp; pD2 = kDown; pOK2 = keyOK; pBk2 = keyBack;
+    if (kHome) return;
+    if (!over) {
+      // ---- debut de vague (auto apres decompte, ou RETOUR)
+      if (!inWave && interT <= 0.0f) {
+        inWave = true; wave++; spawnLeft = 5 + wave * 2; bossLeft = (wave % 5 == 0) ? 1 : 0; spawnT2 = 0.0f;
+      }
+      if (!inWave) interT -= dt;
+      // ---- apparitions des ennemis (0.8 s d'intervalle)
+      if (inWave && spawnLeft > 0) {
+        spawnT2 -= dt;
+        if (spawnT2 <= 0.0f) {
+          spawnT2 = 0.8f; spawnLeft--;
+          if (ne < TD_NE) {
+            int t = 0;
+            if (bossLeft > 0 && spawnLeft < 3) { t = 3; bossLeft--; } // le boss clot la vague
+            else if (wave >= 4 && rnd(5) == 0) t = 2;
+            else if (wave >= 2 && rnd(100) < 35) t = 1;
+            tex[ne] = TD_GX + TD_WC[0] * TD_CS + TD_CS / 2.0f; tey[ne] = TD_GY + TD_WR[0] * TD_CS + TD_CS / 2.0f;
+            twp[ne] = 1; ttp[ne] = (uint8_t)t; tslw[ne] = 0.0f;
+            tspd[ne] = TD_ESP[t] * (1.0f + wave * 0.03f);
+            thp[ne] = (int)(TD_EHP[t] * (1.0f + (wave - 1) * 0.25f)); ne++;
+          }
+        }
+      }
+      // ---- avancee des ennemis le long du chemin
+      for (int i = 0; i < ne; i++) {
+        float sp = tspd[i]; if (tslw[i] > 0.0f) { tslw[i] -= dt; sp *= 0.5f; }
+        float cx2 = TD_GX + TD_WC[twp[i]] * TD_CS + TD_CS / 2.0f;
+        float cy2 = TD_GY + TD_WR[twp[i]] * TD_CS + TD_CS / 2.0f;
+        float ddx = cx2 - tex[i], ddy = cy2 - tey[i];
+        float n = sqrtf(ddx * ddx + ddy * ddy);
+        if (n <= sp * dt + 1.0f) { // point de passage atteint
+          tex[i] = cx2; tey[i] = cy2; twp[i]++;
+          if (twp[i] > 6) { // ENNEMI DANS LA BASE : des PV en moins
+            lives -= (ttp[i] == 3) ? 3 : 1;
+            ne--; tex[i] = tex[ne]; tey[i] = tey[ne]; tspd[i] = tspd[ne]; tslw[i] = tslw[ne];
+            thp[i] = thp[ne]; twp[i] = twp[ne]; ttp[i] = ttp[ne];
+            i--; if (lives <= 0) { lives = 0; over = true; }
+          }
+        } else { tex[i] += ddx / n * sp * dt; tey[i] += ddy / n * sp * dt; }
+      }
+      // ---- tir des tours sur l'ennemi le plus proche dans la portee
+      for (int c = 0; c < 50; c++) {
+        if (tdT[c] == 0) continue;
+        tdCd[c] -= dt;
+        if (tdCd[c] > 0.0f) continue;
+        int cx2 = TD_GX + (c % TD_GC) * TD_CS + TD_CS / 2;
+        int cy2 = TD_GY + (c / TD_GC) * TD_CS + TD_CS / 2;
+        float rg = TD_TRG[tdT[c]] + 7 * (tdL[c] - 1);
+        int bi = -1; float bd = rg * rg;
+        for (int i = 0; i < ne; i++) {
+          float ddx = tex[i] - cx2, ddy = tey[i] - cy2; float d2 = ddx * ddx + ddy * ddy;
+          if (d2 < bd) { bd = d2; bi = i; }
+        }
+        if (bi >= 0) {
+          tdCd[c] = TD_TRT[tdT[c]] / (1.0f + 0.2f * (tdL[c] - 1));
+          float a = atan2f(tey[bi] - cy2, tex[bi] - cx2);
+          int slot = -1;
+          for (int j = 0; j < TD_NP; j++) { if (plife2[j] <= 0) { slot = j; break; } }
+          if (slot >= 0) {
+            pjx[slot] = cx2; pjy[slot] = cy2; pvx2[slot] = fcosf(a) * 200.0f; pvy2[slot] = fsinf(a) * 200.0f;
+            plife2[slot] = 90; psp2[slot] = tdT[c]; pjd[slot] = TD_TDM[tdT[c]] + TD_TDM2[tdT[c]] * (tdL[c] - 1);
+          }
+        }
+      }
+      // ---- projectiles : vol, impact, zone d'effet du canon, gel de la glace
+      for (int i = 0; i < TD_NP; i++) {
+        if (plife2[i] <= 0) continue;
+        plife2[i]--; pjx[i] += pvx2[i] * dt; pjy[i] += pvy2[i] * dt;
+        if (pjx[i] < 0 || pjx[i] > SW || pjy[i] < 24 || pjy[i] > 180) { plife2[i] = 0; continue; }
+        bool hit = false;
+        for (int j = 0; j < ne; j++) {
+          float ddx = tex[j] - pjx[i], ddy = tey[j] - pjy[i];
+          int rr = TD_ERD[ttp[j]] + 3;
+          if (ddx * ddx + ddy * ddy < rr * rr) { hit = true; break; }
+        }
+        if (hit) {
+          if (psp2[i] == 2) { // obus : explose et touche tout dans un rayon de 22 px
+            for (int j = 0; j < ne; j++) {
+              float ddx = tex[j] - pjx[i], ddy = tey[j] - pjy[i];
+              if (ddx * ddx + ddy * ddy < 22.0f * 22.0f) thp[j] -= pjd[i];
+            }
+          } else {
+            for (int j = 0; j < ne; j++) { // cherche l'ennemi touche
+              float ddx = tex[j] - pjx[i], ddy = tey[j] - pjy[i];
+              int rr = TD_ERD[ttp[j]] + 3;
+              if (ddx * ddx + ddy * ddy < rr * rr) {
+                thp[j] -= pjd[i];
+                if (psp2[i] == 3) tslw[j] = 2.0f; // tour de glace : ralenti 2 s
+                break;
+              }
+            }
+          }
+          plife2[i] = 0;
+        }
+      }
+      // ---- ramasse les ennemis morts (or + kills)
+      for (int j = ne - 1; j >= 0; j--) {
+        if (thp[j] <= 0) {
+          kills++; money += TD_ERW[ttp[j]];
+          ne--; tex[j] = tex[ne]; tey[j] = tey[ne]; tspd[j] = tspd[ne]; tslw[j] = tslw[ne];
+          thp[j] = thp[ne]; twp[j] = twp[ne]; ttp[j] = ttp[ne];
+        }
+      }
+      // ---- fin de vague : bonus d'or puis decompte avant la suivante
+      if (inWave && spawnLeft == 0 && ne == 0) { inWave = false; money += 30 + wave * 5; interT = 8.0f; }
+    }
+    // ================= rendu =================
+    fRect(0, 0, SW, SH, KDColor::RGB24(0x1A2028));
+    fRect(0, 0, SW, 24, KDColor::RGB24(0x10161E)); fRect(0, 24, SW, 2, C_BTND); // HUD haut
+    char mb[20]; snprintf(mb, 20, "OR:%d", money); drawText(8, 8, mb, C_GOLD);
+    char lb2[20]; snprintf(lb2, 20, "PV:%d", lives); drawText(120, 8, lb2, C_RED);
+    char wb[20]; snprintf(wb, 20, "VAGUE %d", wave); drawText(230, 8, wb, C_YEL);
+    // ---- grille (chemin plus clair, cases constructibles sombres)
+    for (int gy = 0; gy < TD_GR; gy++) for (int gx = 0; gx < TD_GC; gx++) {
+      int pxl = TD_GX + gx * TD_CS, pyl = TD_GY + gy * TD_CS;
+      bool onP = onPath[gy * TD_GC + gx];
+      fRect(pxl, pyl, TD_CS - 1, TD_CS - 1, onP ? KDColor::RGB24(0x4E4234) : KDColor::RGB24(0x242E3A));
+      fRect(pxl, pyl, TD_CS - 1, 2, onP ? KDColor::RGB24(0x5E5040) : KDColor::RGB24(0x2C3A4A));
+    }
+    // ---- portail d'entree (vert) et base a proteger (bleue)
+    rRect(TD_GX + TD_WC[0] * TD_CS + 8, TD_GY + TD_WR[0] * TD_CS + 8, 14, 14, 4, C_GREEN);
+    int bx = TD_GX + TD_WC[6] * TD_CS + 8, by = TD_GY + TD_WR[6] * TD_CS + 8;
+    fRect(bx, by, 14, 14, KDColor::RGB24(0x2E9BFF));
+    fRect(bx + 5, by + 3, 4, 8, C_RED); fRect(bx + 3, by + 5, 8, 4, C_RED); // croix rouge
+    // ---- tours (couleur par type, taille selon niveau, points de niveau)
+    for (int c = 0; c < 50; c++) {
+      if (tdT[c] == 0) continue;
+      int cx2 = TD_GX + (c % TD_GC) * TD_CS + TD_CS / 2;
+      int cy2 = TD_GY + (c / TD_GC) * TD_CS + TD_CS / 2;
+      int r = 6 + tdL[c];
+      fCirc(cx2, cy2, r, TD_TCOL[tdT[c]]);
+      fRect(cx2 - 1, cy2 - r - 3, 2, 3, KDColor::RGB24(0x606060)); // canon vers le haut
+      for (int l = 0; l < tdL[c]; l++) fRect(cx2 - 4 + l * 4, cy2 + r + 2, 2, 2, C_YEL); // points de niveau
+    }
+    // ---- ennemis + barre de vie + marqueur de gel
+    for (int i = 0; i < ne; i++) {
+      int t = ttp[i];
+      fCirc((int)tex[i], (int)tey[i], TD_ERD[t], TD_ECOL[t]);
+      if (t == 3) { fRect((int)tex[i] - 4, (int)tey[i] - 3, 2, 2, C_WHT); fRect((int)tex[i] + 2, (int)tey[i] - 3, 2, 2, C_WHT); } // yeux du boss
+      int maxhp = (int)(TD_EHP[t] * (1.0f + (wave - 1) * 0.25f)); if (maxhp < 1) maxhp = 1;
+      int bw = 12 * thp[i] / maxhp; if (bw < 0) bw = 0; if (bw > 12) bw = 12;
+      fRect((int)tex[i] - 6, (int)tey[i] - TD_ERD[t] - 7, 12, 2, KDColor::RGB24(0x3A0A0A));
+      fRect((int)tex[i] - 6, (int)tey[i] - TD_ERD[t] - 7, bw, 2, C_RED);
+      if (tslw[i] > 0.0f) fRect((int)tex[i] - 2, (int)tey[i] + TD_ERD[t] + 1, 4, 2, KDColor::RGB24(0xA8D8F0)); // marqueur de gel
+    }
+    // ---- projectiles
+    for (int i = 0; i < TD_NP; i++) if (plife2[i] > 0)
+      fRect((int)pjx[i] - 1, (int)pjy[i] - 1, 3, 3, psp2[i] == 1 ? C_CYN : (psp2[i] == 2 ? C_ORG : KDColor::RGB24(0xA8D8F0)));
+    // ---- curseur (cadre jaune)
+    int ux = TD_GX + ccx * TD_CS, uy = TD_GY + ccy * TD_CS;
+    fRect(ux, uy, TD_CS - 1, 2, C_YEL); fRect(ux, uy + TD_CS - 3, TD_CS - 1, 2, C_YEL);
+    fRect(ux, uy, 2, TD_CS - 1, C_YEL); fRect(ux + TD_CS - 3, uy, 2, TD_CS - 1, C_YEL);
+    // ---- barre du bas : infos et etat de la vague
+    fRect(0, 180, SW, SH - 180, KDColor::RGB24(0x10161E)); fRect(0, 180, SW, 2, C_BTND);
+    char b1[40];
+    if (tdT[cur] > 0) {
+      if (tdL[cur] < 3) snprintf(b1, 40, "%s NV%d : AMELIORER %d$", TD_TN[tdT[cur]], tdL[cur], 40 * tdL[cur]);
+      else snprintf(b1, 40, "%s NV3 : NIVEAU MAX", TD_TN[tdT[cur]]);
+    } else if (!onPath[cur]) snprintf(b1, 40, "OK : POSER UNE TOUR");
+    else snprintf(b1, 40, "CHEMIN : IMPOSSIBLE ICI");
+    drawText(8, 190, b1, C_WHT);
+    char b2[40];
+    if (inWave) {
+      int rest = spawnLeft + ne;
+      snprintf(b2, 40, "VAGUE %d : %d RESTANTS", wave, rest);
+      drawText(8, 206, b2, C_YEL);
+      if (bossLeft > 0) drawText(170, 206, "UN BOSS ARRIVE !", KDColor::RGB24(0xB44BFF));
+    } else {
+      snprintf(b2, 40, "VAGUE %d DANS %d S", wave + 1, (int)interT + 1);
+      drawText(8, 206, b2, C_GRE);
+      drawText(170, 206, "RETOUR: LANCER +15$", C_GOLD);
+    }
+    blit();
+    // ---- game over : records + ecran de fin
+    if (over) {
+      bool recW = (wave > tdBestW);
+      if (recW) tdBestW = wave;
+      tdWavesT += wave; tdKillsT += kills;
+      saveAcc();
+      waitRelease();
+      bool pOK3 = false, pBk3 = false;
+      while (true) {
+        pollKeys();
+        if (keyOK && !pOK3) { waitRelease(); fresh = true; break; } // rejouer
+        if (keyBack && !pBk3) { waitRelease(); return; }
+        pOK3 = keyOK; pBk3 = keyBack;
+        bgPanel();
+        drawTextC(16, "LA BASE EST TOMEE...", C_RED);
+        char e1[40]; snprintf(e1, 40, "VAGUE ATTEINTE : %d", wave); drawTextC(48, e1, recW ? C_YEL : C_WHT);
+        if (recW) drawTextC(66, "NOUVEAU RECORD !", C_YEL);
+        char e2[40]; snprintf(e2, 40, "KILLS : %d", kills); drawTextC(88, e2, C_WHT);
+        char e3[40]; snprintf(e3, 40, "RECORD VAGUE : %d", tdBestW); drawTextC(110, e3, C_GRE);
+        char e4[40]; snprintf(e4, 40, "TOTAL : %dV %dK", tdWavesT, tdKillsT); drawTextC(132, e4, C_GRE);
+        rRect(SW / 2 - 120, 176, 110, 22, 8, C_YEL); drawText(40 + (110 - textW("REJOUER")) / 2, 182, "REJOUER", C_BLK);
+        rRect(SW / 2 + 10, 176, 110, 22, 8, KDColor::RGB24(0x3A3A4A)); drawText(170 + (110 - textW("MENU")) / 2, 182, "MENU", C_WHT);
+        blit(); Ion::Timing::msleep(30);
+      }
+    }
+    Ion::Timing::msleep(16); // ~60 FPS
+  }
+}
+
+
+// ======================= OTHELLO MINI (V5.32) =========================
+// Reversi 8x8 contre l'IA : noir = toi, blanc = l'IA. Choisis ton niveau
+// (FACILE, MOYEN, DIFFICILE), tes coups legaux clignotent en jaune.
+static int otLegal(uint8_t *b, int i, int p) { // nombre de pions retournes si p joue en i (0 = illegal)
+  if (b[i] != 0) return 0;
+  static const int DX[8] = { 1, -1, 0, 0, 1, 1, -1, -1 };
+  static const int DY[8] = { 0, 0, 1, -1, 1, -1, 1, -1 };
+  int x = i % 8, y = i / 8, q = (p == 1) ? 2 : 1, flips = 0;
+  for (int d = 0; d < 8; d++) {
+    int cx = x + DX[d], cy = y + DY[d], run = 0;
+    while (cx >= 0 && cx < 8 && cy >= 0 && cy < 8 && b[cy * 8 + cx] == q) { run++; cx += DX[d]; cy += DY[d]; }
+    if (run > 0 && cx >= 0 && cx < 8 && cy >= 0 && cy < 8 && b[cy * 8 + cx] == p) flips += run;
+  }
+  return flips;
+}
+static int otMoves(uint8_t *b, int p, int *out) { // liste des coups legaux de p
+  int n = 0;
+  for (int i = 0; i < 64; i++) if (otLegal(b, i, p) > 0) out[n++] = i;
+  return n;
+}
+static void otPlay(uint8_t *b, int i, int p) { // pose le pion et retourne les encadrements
+  static const int DX[8] = { 1, -1, 0, 0, 1, 1, -1, -1 };
+  static const int DY[8] = { 0, 0, 1, -1, 1, -1, 1, -1 };
+  int x = i % 8, y = i / 8, q = (p == 1) ? 2 : 1;
+  b[i] = (uint8_t)p;
+  for (int d = 0; d < 8; d++) {
+    int cx = x + DX[d], cy = y + DY[d], run = 0;
+    while (cx >= 0 && cx < 8 && cy >= 0 && cy < 8 && b[cy * 8 + cx] == q) { run++; cx += DX[d]; cy += DY[d]; }
+    if (run > 0 && cx >= 0 && cx < 8 && cy >= 0 && cy < 8 && b[cy * 8 + cx] == p) {
+      int fx = x + DX[d], fy = y + DY[d];
+      while (fx != cx || fy != cy) { b[fy * 8 + fx] = (uint8_t)p; fx += DX[d]; fy += DY[d]; }
+    }
+  }
+}
+static const int otW[64] = { // poids positionnels : coins forts, bords moyens, adjacents aux coins faibles
+  9, 2, 5, 5, 5, 5, 2, 9,  2, 1, 3, 3, 3, 3, 1, 2,  5, 3, 4, 4, 4, 4, 3, 5,
+  5, 3, 4, 4, 4, 4, 3, 5,  5, 3, 4, 4, 4, 4, 3, 5,  5, 3, 4, 4, 4, 4, 3, 5,
+  2, 1, 3, 3, 3, 3, 1, 2,  9, 2, 5, 5, 5, 5, 2, 9
+};
+static int otScore(uint8_t *b) { // evaluation : + = bon pour l'IA (blanc)
+  int s = 0;
+  for (int i = 0; i < 64; i++) { if (b[i] == 2) s += otW[i]; else if (b[i] == 1) s -= otW[i]; }
+  return s;
+}
+static int otSearch(uint8_t *b, int depth, int alpha, int beta, int p) { // minimax alpha-beta
+  int mv[64], n = otMoves(b, p, mv);
+  if (n == 0) {
+    int mv2[64];
+    if (otMoves(b, (p == 1) ? 2 : 1, mv2) == 0) { // fin de partie : difference de pions, tres lourde
+      int bl = 0, wh = 0;
+      for (int i = 0; i < 64; i++) { if (b[i] == 1) bl++; else if (b[i] == 2) wh++; }
+      return (wh - bl) * 100;
+    }
+    return otSearch(b, depth, alpha, beta, (p == 1) ? 2 : 1); // passe sans consommer de profondeur
+  }
+  if (depth <= 0) return otScore(b);
+  if (p == 2) { // l'IA maximise
+    int best = -1000000;
+    for (int k = 0; k < n; k++) {
+      uint8_t nb[64];
+      for (int i = 0; i < 64; i++) nb[i] = b[i];
+      otPlay(nb, mv[k], 2);
+      int v = otSearch(nb, depth - 1, alpha, beta, 1);
+      if (v > best) best = v;
+      if (best > alpha) alpha = best;
+      if (alpha >= beta) break; // coupe
+    }
+    return best;
+  }
+  int best = 1000000; // le joueur minimise
+  for (int k = 0; k < n; k++) {
+    uint8_t nb[64];
+    for (int i = 0; i < 64; i++) nb[i] = b[i];
+    otPlay(nb, mv[k], 1);
+    int v = otSearch(nb, depth - 1, alpha, beta, 2);
+    if (v < best) best = v;
+    if (best < beta) beta = best;
+    if (beta <= alpha) break; // coupe
+  }
+  return best;
+}
+static void otDraw(uint8_t *b, int ccx, int ccy, int *pm, int np, const char *msg, KDColor mc, int lvlN) {
+  fRect(0, 0, SW, SH, KDColor::RGB24(0x1A2028));
+  int x0 = 72, y0 = 28, cs = 22; // plateau 176x176 centre
+  for (int y = 0; y < 8; y++) for (int x = 0; x < 8; x++) {
+    fRect(x0 + x * cs, y0 + y * cs, cs - 1, cs - 1, KDColor::RGB24(0x3D7A20));
+    fRect(x0 + x * cs, y0 + y * cs, cs - 1, 2, KDColor::RGB24(0x2E5A16));
+  }
+  for (int i = 0; i < 64; i++) { // pions poses
+    if (b[i] == 0) continue;
+    int cx2 = x0 + (i % 8) * cs + cs / 2, cy2 = y0 + (i / 8) * cs + cs / 2;
+    if (b[i] == 1) { fCirc(cx2, cy2, 8, C_GRE); fCirc(cx2, cy2, 7, KDColor::RGB24(0x151515)); }
+    else fCirc(cx2, cy2, 8, C_WHT);
+  }
+  int t2 = (int)Ion::Timing::millis();
+  for (int k = 0; k < np; k++) // coups legaux : petits points jaunes qui clignotent
+    if (((t2 / 250) & 1) == 0) fRect(x0 + (pm[k] % 8) * cs + cs / 2 - 2, y0 + (pm[k] / 8) * cs + cs / 2 - 2, 4, 4, C_YEL);
+  int ux = x0 + ccx * cs, uy = y0 + ccy * cs; // curseur jaune
+  fRect(ux, uy, cs - 1, 2, C_YEL); fRect(ux, uy + cs - 3, cs - 1, 2, C_YEL);
+  fRect(ux, uy, 2, cs - 1, C_YEL); fRect(ux + cs - 3, uy, 2, cs - 1, C_YEL);
+  int bl = 0, wh = 0;
+  for (int i = 0; i < 64; i++) { if (b[i] == 1) bl++; else if (b[i] == 2) wh++; }
+  fRect(0, 208, SW, SH - 208, KDColor::RGB24(0x10161E));
+  char sb[32]; snprintf(sb, 32, "NOIR %d - %d BLANC", bl, wh); drawText(6, 212, sb, C_WHT);
+  char tb2[32]; snprintf(tb2, 32, "NV IA %d", lvlN); drawText(240, 212, tb2, C_GRE);
+  drawTextC(6, msg, mc); // message d'etat en haut, au-dessus du plateau
+  blit();
+}
+static void otGame() {
+  static uint8_t bo[64];
+  static const int OT_DEPTHS[3] = { 1, 3, 5 };
+  waitRelease();
+  int lvl = 0;
+  { // ---- choix du niveau de l'IA
+    static const char *OT_LV[3] = { "FACILE (IA RAPIDE)", "MOYEN", "DIFFICILE (IA LONGUE)" };
+    int sel = 1; bool pU2 = false, pD2 = false, pOK2 = false, pBk2 = false;
+    while (true) {
+      pollKeys();
+      if (kUp && !pU2 && sel > 0) sel--;
+      if (kDown && !pD2 && sel < 2) sel++;
+      if (keyOK && !pOK2) { waitRelease(); lvl = sel; break; }
+      if (keyBack && !pBk2) { waitRelease(); return; }
+      pU2 = kUp; pD2 = kDown; pOK2 = keyOK; pBk2 = keyBack;
+      bgPanel();
+      drawTextC(16, "OTHELLO : NIVEAU IA", C_YEL);
+      drawTextC(44, "NOIR = TOI, BLANC = IA", C_GRE);
+      for (int i = 0; i < 3; i++) {
+        rRect(SW / 2 - 130, 70 + i * 34, 260, 28, 6, sel == i ? C_YEL : KDColor::RGB24(0x3A3A4A));
+        drawTextC(77 + i * 34, OT_LV[i], sel == i ? C_BLK : C_WHT);
+      }
+      drawTextC(186, "OK POUR JOUER", C_GRE);
+      blit(); Ion::Timing::msleep(30);
+    }
+  }
+  int depth = OT_DEPTHS[lvl];
+  bool fresh = true;
+  while (true) { // une partie complete
+    if (fresh) {
+      fresh = false;
+      for (int i = 0; i < 64; i++) bo[i] = 0;
+      bo[27] = 2; bo[28] = 1; bo[35] = 1; bo[36] = 2; // disposition de depart
+    }
+    int turn = 1, ccx = 3, ccy = 3; // noir commence
+    bool pL2 = false, pR2 = false, pU2 = false, pD2 = false, pOK2 = false, pBk2 = false;
+    bool quit = false;
+    while (true) { // tour par tour
+      int pm[64], ai[64];
+      int np = otMoves(bo, 1, pm), na = otMoves(bo, 2, ai);
+      if (np == 0 && na == 0) break; // partie finie : plus aucun coup nulle part
+      if (turn == 1 && np == 0) { // le joueur doit passer
+        waitRelease();
+        bool pOK3 = false;
+        while (true) { pollKeys(); if (keyOK && !pOK3) { waitRelease(); break; } pOK3 = keyOK;
+          bgPanel(); drawTextC(90, "TU PASSES !", C_YEL); drawTextC(120, "OK POUR CONTINUER", C_GRE); blit(); Ion::Timing::msleep(30); }
+        turn = 2; continue;
+      }
+      if (turn == 2) { // ---- tour de l'IA
+        if (na == 0) { // l'IA passe
+          waitRelease();
+          bool pOK3 = false;
+          while (true) { pollKeys(); if (keyOK && !pOK3) { waitRelease(); break; } pOK3 = keyOK;
+            bgPanel(); drawTextC(90, "L'IA PASSE !", C_YEL); drawTextC(120, "OK POUR CONTINUER", C_GRE); blit(); Ion::Timing::msleep(30); }
+          turn = 1; continue;
+        }
+        otDraw(bo, ccx, ccy, pm, np, "L'IA REFLECHIT...", C_GRE, lvl + 1); // affiche avant de calculer
+        int best = -1000000, bm = ai[0];
+        for (int k = 0; k < na; k++) {
+          uint8_t nb[64];
+          for (int i = 0; i < 64; i++) nb[i] = bo[i];
+          otPlay(nb, ai[k], 2);
+          int v = otSearch(nb, depth - 1, -1000000, 1000000, 1);
+          if (v > best) { best = v; bm = ai[k]; }
+        }
+        otPlay(bo, bm, 2);
+        turn = 1; continue;
+      }
+      // ---- tour du joueur : fleches pour le curseur, OK pour poser
+      pollKeys();
+      if (kLeft && !pL2 && ccx > 0) ccx--;
+      if (kRight && !pR2 && ccx < 7) ccx++;
+      if (kUp && !pU2 && ccy > 0) ccy--;
+      if (kDown && !pD2 && ccy < 7) ccy++;
+      if (keyBack && !pBk2) { waitRelease(); quit = true; break; } // abandon
+      if (keyOK && !pOK2) {
+        int idx = ccy * 8 + ccx;
+        if (otLegal(bo, idx, 1) > 0) { otPlay(bo, idx, 1); waitRelease(); turn = 2; }
+        // coup illegal : rien, on laisse le curseur la ou il est
+      }
+      pL2 = kLeft; pR2 = kRight; pU2 = kUp; pD2 = kDown; pOK2 = keyOK; pBk2 = keyBack;
+      if (kHome) return;
+      otDraw(bo, ccx, ccy, pm, np, "A TOI DE JOUER", C_YEL, lvl + 1);
+      Ion::Timing::msleep(30);
+    }
+    if (quit) return;
+    // ---- fin de partie : denombrement et resultat
+    int bl = 0, wh = 0;
+    for (int i = 0; i < 64; i++) { if (bo[i] == 1) bl++; else if (bo[i] == 2) wh++; }
+    int res = (bl > wh) ? 1 : ((wh > bl) ? 2 : 0); // 1 = joueur gagne, 2 = IA gagne, 0 = nul
+    if (res == 1) otWins++;
+    else if (res == 2) otLosses++;
+    else otDraws++;
+    saveAcc();
+    waitRelease();
+    bool pOK3 = false, pBk3 = false;
+    while (true) {
+      pollKeys();
+      if (keyOK && !pOK3) { waitRelease(); fresh = true; break; } // rejouer au meme niveau
+      if (keyBack && !pBk3) { waitRelease(); return; }
+      pOK3 = keyOK; pBk3 = keyBack;
+      bgPanel();
+      char r1[32];
+      snprintf(r1, 32, "NOIR %d - %d BLANC", bl, wh); drawTextC(40, r1, C_WHT);
+      if (res == 1) drawTextC(16, "TU AS GAGNE !", C_YEL);
+      else if (res == 2) drawTextC(16, "L'IA GAGNE...", C_RED);
+      else drawTextC(16, "MATCH NUL", C_GRE);
+      char r2[40]; snprintf(r2, 40, "VICTOIRES %d DEFAITES %d NULS %d", otWins, otLosses, otDraws);
+      drawTextC(80, r2, C_GRE);
+      rRect(SW / 2 - 120, 176, 110, 22, 8, C_YEL); drawText(40 + (110 - textW("REJOUER")) / 2, 182, "REJOUER", C_BLK);
+      rRect(SW / 2 + 10, 176, 110, 22, 8, KDColor::RGB24(0x3A3A4A)); drawText(170 + (110 - textW("MENU")) / 2, 182, "MENU", C_WHT);
+      blit(); Ion::Timing::msleep(30);
+    }
+  }
+}
+
+// ======================= DONJON ROGUELIKE MINI (V5.32) =================
+// Explore des donjons generes aleatoirement, bats les monstres, ramasse
+// les potions et l'or, descends le plus loin possible. Tour par tour :
+// FLECHES pour bouger/frapper, OK pour boire une potion.
+static void dgGame() {
+  enum { DGW = 20, DGH = 12, DGT = 16, DGY = 14, DG_NE = 14 }; // grille 20x12, tuiles 16 px
+  static uint8_t dgMap[DGW * DGH]; // 0 sol, 1 mur, 2 escalier, 3 potion, 4 or, 5 epee
+  static int ex2[DG_NE], ey2[DG_NE], ehp2[DG_NE]; static uint8_t etp2[DG_NE];
+  static bool seen[DGW * DGH]; static int dist[DGW * DGH];
+  static int qx[DGW * DGH], qy[DGW * DGH];
+  static const int DG_EHP[4] = { 4, 6, 9, 26 };
+  static const int DG_EAT[4] = { 1, 2, 3, 5 };
+  static const char *DG_EN[4] = { "RAT", "GELATINE", "SQUELETTE", "BOSS" };
+  static const KDColor DG_ECOL[4] = { KDColor::RGB24(0x9A7A5A), KDColor::RGB24(0x3DDC55), KDColor::RGB24(0xE8E8E8), KDColor::RGB24(0xC51111) };
+  int px2 = 1, py2 = 1, ne = 0, hp = 20, maxHp = 20, atk = 3, pots = 1, gold = 0, floor = 1, kills = 0;
+  bool newRun = true, genFloor = false;
+  waitRelease();
+  bool pU2 = false, pD2 = false, pL2 = false, pR2 = false, pOK2 = false, pBk2 = false;
+  char log1[40];
+  snprintf(log1, 40, "ETAGE 1 : TROUVE L'ESCALIER");
+  while (true) { // ================= boucle principale =================
+    if (newRun) { // ---- nouvelle partie
+      newRun = false;
+      px2 = 1; py2 = 1; ne = 0; hp = 20; maxHp = 20; atk = 3; pots = 1; gold = 0; floor = 1; kills = 0;
+      snprintf(log1, 40, "ETAGE 1 : TROUVE L'ESCALIER");
+      genFloor = true;
+    }
+    if (genFloor) { // ---- generation de l'etage (murs aleatoires, tout est toujours atteignable)
+      genFloor = false;
+      for (int y = 0; y < DGH; y++) for (int x = 0; x < DGW; x++)
+        dgMap[y * DGW + x] = (x == 0 || y == 0 || x == DGW - 1 || y == DGH - 1 || rnd(100) < 13) ? 1 : 0;
+      px2 = 1 + rnd(DGW - 2); py2 = 1 + rnd(DGH - 2);
+      dgMap[py2 * DGW + px2] = 0;
+      for (int i = 0; i < DGW * DGH; i++) seen[i] = false; // acces : onde depuis le joueur
+      int qh = 0, qt = 0;
+      qx[qt] = px2; qy[qt] = py2; qt++; seen[py2 * DGW + px2] = true; dist[py2 * DGW + px2] = 0;
+      while (qh < qt) {
+        int cx2 = qx[qh], cy2 = qy[qh]; qh++;
+        static const int DX[4] = { 1, -1, 0, 0 }; static const int DY[4] = { 0, 0, 1, -1 };
+        for (int d = 0; d < 4; d++) {
+          int nx = cx2 + DX[d], ny = cy2 + DY[d];
+          if (nx < 0 || ny < 0 || nx >= DGW || ny >= DGH) continue;
+          if (dgMap[ny * DGW + nx] == 1 || seen[ny * DGW + nx]) continue;
+          seen[ny * DGW + nx] = true; dist[ny * DGW + nx] = dist[cy2 * DGW + cx2] + 1;
+          qx[qt] = nx; qy[qt] = ny; qt++;
+        }
+      }
+      int far = 0, fx = px2, fy = py2; // l'escalier au point le plus loin du joueur
+      for (int y = 1; y < DGH - 1; y++) for (int x = 1; x < DGW - 1; x++)
+        if (seen[y * DGW + x] && dist[y * DGW + x] > far) { far = dist[y * DGW + x]; fx = x; fy = y; }
+      dgMap[fy * DGW + fx] = 2;
+      int placed = 0, guard = 0; // potions : uniquement sur des cases atteignables
+      while (placed < 3 && guard++ < 300) {
+        int x = 1 + rnd(DGW - 2), y = 1 + rnd(DGH - 2);
+        if (seen[y * DGW + x] && dgMap[y * DGW + x] == 0) { dgMap[y * DGW + x] = 3; placed++; }
+      }
+      placed = 0; guard = 0; // tas d'or
+      while (placed < 3 && guard++ < 300) {
+        int x = 1 + rnd(DGW - 2), y = 1 + rnd(DGH - 2);
+        if (seen[y * DGW + x] && dgMap[y * DGW + x] == 0) { dgMap[y * DGW + x] = 4; placed++; }
+      }
+      if (rnd(100) < 60) { // une epee d'amelioration, 60% du temps
+        int x = 1 + rnd(DGW - 2), y = 1 + rnd(DGH - 2);
+        if (seen[y * DGW + x] && dgMap[y * DGW + x] == 0) dgMap[y * DGW + x] = 5;
+      }
+      int nEn = 3 + floor; if (nEn > DG_NE) nEn = DG_NE; // les monstres
+      if (floor % 5 == 0) nEn = DG_NE; // etage du boss : pack complet, le boss clot la generation
+      placed = 0; guard = 0;
+      while (placed < nEn && guard++ < 600) {
+        int x = 1 + rnd(DGW - 2), y = 1 + rnd(DGH - 2);
+        if (!seen[y * DGW + x] || dgMap[y * DGW + x] != 0) continue;
+        if (x == px2 && y == py2) continue;
+        int dMan = (x > px2 ? x - px2 : px2 - x) + (y > py2 ? y - py2 : py2 - y);
+        if (dMan <= 5) continue; // jamais colles au joueur au depart
+        int t = 0;
+        if (floor >= 2 && rnd(100) < 40) t = 1;
+        if (floor >= 3 && rnd(100) < 25) t = 2;
+        if (floor % 5 == 0 && placed == nEn - 1) t = 3;
+        ex2[placed] = x; ey2[placed] = y; etp2[placed] = (uint8_t)t;
+        ehp2[placed] = DG_EHP[t] + (floor - 1) * (t == 3 ? 8 : 1); placed++;
+      }
+      ne = placed;
+    }
+    // ---- entrees : un appui = une action (tour par tour)
+    pollKeys();
+    bool acted = false;
+    int nx = px2, ny = py2;
+    if (kLeft && !pL2) nx = px2 - 1;
+    else if (kRight && !pR2) nx = px2 + 1;
+    else if (kUp && !pU2) ny = py2 - 1;
+    else if (kDown && !pD2) ny = py2 + 1;
+    if (kHome) { pL2 = kLeft; pR2 = kRight; pU2 = kUp; pD2 = kDown; return; }
+    if (keyBack && !pBk2) { waitRelease(); return; } // abandon
+    if (keyOK && !pOK2) { // boire une potion (ca ne reveille pas les monstres)
+      waitRelease();
+      if (pots > 0 && hp < maxHp) { pots--; hp += 8; if (hp > maxHp) hp = maxHp; snprintf(log1, 40, "TU BOIS : +8 PV"); }
+      else snprintf(log1, 40, pots > 0 ? "PV AU MAXIMUM" : "PLUS DE POTIONS !");
+      acted = false;
+    }
+    if (nx != px2 || ny != py2) { // ---- deplacement ou attaque au corps a corps
+      int tgt = -1;
+      for (int i = 0; i < ne; i++) if (ex2[i] == nx && ey2[i] == ny) { tgt = i; break; }
+      if (tgt >= 0) { // frappe le monstre
+        ehp2[tgt] -= atk;
+        snprintf(log1, 40, "TU FRAPPES LE %s : -%d", DG_EN[etp2[tgt]], atk);
+        if (ehp2[tgt] <= 0) {
+          kills++;
+          snprintf(log1, 40, "%s MORT !", DG_EN[etp2[tgt]]);
+          ne--; ex2[tgt] = ex2[ne]; ey2[tgt] = ey2[ne]; ehp2[tgt] = ehp2[ne]; etp2[tgt] = etp2[ne];
+        }
+        acted = true;
+      } else if (dgMap[ny * DGW + nx] != 1) { // case praticable : on avance
+        px2 = nx; py2 = ny; acted = true;
+        if (dgMap[py2 * DGW + px2] == 2) { // ---- ESCALIER : etage suivant
+          floor++;
+          hp += 4; if (hp > maxHp) hp = maxHp;
+          gold += 10;
+          genFloor = true;
+          snprintf(log1, 40, "DESCENTE A L'ETAGE %d", floor);
+          pL2 = kLeft; pR2 = kRight; pU2 = kUp; pD2 = kDown; pOK2 = keyOK; pBk2 = keyBack;
+          continue; // regenere avant de rendre (saute le tour des monstres)
+        } else if (dgMap[py2 * DGW + px2] == 3) { dgMap[py2 * DGW + px2] = 0; pots++; snprintf(log1, 40, "POTION RAMASSEE"); }
+        else if (dgMap[py2 * DGW + px2] == 4) { dgMap[py2 * DGW + px2] = 0; gold += 25; snprintf(log1, 40, "+25 OR !"); }
+        else if (dgMap[py2 * DGW + px2] == 5) { dgMap[py2 * DGW + px2] = 0; atk++; snprintf(log1, 40, "EPEE : ATK %d", atk); }
+      }
+    }
+    pL2 = kLeft; pR2 = kRight; pU2 = kUp; pD2 = kDown; pOK2 = keyOK; pBk2 = keyBack;
+    if (acted) { // ---- tour des monstres apres ton action
+      for (int i = 0; i < ne; i++) {
+        int dx = px2 - ex2[i], dy = py2 - ey2[i];
+        int adx = (dx > 0) ? dx : -dx, ady = (dy > 0) ? dy : -dy;
+        if (adx + ady == 1) { // adjacent : il frappe
+          hp -= DG_EAT[etp2[i]];
+          snprintf(log1, 40, "LE %s TE FRAPPE : -%d", DG_EN[etp2[i]], DG_EAT[etp2[i]]);
+          if (hp <= 0) { hp = 0; break; }
+        } else { // sinon il s'approche : axe le plus long d'abord, l'autre en secours
+          int sx = (dx > 0) ? 1 : -1, sy = (dy > 0) ? 1 : -1;
+          int tx = ex2[i], ty = ey2[i];
+          if (dx != 0 && adx >= ady) tx += sx; else if (dy != 0) ty += sy;
+          bool wall = (dgMap[ty * DGW + tx] == 1);
+          bool occ = (tx == px2 && ty == py2);
+          if (!occ) for (int j = 0; j < ne; j++) if (j != i && ex2[j] == tx && ey2[j] == ty) { occ = true; break; }
+          if (wall || occ) { // premier axe bloque : essai l'autre axe
+            tx = ex2[i]; ty = ey2[i];
+            if (dx != 0 && adx >= ady) { if (dy != 0) ty += sy; }
+            else if (dx != 0) tx += sx;
+            if (tx != ex2[i] || ty != ey2[i]) {
+              wall = (dgMap[ty * DGW + tx] == 1);
+              occ = (tx == px2 && ty == py2);
+              if (!occ) for (int j = 0; j < ne; j++) if (j != i && ex2[j] == tx && ey2[j] == ty) { occ = true; break; }
+              if (wall || occ) { tx = ex2[i]; ty = ey2[i]; } // bloque des deux cotes : il attend
+            }
+          }
+          if (tx != ex2[i] || ty != ey2[i]) { ex2[i] = tx; ey2[i] = ty; }
+        }
+      }
+    }
+    // ---- mort du joueur
+    if (hp <= 0) {
+      bool recF = (floor > rgBestF);
+      if (recF) rgBestF = floor;
+      rgKillsT += kills; rgFloorsT += floor;
+      saveAcc();
+      waitRelease();
+      bool pOK3 = false, pBk3 = false;
+      while (true) {
+        pollKeys();
+        if (keyOK && !pOK3) { waitRelease(); newRun = true; break; } // rejouer
+        if (keyBack && !pBk3) { waitRelease(); return; }
+        pOK3 = keyOK; pBk3 = keyBack;
+        bgPanel();
+        drawTextC(16, "TU ES MORT...", C_RED);
+        char d1[40]; snprintf(d1, 40, "ETAGE %d  OR %d  KILLS %d", floor, gold, kills); drawTextC(48, d1, C_WHT);
+        if (recF) drawTextC(66, "NOUVEAU RECORD !", C_YEL);
+        char d2[40]; snprintf(d2, 40, "RECORD : ETAGE %d", rgBestF); drawTextC(88, d2, C_GRE);
+        char d3[40]; snprintf(d3, 40, "TOTAL : %dE %dK", rgFloorsT, rgKillsT); drawTextC(110, d3, C_GRE);
+        rRect(SW / 2 - 120, 176, 110, 22, 8, C_YEL); drawText(40 + (110 - textW("REJOUER")) / 2, 182, "REJOUER", C_BLK);
+        rRect(SW / 2 + 10, 176, 110, 22, 8, KDColor::RGB24(0x3A3A4A)); drawText(170 + (110 - textW("MENU")) / 2, 182, "MENU", C_WHT);
+        blit(); Ion::Timing::msleep(30);
+      }
+      continue; // retour au jeu avec newRun
+    }
+    // ================= rendu =================
+    fRect(0, 0, SW, SH, KDColor::RGB24(0x14101E));
+    for (int y = 0; y < DGH; y++) for (int x = 0; x < DGW; x++) {
+      int t = dgMap[y * DGW + x];
+      int pxl = x * DGT, pyl = DGY + y * DGT;
+      if (t == 1) { fRect(pxl, pyl, DGT, DGT, KDColor::RGB24(0x6A5A4A)); fRect(pxl, pyl, DGT, 3, KDColor::RGB24(0x8A7A6A)); }
+      else fRect(pxl, pyl, DGT, DGT, KDColor::RGB24(0x241A30));
+      if (t == 2) { fRect(pxl + 4, pyl + 2, 8, 12, KDColor::RGB24(0x7A5432)); fRect(pxl + 3, pyl + 4, 10, 2, C_YEL); fRect(pxl + 3, pyl + 9, 10, 2, C_YEL); } // escalier
+      else if (t == 3) { fRect(pxl + 6, pyl + 3, 4, 6, C_RED); fRect(pxl + 5, pyl + 9, 6, 4, KDColor::RGB24(0xC51111)); } // potion
+      else if (t == 4) { fCirc(pxl + 8, pyl + 8, 4, C_GOLD); } // or
+      else if (t == 5) { fRect(pxl + 7, pyl + 2, 2, 9, C_WHT); fRect(pxl + 5, pyl + 9, 6, 2, C_WHT); fRect(pxl + 6, pyl + 11, 4, 3, KDColor::RGB24(0x8A6D00)); } // epee
+    }
+    for (int i = 0; i < ne; i++) { // monstres
+      int pxl = ex2[i] * DGT, pyl = DGY + ey2[i] * DGT;
+      int r = (etp2[i] == 3) ? 7 : 5;
+      fCirc(pxl + 8, pyl + 8, r, DG_ECOL[etp2[i]]);
+      fRect(pxl + 5, pyl + 6, 2, 2, C_RED); fRect(pxl + 9, pyl + 6, 2, 2, C_RED); // yeux
+      int mx = DG_EHP[etp2[i]] + (floor - 1) * (etp2[i] == 3 ? 8 : 1); if (mx < 1) mx = 1;
+      int bw = 10 * ehp2[i] / mx; if (bw < 0) bw = 0; if (bw > 10) bw = 10;
+      fRect(pxl + 3, pyl + 1, 10, 2, KDColor::RGB24(0x3A0A0A));
+      fRect(pxl + 3, pyl + 1, bw, 2, C_RED);
+    }
+    int pxl = px2 * DGT, pyl = DGY + py2 * DGT; // joueur
+    fCirc(pxl + 8, pyl + 8, 5, C_YEL);
+    fRect(pxl + 5, pyl + 6, 2, 2, C_BLK); fRect(pxl + 9, pyl + 6, 2, 2, C_BLK);
+    fRect(0, 0, SW, 14, KDColor::RGB24(0x10161E)); fRect(0, 14, SW, 2, C_BTND); // HUD haut
+    char h1[48]; snprintf(h1, 48, "PV%d ATK%d P%d OR%d E%d", hp, atk, pots, gold, floor);
+    drawText(6, 3, h1, C_WHT);
+    fRect(0, 206, SW, SH - 206, KDColor::RGB24(0x10161E)); fRect(0, 206, SW, 2, C_BTND); // barre du bas
+    drawText(6, 212, log1, C_WHT);
+    blit();
+    Ion::Timing::msleep(40);
+  }
+}
+
+
+// ------------------------- LANCEUR : 6 jeux dans l'app ----------------
+
 static int launcherScreen() {
   int sel = 0, drawn = -1;
-  bool pL = false, pR = false, pOK = false, pB = false;
+  bool pL = false, pR = false, pU = false, pD = false, pOK = false, pB = false;
   waitRelease();
   while (true) {
     pollKeys();
-    if (kLeft && !pL) sel = 0;
-    if (kRight && !pR) sel = 1;
+    if (kLeft && !pL && sel > 0) sel--;
+    if (kRight && !pR && sel < 5) sel++;
+    if (kUp && !pU && sel >= 3) sel -= 3;
+    if (kDown && !pD && sel + 3 < 6) sel += 3;
     if (keyOK && !pOK) { waitRelease(); return sel; }
     if (keyBack && !pB) { waitRelease(); return -1; }
     if (kHome) return -1;
     if (drawn != sel) {
       drawn = sel;
       for (int y = 0; y < SH; y++) { int x = 0; while (x < SW) { int band = (x + y * 2) / 40; int xe = (band + 1) * 40 - y * 2 - 1; if (xe >= SW) xe = SW - 1; fillSpan(y, x, xe, (band % 2) ? KDColor::RGB24(0x151A22) : KDColor::RGB24(0x1B222D)); x = xe + 1; } }
-      drawTextC(20, "MICRO GAMES", C_YEL);
-      fRect(SW / 2 - 60, 30, 120, 3, C_BTND);
-      // carte 1 : BRAWL MICROSTARS
-      rRect(12, 52, 140, 140, 10, sel == 0 ? KDColor::RGB24(0xF5C518) : KDColor::RGB24(0x2E3A4A));
-      fRect(16, 56, 132, 132, sel == 0 ? KDColor::RGB24(0x22282F) : KDColor::RGB24(0x1B222D));
-      oCirc(82, 118, 22, KDColor::RGB24(0xF5C518), KDColor::RGB24(0x8A6D00));
-      fRect(58, 138, 48, 6, KDColor::RGB24(0x8A6D00));
-      drawText(82 - textW("BRAWL") / 2, 158, "BRAWL", C_WHT);
-      drawText(82 - textW("MICROSTARS") / 2, 170, "MICROSTARS", C_WHT);
-      // carte 2 : AMONG US MICRO
-      rRect(168, 52, 140, 140, 10, sel == 1 ? KDColor::RGB24(0xC51111) : KDColor::RGB24(0x2E3A4A));
-      fRect(172, 56, 132, 132, sel == 1 ? KDColor::RGB24(0x22282F) : KDColor::RGB24(0x1B222D));
-      drawBean(238, 116, KDColor::RGB24(0xC51111), false);
-      drawText(238 - textW("AMONG US") / 2, 158, "AMONG US", C_WHT);
-      drawText(238 - textW("MICRO") / 2, 170, "MICRO", C_WHT);
-      drawTextC(212, sel == 0 ? "FLECHES PUIS OK POUR JOUER" : "IMPOSTEUR OU EQUIPAGE ?", C_GRE);
+      drawTextC(8, "MICRO GAMES : 6 JEUX", C_YEL);
+      fRect(SW / 2 - 60, 20, 120, 2, C_BTND);
+      static const KDColor HIL[6] = { KDColor::RGB24(0xF5C518), KDColor::RGB24(0xC51111), KDColor::RGB24(0xB44BFF),
+                                      KDColor::RGB24(0x35D4E8), KDColor::RGB24(0x3DDC55), KDColor::RGB24(0xFF8327) };
+      for (int i = 0; i < 6; i++) { // 2 rangees de 3 cartes de 98 px
+        int cx0 = 3 + (i % 3) * 108, cy0 = (i < 3) ? 30 : 114;
+        rRect(cx0, cy0, 98, 78, 10, sel == i ? HIL[i] : KDColor::RGB24(0x2E3A4A));
+        fRect(cx0 + 4, cy0 + 4, 90, 70, sel == i ? KDColor::RGB24(0x22282F) : KDColor::RGB24(0x1B222D));
+        int icx = cx0 + 49, icy = cy0 + 24;
+        if (i == 0) { oCirc(icx, icy, 12, KDColor::RGB24(0xF5C518), KDColor::RGB24(0x8A6D00)); fRect(icx - 8, icy + 10, 16, 3, KDColor::RGB24(0x8A6D00)); }
+        else if (i == 1) drawBean(icx, icy, KDColor::RGB24(0xC51111), false);
+        else if (i == 2) { oCirc(icx, icy, 12, KDColor::RGB24(0xB44BFF), KDColor::RGB24(0x5A1F78)); fRect(icx - 5, icy - 3, 2, 2, C_RED); fRect(icx + 3, icy - 3, 2, 2, C_RED); fRect(icx - 3, icy + 6, 6, 2, C_WHT); }
+        else if (i == 3) { fRect(icx - 6, icy - 6, 12, 16, KDColor::RGB24(0x9A9AA8)); fRect(icx - 8, icy - 10, 16, 5, KDColor::RGB24(0x35D4E8)); fRect(icx - 3, icy + 12, 2, 2, C_YEL); fRect(icx + 1, icy + 12, 2, 2, C_YEL); }
+        else if (i == 4) { fRect(icx - 12, icy - 12, 24, 24, KDColor::RGB24(0x3D7A20)); fRect(icx - 2, icy - 12, 3, 24, KDColor::RGB24(0x2E5A16)); fRect(icx - 12, icy - 2, 24, 3, KDColor::RGB24(0x2E5A16)); fCirc(icx - 6, icy - 6, 3, KDColor::RGB24(0x151515)); fCirc(icx + 6, icy + 6, 3, C_WHT); }
+        else { fRect(icx - 12, icy - 12, 24, 24, KDColor::RGB24(0x6A5A4A)); fRect(icx - 4, icy - 2, 8, 14, KDColor::RGB24(0x7A5432)); fRect(icx - 12, icy - 12, 24, 3, KDColor::RGB24(0x8A7A6A)); fCirc(icx + 8, icy - 6, 2, C_GOLD); }
+      }
+      drawText(6 + 49 - textW("BRAWL") / 2, 30 + 62, "BRAWL", C_WHT); drawText(6 + 49 - textW("MICRO") / 2, 30 + 74, "MICRO", C_GRE);
+      drawText(114 + 49 - textW("AMONG") / 2, 30 + 62, "AMONG", C_WHT); drawText(114 + 49 - textW("US") / 2, 30 + 74, "US", C_GRE);
+      drawText(222 + 49 - textW("VAMPIRE") / 2, 30 + 62, "VAMPIRE", C_WHT); drawText(222 + 49 - textW("MINI") / 2, 30 + 74, "MINI", C_GRE);
+      drawText(6 + 49 - textW("TOWER") / 2, 114 + 62, "TOWER", C_WHT); drawText(6 + 49 - textW("DEF") / 2, 114 + 74, "DEF", C_GRE);
+      drawText(114 + 49 - textW("OTHELLO") / 2, 114 + 62, "OTHELLO", C_WHT); drawText(114 + 49 - textW("VS IA") / 2, 114 + 74, "VS IA", C_GRE);
+      drawText(222 + 49 - textW("DONJON") / 2, 114 + 62, "DONJON", C_WHT); drawText(222 + 49 - textW("ROGUE") / 2, 114 + 74, "ROGUE", C_GRE);
+      static const char *HINTS[6] = { "COMBAT 3V3 ARCADE", "IMPOSTEUR OU EQUIPAGE ?", "SURVIS AUX VAGUES !", "DEFENDS TA BASE !", "REVERSI CONTRE L'IA", "DESCENDS LE DONJON !" };
+      drawTextC(212, HINTS[sel], C_GRE);
     }
-    pL = kLeft; pR = kRight; pOK = keyOK; pB = keyBack;
+    pL = kLeft; pR = kRight; pU = kUp; pD = kDown; pOK = keyOK; pB = keyBack;
     Ion::Timing::msleep(40);
   }
 }
@@ -7226,11 +8499,15 @@ void ion_main(int argc, char *argv[]) {
   if (!acc.name[0]) { namePicker(); waitRelease(); } // pseudo au premier lancement (V5.11)
   int myBrawler = 0;
   const char *mainItems[10] = {"JOUER", "ENTRAINEMENT", "BRAWLERS", "BOUTIQUE", "CARRIERE", "EMOTES", "QUETES DU JOUR", "ROUTE DES TROPHEES", "PARAMETRES", "AIDE"};
-  while (true) { // V5.18 : LANCEUR — le projet contient DEUX jeux maintenant !
+  while (true) { // V5.18 : LANCEUR — le projet contient SIX jeux maintenant ! (V5.32 : Vampire, Tower Defense, Othello, Donjon)
     int game = launcherScreen();
     waitRelease();
     if (game < 0) return; // BACK au lanceur = quitter l'app
     if (game == 1) { amongUsGame(); waitRelease(); continue; } // AMONG US MICRO
+    if (game == 2) { vsGame(); waitRelease(); continue; } // VAMPIRE SURVIVORS MINI (V5.32)
+    if (game == 3) { tdGame(); waitRelease(); continue; } // TOWER DEFENSE MINI (V5.32)
+    if (game == 4) { otGame(); waitRelease(); continue; } // OTHELLO MINI (V5.32)
+    if (game == 5) { dgGame(); waitRelease(); continue; } // DONJON ROGUELIKE MINI (V5.32)
   while (true) { // menu BRAWL MICROSTARS
     gTitleAnim = true; // brawlers qui defilent derriere le menu principal (V5.11)
     gPortrait = myBrawler; // V5.14 : portrait du brawler courant au menu principal
