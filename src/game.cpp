@@ -7503,7 +7503,7 @@ static void vsGame() {
   float fireT = 0.0f, invT = 0.0f, regT = 0.0f, gameTime = 0.0f, spawnT = 0.0f, bossMsgT = 0.0f;
   bool bossFight = false; int bossType = 0; // V5.38 : duel 1c1, 3 types de boss qui se succedent
   float bossDashT = 0.0f, bossDashCd = 2.0f, bossShotT = 0.0f;
-  int bossNext = 60;
+  int bossNext = 300; // V5.41 : un boss toutes les 5 MINUTES (avant 1 min : ils s'enchainaient)
   bool faceR = true;
   waitRelease();
   bool prevBk = false, prevOK2 = false;
@@ -7577,7 +7577,7 @@ static void vsGame() {
       if (uReg > 0 && regT >= 2.0f) { regT -= 2.0f; hp += uReg; if (hp > maxHp) hp = maxHp; }
       // ---- apparitions (rythme croissant) + boss toutes les 60 s
       if (gameTime >= bossNext && !bossFight) { // V5.38 : BOSS en DUEL 1c1 : les autres meurent d'un coup
-        bossNext += 60; bossN++;
+        bossNext += 300; bossN++; // V5.41 : prochain duel 5 minutes plus tard
         ne = 0; // le terrain se vide : c'est un vrai 1v1
         bossType = (bossN - 1) % 3; // les 3 boss se succedent
         int s = rnd(4);
@@ -7777,17 +7777,26 @@ static void vsGame() {
         int edmg = VS_DMG[etp[i]] + ((esp[i] == 2) ? 3 : 0) + ((esp[i] == 3) ? 5 : 0);
         if (gameTime < 30.0f && edmg > 3) edmg -= 3; // V5.36 : les 30 premieres secondes font moins mal
         if (invT <= 0.0f && ddx * ddx + ddy * ddy < rr * rr) { hp -= edmg; invT = 0.75f; if (hp <= 0) { hp = 0; dead = true; } }
-        if (etp[i] == 4) { // V5.38 : ATTAQUE A DISTANCE du boss : boule de feu visee
+        if (etp[i] == 4) { // V5.41 : ATTAQUE UNIQUE PAR BOSS
           bossShotT -= dt;
           if (bossShotT <= 0.0f) {
-            bossShotT = 1.25f + rnd(6) * 0.1f;
-            float dl = sqrtf(ddx * ddx + ddy * ddy); if (dl < 1.0f) dl = 1.0f;
-            for (int s2 = 0; s2 < 8; s2++) {
-              if (bpl[s2] > 0.0f) continue;
-              bpx2[s2] = ex[i]; bpy2[s2] = ey[i];
-              bvx2[s2] = ddx / dl * 95.0f; bvy2[s2] = ddy / dl * 95.0f;
-              bpl[s2] = 4.0f;
-              break;
+            float ang = atan2f(ddy, ddx);
+            float spdB = 100.0f;
+            int nShots = 1;
+            if (bossType == 0) { bossShotT = 1.15f + rnd(6) * 0.1f; } // CRIMSON : boule unique, rapide et precise
+            else if (bossType == 1) { bossShotT = 1.6f + rnd(6) * 0.1f; nShots = 3; } // SPECTRE : eventail de 3 boules
+            else { bossShotT = 2.3f + rnd(8) * 0.1f; nShots = 8; spdB = 70.0f; } // GOLEM : anneau de 8 boules lentes
+            for (int k2 = 0; k2 < nShots; k2++) {
+              float a2 = ang;
+              if (nShots == 3) a2 += (k2 - 1) * 0.28f;
+              else if (nShots == 8) a2 = k2 * 0.7854f;
+              for (int s2 = 0; s2 < 8; s2++) {
+                if (bpl[s2] > 0.0f) continue;
+                bpx2[s2] = ex[i]; bpy2[s2] = ey[i];
+                bvx2[s2] = fcosf(a2) * spdB; bvy2[s2] = fsinf(a2) * spdB;
+                bpl[s2] = 4.0f;
+                break;
+              }
             }
           }
         }
@@ -8040,41 +8049,80 @@ static void vsGame() {
       int t = etp[i]; KDColor c = VS_COL[t];
       int rx = (int)ex[i], ry = (int)ey[i];
       if (esp[i] > 0 && t != 4) fRing(rx, ry, VS_RAD[t] + 3, VS_MCOL[esp[i]]); // V5.34 : halo des ennemis speciaux
-      if (t == 4) { // V5.38 : BOSS : sprite detaile selon son type (cornes, yeux, bouche, telegraphes)
+      if (t == 4) { // V5.41 : BOSS : sprites detailles, silhouettes uniques par type
         uint32_t bTop, bBot; const char *bName;
         if (bossType == 0) { bTop = 0xE03B3B; bBot = 0x6D0000; bName = "CRIMSON"; }
         else if (bossType == 1) { bTop = 0xB44BFF; bBot = 0x5A1F78; bName = "SPECTRE"; }
         else { bTop = 0x3DDC55; bBot = 0x1F7A32; bName = "GOLEM"; }
         if (bossDashT > 0.0f) fRing(rx, ry, 16, C_ORG); // halo orange : il dash !
-        oCirc(rx, ry, 12, KDColor::RGB24(bTop), KDColor::RGB24(bBot)); // corps bicolore
-        fRect(rx - 9, ry - 16, 3, 6, KDColor::RGB24(0xE8E0D0)); // cornes
-        fRect(rx + 6, ry - 16, 3, 6, KDColor::RGB24(0xE8E0D0));
-        px(rx - 8, ry - 17, C_WHT); px(rx + 7, ry - 17, C_WHT);
-        if (bossType == 1) { fRect(rx - 6, ry - 5, 4, 2, C_YEL); fRect(rx + 2, ry - 5, 4, 2, C_YEL); } // yeux en fente
-        else { fCirc(rx - 4, ry - 4, 2, C_WHT); fCirc(rx + 3, ry - 4, 2, C_WHT); px(rx - 4, ry - 4, C_RED); px(rx + 3, ry - 4, C_RED); }
-        fRect(rx - 5, ry + 3, 10, 3, C_BLK); // bouche
-        for (int tx2 = -4; tx2 <= 4; tx2 += 3) px(rx + tx2, ry + 3, C_WHT); // dents
+        if (bossType == 1) { // SPECTRE : il FLOTTE, brume dessous, cornes fines, yeux en fente
+          ry = ry + (int)(fsinf(gameTime * 3.0f) * 2.0f);
+          for (int w2 = 0; w2 < 3; w2++) fCirc(rx - 10 + w2 * 10, ry + 14 + w2, 2, KDColor::RGB24(0x8A5AB0)); // brume
+          oCirc(rx, ry, 12, KDColor::RGB24(bTop), KDColor::RGB24(bBot));
+          fRect(rx - 12, ry + 8, 4, 3, KDColor::RGB24(bBot)); fRect(rx + 8, ry + 8, 4, 3, KDColor::RGB24(bBot)); // bras fumeux
+          fRect(rx - 5, ry + 11, 3, 4, KDColor::RGB24(bTop)); fRect(rx + 2, ry + 11, 3, 4, KDColor::RGB24(bTop)); // franges
+          fRect(rx - 8, ry - 14, 5, 3, KDColor::RGB24(0xE8E0D0)); fRect(rx + 3, ry - 14, 5, 3, KDColor::RGB24(0xE8E0D0)); // cornes
+          fRect(rx - 7, ry - 5, 5, 2, C_YEL); fRect(rx + 2, ry - 5, 5, 2, C_YEL); // yeux fente
+        } else if (bossType == 2) { // GOLEM : massif, taches de roche, GROS poings, oreilles de pierre
+          oCirc(rx, ry, 13, KDColor::RGB24(bTop), KDColor::RGB24(bBot));
+          fCirc(rx - 5, ry + 3, 2, KDColor::RGB24(bBot)); fCirc(rx + 6, ry - 2, 2, KDColor::RGB24(bBot)); fCirc(rx + 1, ry + 7, 2, KDColor::RGB24(bBot));
+          fCirc(rx - 12, ry + 5, 5, KDColor::RGB24(bBot)); fCirc(rx + 12, ry + 5, 5, KDColor::RGB24(bBot)); // poings
+          fRect(rx - 8, ry - 15, 4, 5, KDColor::RGB24(0x8A9A80)); fRect(rx + 4, ry - 15, 4, 5, KDColor::RGB24(0x8A9A80)); // oreilles pierre
+          fCirc(rx - 4, ry - 4, 2, C_WHT); fCirc(rx + 3, ry - 4, 2, C_WHT); px(rx - 4, ry - 4, C_BLK); px(rx + 3, ry - 4, C_BLK);
+          fRect(rx - 5, ry + 4, 10, 2, KDColor::RGB24(bBot)); // bouche rectangulaire
+        } else { // CRIMSON : demon de feu, flammes dans le dos, cornes, dents
+          oCirc(rx, ry, 12, KDColor::RGB24(bTop), KDColor::RGB24(bBot));
+          for (int f2 = 0; f2 < 3; f2++) { // flammes qui lechent
+            int fy2 = ry - 10 + (int)(fsinf(gameTime * 6.0f + f2 * 2.0f) * 2.0f);
+            fRect(rx - 14 + f2 * 3, fy2, 2, 4, C_ORG);
+            px(rx - 13 + f2 * 3, fy2 - 1, C_YEL);
+          }
+          fRect(rx - 9, ry - 16, 3, 6, KDColor::RGB24(0xE8E0D0)); fRect(rx + 6, ry - 16, 3, 6, KDColor::RGB24(0xE8E0D0)); // cornes
+          fCirc(rx - 4, ry - 4, 2, C_WHT); fCirc(rx + 3, ry - 4, 2, C_WHT); px(rx - 4, ry - 4, C_RED); px(rx + 3, ry - 4, C_RED);
+          fRect(rx - 5, ry + 3, 10, 3, C_BLK); // bouche
+          for (int tx2 = -4; tx2 <= 4; tx2 += 3) px(rx + tx2, ry + 3, C_WHT); // dents
+        }
         if (bossShotT < 0.3f && bossFight) fRing(rx, ry, 15, C_YEL); // il va tirer : halo jaune
         drawTextC(ry - 32, bName, KDColor::RGB24(bTop)); // son nom au-dessus
-        int bw = ehp[i] * 28 / (VS_HP0[4] + (bossN - 1) * 1000); // V5.40 : barre sur les nouveaux PV
+        int bw = ehp[i] * 28 / (VS_HP0[4] + (bossN - 1) * 1000);
         if (bw < 0) bw = 0;
         if (bw > 28) bw = 28;
         fRect(rx - 14, ry - 20, 28, 3, KDColor::RGB24(0x3A0A0A));
         fRect(rx - 14, ry - 20, bw, 3, C_RED);
-      } else if (t == 0) { // chauve-souris : corps + ailes qui battent
-        fRect(rx - 7, ry - 2 + ((int)(gameTime * 10) & 1), 4, 2, KDColor::RGB24(0x6A1FA0));
-        fRect(rx + 3, ry - 2 - ((int)(gameTime * 10) & 1), 4, 2, KDColor::RGB24(0x6A1FA0));
-        fCirc(rx, ry, 3 + ((esp[i] == 3) ? 2 : 0), c);
-      } else if (t == 2) { // zombie : cercle + yeux rouges
-        fCirc(rx, ry, 5 + ((esp[i] == 3) ? 2 : 0), c);
+      } else if (t == 0) { // V5.41 : chauve-souris : ailes battantes, oreilles, yeux rouges, crocs
+        int gr = (esp[i] == 3) ? 2 : 0;
+        int wf = ((int)(gameTime * 10) & 1);
+        fRect(rx - 8, ry - 1 + wf, 5, 2, KDColor::RGB24(0x6A1FA0));
+        fRect(rx + 3, ry - 1 - wf, 5, 2, KDColor::RGB24(0x6A1FA0));
+        fRect(rx - 9, ry - 2 + wf, 2, 3, KDColor::RGB24(0x8A3BD0)); // bouts d'ailes
+        fRect(rx + 7, ry - 2 - wf, 2, 3, KDColor::RGB24(0x8A3BD0));
+        fCirc(rx, ry, 3 + gr, c);
+        px(rx - 1, ry - 4 - gr, c); px(rx + 1, ry - 4 - gr, c); // oreilles
+        px(rx - 2, ry - 1, C_RED); px(rx + 1, ry - 1, C_RED);     // yeux rouges
+        px(rx - 1, ry + 2, C_WHT); px(rx + 1, ry + 2, C_WHT);     // crocs
+      } else if (t == 2) { // V5.41 : zombie : cheveux, yeux rouges, bouche beante, bras tendus
+        int gr = (esp[i] == 3) ? 2 : 0;
+        fCirc(rx, ry, 5 + gr, c);
+        fRect(rx - 2, ry - 6 - gr, 4, 3, KDColor::RGB24(0x2AA83E)); // touffe de cheveux
         fRect(rx - 3, ry - 2, 2, 2, C_RED); fRect(rx + 1, ry - 2, 2, 2, C_RED);
-      } else if (t == 3) { // fantome : cercle + franges
-        fCirc(rx, ry, 4 + ((esp[i] == 3) ? 2 : 0), c);
-        fRect(rx - 4, ry + 3, 2, 2, c); fRect(rx, ry + 4, 2, 2, c); fRect(rx + 2, ry + 3, 2, 2, c);
-        fRect(rx - 2, ry - 2, 2, 2, KDColor::RGB24(0x0A5A6A));
-      } else { // squelette : cercle blanc + yeux noirs
-        fCirc(rx, ry, 4 + ((esp[i] == 3) ? 2 : 0), c);
-        fRect(rx - 2, ry - 2, 2, 2, C_BLK); fRect(rx, ry - 2, 2, 2, C_BLK);
+        fRect(rx - 2, ry + 2, 4, 2, C_BLK); // bouche
+        px(rx - 1, ry + 2, KDColor::RGB24(0x9CFFAA)); // dent
+        fRect(rx - 8, ry + 1, 3, 2, c); fRect(rx + 5, ry + 1, 3, 2, c); // bras
+      } else if (t == 3) { // V5.41 : fantome : il flotte, deux yeux, bouche, ombre au sol
+        int gr = (esp[i] == 3) ? 2 : 0;
+        int fl = (int)fsinf(gameTime * 3.0f + (float)i);
+        fCirc(rx, ry + fl, 4 + gr, c);
+        fRect(rx - 4, ry + 3 + gr + fl, 2, 3, c); fRect(rx, ry + 4 + gr + fl, 2, 3, c); fRect(rx + 2, ry + 3 + gr + fl, 2, 3, c); // franges
+        fRect(rx - 3, ry - 2 + fl, 2, 2, KDColor::RGB24(0x0A5A6A)); fRect(rx + 1, ry - 2 + fl, 2, 2, KDColor::RGB24(0x0A5A6A)); // yeux
+        px(rx - 1, ry + 1 + fl, C_BLK); // bouche
+        fRect(rx - 5, ry + 7, 10, 1, KDColor::RGB24(0x151022)); // ombre
+      } else { // V5.41 : squelette : crane, orbites creuses, machoire, reflet
+        int gr = (esp[i] == 3) ? 2 : 0;
+        fCirc(rx, ry, 4 + gr, c);
+        fCirc(rx - 2, ry - 1, 1, C_BLK); fCirc(rx + 2, ry - 1, 1, C_BLK); // orbites
+        fRect(rx - 2, ry + 2, 4, 1, C_BLK); // machoire
+        px(rx - 1, ry + 2, C_WHT); px(rx + 1, ry + 2, C_WHT); // dents
+        px(rx + 3 + gr, ry - 3, KDColor::RGB24(0xFFF3A8)); // reflet lumineux
       }
     }
     // ---- rendu des pouvoirs
@@ -8180,7 +8228,7 @@ static void vsGame() {
           vpx = SW / 2.0f; vpy = 130.0f;
           maxHp = 100; hp = 100; lvl = 1; xp = 0; xpNeed = 7; kills = 0; bossN = 0;
           uDmg = uRate = uSpd = uHp = uMul = uMag = uReg = 0;
-          fireT = invT = regT = gameTime = spawnT = bossMsgT = 0.0f; bossNext = 60;
+          fireT = invT = regT = gameTime = spawnT = bossMsgT = 0.0f; bossNext = 300;
           bossFight = false; bossType = 0; // V5.38 : le duel est annule au rejouer
           for (int q2 = 0; q2 < 8; q2++) bpl[q2] = 0.0f;
           orbA = foudT = novaT = novaFxT = foudFxT = knT = whT = axT = crT = waT = fiT = whFxT = healT = 0.0f; prevOK2 = false;
@@ -8612,14 +8660,35 @@ static void tdGame() {
       for (int l = 0; l < tdL[c]; l++) fRect(cx2 - 4 + l * 4, cy2 + r + 2, 2, 2, C_YEL);
       if (tdL[c] >= 3) fRect(cx2 - 5, cy2 + r + 6, 10, 2, tdS[c] == 0 ? C_YEL : C_MAG); // barre de spec A/B
     }
-    for (int i = 0; i < ne; i++) { // ennemis
+    for (int i = 0; i < ne; i++) { // ennemis V5.41 : sprites detailles par type
       int t = ttp[i];
-      fCirc((int)tex[i], (int)tey[i], TD_ERD[t], TD_ECOL[t]);
-      if (t == 3) { fRect((int)tex[i] - 4, (int)tey[i] - 3, 2, 2, C_WHT); fRect((int)tex[i] + 2, (int)tey[i] - 3, 2, 2, C_WHT); }
-      if (t == 4) { // V5.35 : le volant a des ailes qui battent
+      int ex3 = (int)tex[i], ey3 = (int)tey[i];
+      int rr3 = TD_ERD[t];
+      fCirc(ex3, ey3, rr3, TD_ECOL[t]);
+      if (t == 0) { // LIMACE : yeux, antennes, trainee
+        px(ex3 - 2, ey3 - 2, C_BLK); px(ex3 + 1, ey3 - 2, C_BLK);
+        px(ex3 - 2, ey3 - rr3 - 1, C_WHT); px(ex3 + 1, ey3 - rr3 - 1, C_WHT); // antennes
+        fRect(ex3 - 3, ey3 + rr3 - 1, 6, 1, KDColor::RGB24(0x2AA83E)); // trainee visqueuse
+      } else if (t == 1) { // FRELON : rayures, pattes, yeux
+        fRect(ex3 - 1, ey3 - 2, 2, 4, C_BLK); // rayure
+        px(ex3 - rr3, ey3 + 1, C_BLK); px(ex3 + rr3 - 1, ey3 + 1, C_BLK); // pattes
+        px(ex3 - 2, ey3 - 1, C_BLK); px(ex3 + 1, ey3 - 1, C_BLK); // yeux
+      } else if (t == 2) { // GOLEM D'ACIER : visiere, boulons, yeux lumineux
+        fRect(ex3 - rr3 + 1, ey3 - 2, rr3 * 2 - 2, 2, KDColor::RGB24(0x6A6A78)); // visiere
+        px(ex3 - rr3 + 2, ey3 + rr3 - 2, C_BLK); px(ex3 + rr3 - 3, ey3 + rr3 - 2, C_BLK); // boulons
+        px(ex3 - 1, ey3 - 2, C_RED); px(ex3 + 1, ey3 - 2, C_RED); // optiques
+      } else if (t == 3) { // BOSS : cornes, yeux blancs, bouche dentee
+        fRect(ex3 - 4, ey3 - 3, 2, 2, C_WHT); fRect(ex3 + 2, ey3 - 3, 2, 2, C_WHT);
+        fRect(ex3 - 7, ey3 - rr3 - 2, 3, 4, KDColor::RGB24(0x8A2EA0)); // cornes
+        fRect(ex3 + 4, ey3 - rr3 - 2, 3, 4, KDColor::RGB24(0x8A2EA0));
+        fRect(ex3 - 4, ey3 + 4, 8, 2, C_BLK); // bouche
+        for (int tx3 = -3; tx3 <= 3; tx3 += 2) px(ex3 + tx3, ey3 + 4, C_WHT); // dents
+      } else { // VOLANT : ailes battantes, yeux, dard
         int wf = ((int)Ion::Timing::millis() / 100) & 1;
-        fRect((int)tex[i] - 7, (int)tey[i] - 2 + wf, 4, 2, KDColor::RGB24(0xD0A0E0));
-        fRect((int)tex[i] + 3, (int)tey[i] - 2 - wf, 4, 2, KDColor::RGB24(0xD0A0E0));
+        fRect(ex3 - 7, ey3 - 2 + wf, 4, 2, KDColor::RGB24(0xD0A0E0));
+        fRect(ex3 + 3, ey3 - 2 - wf, 4, 2, KDColor::RGB24(0xD0A0E0));
+        px(ex3 - 2, ey3 - 1, C_BLK); px(ex3 + 1, ey3 - 1, C_BLK); // yeux
+        fRect(ex3 - 1, ey3 + 2, 2, 2, C_BLK); // dard
       }
       int maxhp = (int)(TD_EHP[t] * (1.0f + (wave - 1) * 0.22f) * TD_MHP[map - 1]);
       if (maxhp < 1) maxhp = 1;
@@ -9307,17 +9376,31 @@ static void dgGame() {
       int r = (etp2[i] == 3) ? 7 : 5;
       fCirc(pxl + 8, pyl + 9, r, KDColor::RGB24(0x1A1210)); // ombre/contour
       fCirc(pxl + 8, pyl + 8, r, DG_ECOL[etp2[i]]);
-      if (etp2[i] == 0) { // rat : oreilles + museau
+      if (etp2[i] == 0) { // V5.41 : rat : oreilles roses, museau, moustaches, queue
         fCirc(pxl + 4, pyl + 4, 2, KDColor::RGB24(0xB08A64)); fCirc(pxl + 12, pyl + 4, 2, KDColor::RGB24(0xB08A64));
-        fRect(pxl + 7, pyl + 10, 2, 2, KDColor::RGB24(0xD8B896));
-      } else if (etp2[i] == 1) { // gelatine : reflet + bave
+        px(pxl + 4, pyl + 4, KDColor::RGB24(0xE880A8)); px(pxl + 12, pyl + 4, KDColor::RGB24(0xE880A8)); // oreilles internes
+        fRect(pxl + 7, pyl + 10, 2, 2, KDColor::RGB24(0xD8B896)); // museau
+        px(pxl + 8, pyl + 11, C_RED); // nez
+        px(pxl + 6, pyl + 9, C_WHT); px(pxl + 10, pyl + 9, C_WHT); // yeux
+        px(pxl + 4, pyl + 10, C_WHT); px(pxl + 11, pyl + 10, C_WHT); // moustaches
+        fRect(pxl + 12, pyl + 12, 4, 1, KDColor::RGB24(0xB08A64)); // queue
+      } else if (etp2[i] == 1) { // V5.41 : gelatine : reflet, yeux, bouche, gouttes
         fRect(pxl + 5, pyl + 5, 2, 2, KDColor::RGB24(0x9CFFAA)); px(pxl + 11, pyl + 12, KDColor::RGB24(0x2AA83E));
-      } else if (etp2[i] == 2) { // squelette : orbites noires + cotes
+        fRect(pxl + 6, pyl + 7, 1, 2, C_BLK); fRect(pxl + 9, pyl + 7, 1, 2, C_BLK); // yeux
+        px(pxl + 7, pyl + 10, C_BLK); // bouche
+        px(pxl + 13, pyl + 5, KDColor::RGB24(0x2AA83E)); px(pxl + 3, pyl + 13, KDColor::RGB24(0x2AA83E)); // gouttes
+      } else if (etp2[i] == 2) { // V5.41 : squelette : crane, machoire, cotes, bras d'os
         fRect(pxl + 5, pyl + 6, 2, 2, C_BLK); fRect(pxl + 9, pyl + 6, 2, 2, C_BLK);
-        fRect(pxl + 5, pyl + 10, 6, 1, KDColor::RGB24(0xB0B0B0)); fRect(pxl + 5, pyl + 12, 6, 1, KDColor::RGB24(0xB0B0B0));
-      } else { // boss : cornes + yeux jaunes
+        fRect(pxl + 6, pyl + 9, 4, 1, C_BLK); // machoire
+        px(pxl + 6, pyl + 9, C_WHT); px(pxl + 9, pyl + 9, C_WHT); // dents
+        fRect(pxl + 5, pyl + 10, 6, 1, KDColor::RGB24(0xB0B0B0)); fRect(pxl + 5, pyl + 12, 6, 1, KDColor::RGB24(0xB0B0B0)); // cotes
+        fRect(pxl + 2, pyl + 9, 3, 1, KDColor::RGB24(0xD0D0D0)); fRect(pxl + 11, pyl + 9, 3, 1, KDColor::RGB24(0xD0D0D0)); // bras
+      } else { // V5.41 : boss : cornes, yeux jaunes, bouche dentee, armure frontale
         fRect(pxl + 2, pyl + 2, 2, 4, C_YEL); fRect(pxl + 12, pyl + 2, 2, 4, C_YEL);
         fRect(pxl + 5, pyl + 6, 2, 2, C_YEL); fRect(pxl + 9, pyl + 6, 2, 2, C_YEL);
+        fRect(pxl + 5, pyl + 10, 6, 2, C_BLK); // bouche
+        px(pxl + 6, pyl + 10, C_WHT); px(pxl + 8, pyl + 10, C_WHT); px(pxl + 10, pyl + 10, C_WHT); // dents
+        fRect(pxl + 6, pyl + 3, 4, 1, KDColor::RGB24(0x8A4A2A)); // armure
       }
       int mx = DG_EHP[etp2[i]] + (floor - 1) * (etp2[i] == 3 ? 8 : 1); if (mx < 1) mx = 1;
       int bw = 10 * ehp2[i] / mx;
