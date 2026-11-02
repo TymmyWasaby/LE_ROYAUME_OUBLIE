@@ -6240,8 +6240,11 @@ static bool auClearLine(float x0, float y0, float x1, float y1) { // ligne de vi
   return true;
 }
 static bool auFree(float x, float y) { // les 4 coins du bean
+  // V5.37 : boite SYMETRIQUE — l'ancien coin bas a y+4.0 tombait PILE sur la frontiere de la
+  // case du dessous : un bot centre sur son chemin pres d'un mur sud etait vu "dans un mur"
+  // et se teleportait en boucle. Maintenant un bot centre sur une case libre est toujours libre.
   if (auSolidPx(x - 3.5f, y - 3.5f) || auSolidPx(x + 3.5f, y - 3.5f)) return false;
-  if (auSolidPx(x - 3.5f, y + 4.0f) || auSolidPx(x + 3.5f, y + 4.0f)) return false;
+  if (auSolidPx(x - 3.5f, y + 3.5f) || auSolidPx(x + 3.5f, y + 3.5f)) return false;
   return true;
 }
 // un petit crewmate/imposteur : corps arrondi + visiere + sac a dos
@@ -6320,7 +6323,17 @@ static void auSetDest(AuBot &b, float tx, float ty) {
   auBFS(sx, sy);
   b.pn = 0; b.pi = 0;
   int c = gy * AUW + gx;
-  if (auPar[c] == -2) { b.pn = 0; b.pi = 0; b.dx = b.x; b.dy = b.y; return; } // V5.26b : injoignable -> arret propre (jamais gele)
+  if (auPar[c] == -2) { // V5.37 : injoignable -> il part vers une case ATTEIGNABLE au hasard (fini le gel sur place et le BFS relance a chaque frame)
+    int start2 = rnd(AUW * AUH);
+    bool ok2 = false;
+    for (int t2 = 0; t2 < AUW * AUH; t2++) {
+      int c2 = (start2 + t2) % (AUW * AUH);
+      if (auPar[c2] >= 0) { c = c2; ok2 = true; break; }
+    }
+    if (!ok2) { b.pn = 0; b.pi = 0; b.dx = b.x; b.dy = b.y; return; } // aucune case joignable : arret propre
+    b.dx = (c % AUW) * 8.0f + 4.0f;
+    b.dy = (c / AUW) * 8.0f + 4.0f;
+  }
   static int rev[AUW * AUH];
   int n = 0;
   while (c >= 0 && n < AUW * AUH) { rev[n++] = c; c = auPar[c]; }
@@ -7449,7 +7462,7 @@ static void vsGame() {
   // ---- donnees des 5 types d'ennemis : chauve-souris, squelette, zombie, fantome, boss
   static const float VS_SPD[5] = { 48.0f, 34.0f, 24.0f, 40.0f, 15.0f };
   static const int  VS_HP0[5]  = { 10, 18, 32, 14, 260 };
-  static const int  VS_DMG[5]  = { 8, 10, 14, 12, 25 };
+  static const int  VS_DMG[5]  = { 8, 10, 14, 12, 18 };
   static const int  VS_RAD[5]  = { 3, 4, 5, 4, 12 };
   static const int  VS_XP[5]   = { 1, 2, 3, 2, 15 };
   static const KDColor VS_COL[5] = { KDColor::RGB24(0xB44BFF), KDColor::RGB24(0xE8E8E8),
@@ -7475,10 +7488,11 @@ static void vsGame() {
   static float ppx[VS_NP], ppy[VS_NP], pvx[VS_NP], pvy[VS_NP]; static int plife[VS_NP], phc[VS_NP]; static uint8_t pw[VS_NP];
   static float gx[VS_NG], gy[VS_NG]; static uint8_t gxp[VS_NG];
   static float zlx[VS_NZ], zly[VS_NZ], zlt[VS_NZ]; static int zlr[VS_NZ], zld[VS_NZ]; // zones eau benite
+  static float bpx2[8], bpy2[8], bvx2[8], bvy2[8], bpl[8]; // V5.38 : boules de feu du boss (duel 1c1)
   int ne = 0;
   // ---- joueur et stats
   float vpx = SW / 2.0f, vpy = 130.0f;
-  int maxHp = 100, hp = 100, lvl = 1, xp = 0, xpNeed = 7, kills = 0, bossN = 0;
+  int maxHp = 130, hp = 130, lvl = 1, xp = 0, xpNeed = 7, kills = 0, bossN = 0; // V5.38 : plus de PV (130 de base)
   int uDmg = 0, uRate = 0, uSpd = 0, uHp = 0, uMul = 0, uMag = 0, uReg = 0;
   int uWl[9]; // V5.34 : niveaux des 9 pouvoirs (orbes, foudre, aura, couteaux, fouet, haches, croix, eau, feu) — NV5 = epique
   for (int i = 0; i < 9; i++) uWl[i] = 0;
@@ -7487,6 +7501,8 @@ static void vsGame() {
   float whFxT = 0.0f; int whFxDir = 1; // flash du fouet
   float healT = 0.0f; // V5.34 : timer de soin DEVOREUR D'AMES
   float fireT = 0.0f, invT = 0.0f, regT = 0.0f, gameTime = 0.0f, spawnT = 0.0f, bossMsgT = 0.0f;
+  bool bossFight = false; int bossType = 0; // V5.38 : duel 1c1, 3 types de boss qui se succedent
+  float bossDashT = 0.0f, bossDashCd = 2.0f, bossShotT = 0.0f;
   int bossNext = 60;
   bool faceR = true;
   waitRelease();
@@ -7495,7 +7511,7 @@ static void vsGame() {
   bool dead = false;
   bool pickChar = true; // V5.35 : perso a choisir au debut et a chaque rejouer
   static const char *VS_CN[4] = { "GUERRIER", "CHASSEUR", "SORCIERE", "ASSASSIN" };
-  static const char *VS_CD[4] = { "120 PV, TRES SOLIDE", "COMMENCE AUX COUTEAUX", "COMMENCE AU FEU, FRAGILE", "+15% VITESSE PERMANENT" };
+  static const char *VS_CD[4] = { "150 PV, TRES SOLIDE", "COMMENCE AUX COUTEAUX", "COMMENCE AU FEU, FRAGILE", "+15% VITESSE PERMANENT" };
   float chX = -99.0f, chY = -99.0f; bool chOn = false; // V5.35 : coffre lache par le boss
   while (true) { // ================= boucle principale =================
     if (pickChar) { // ---- V5.35 : choix du perso (bonus de depart differents)
@@ -7519,12 +7535,12 @@ static void vsGame() {
         drawTextC(194, "OK POUR CHOISIR", C_GRE);
         blit(); Ion::Timing::msleep(30);
       }
-      maxHp = 100; hp = 100; uSpd = 0;
+      maxHp = 130; hp = 130; uSpd = 0; // V5.38 : base 130 PV
       for (int i = 0; i < 9; i++) uWl[i] = 0;
-      if (csel == 0) { maxHp = 120; hp = 120; }
-      else if (csel == 1) { uWl[3] = 1; maxHp = 90; hp = 90; }
-      else if (csel == 2) { uWl[8] = 1; maxHp = 85; hp = 85; }
-      else { uSpd = 1; maxHp = 90; hp = 90; }
+      if (csel == 0) { maxHp = 150; hp = 150; }
+      else if (csel == 1) { uWl[3] = 1; maxHp = 120; hp = 120; }
+      else if (csel == 2) { uWl[8] = 1; maxHp = 115; hp = 115; }
+      else { uSpd = 1; maxHp = 120; hp = 120; }
       lastMs = (int)Ion::Timing::millis();
     }
     int nowMs = (int)Ion::Timing::millis();
@@ -7542,39 +7558,59 @@ static void vsGame() {
         float n = sqrtf(dx * dx + dy * dy); vpx += dx / n * spd * dt; vpy += dy / n * spd * dt;
         if (dx > 0.0f) faceR = true; else if (dx < 0.0f) faceR = false;
       }
-      if (vpx < 6) vpx = 6;
-      if (vpx > SW - 6) vpx = SW - 6;
-      if (vpy < 34) vpy = 34;
-      if (vpy > 214) vpy = 214; // l'ecran reel fait 222 px de haut
+      // ---- V5.37 : MONDE INFINI : quand on deborde d'un bord, TOUT l'univers glisse de l'autre
+      // (tore) : on peut fuir a l'infini, les mobs continuent d'apparaitre sur les bords de l'ecran
+      float shX = 0.0f, shY = 0.0f;
+      if (vpx < 6) shX = (float)SW;
+      else if (vpx > SW - 6) shX = -(float)SW;
+      if (vpy < 34) shY = 180.0f;
+      else if (vpy > 214) shY = -180.0f;
+      if (shX != 0.0f || shY != 0.0f) {
+        vpx += shX; vpy += shY;
+        for (int i = 0; i < VS_NE; i++) { ex[i] += shX; ey[i] += shY; }
+        for (int i = 0; i < VS_NP; i++) { ppx[i] += shX; ppy[i] += shY; }
+        for (int i = 0; i < VS_NG; i++) { gx[i] += shX; gy[i] += shY; }
+        for (int i = 0; i < VS_NZ; i++) { zlx[i] += shX; zly[i] += shY; }
+        if (chOn) { chX += shX; chY += shY; }
+      }
       // ---- regen
       if (uReg > 0 && regT >= 2.0f) { regT -= 2.0f; hp += uReg; if (hp > maxHp) hp = maxHp; }
       // ---- apparitions (rythme croissant) + boss toutes les 60 s
-      if (gameTime >= bossNext) { // BOSS !
+      if (gameTime >= bossNext && !bossFight) { // V5.38 : BOSS en DUEL 1c1 : les autres meurent d'un coup
         bossNext += 60; bossN++;
-        if (ne < VS_NE) { int s = rnd(4); float sx = (s == 0) ? -10.0f : (s == 1) ? SW + 10.0f : (s == 2) ? rnd(SW) * 1.0f : rnd(SW) * 1.0f;
-          float sy = (s == 2) ? -10.0f : (s == 3) ? SH + 10.0f : rnd(SH) * 1.0f;
-          ex[ne] = sx; ey[ne] = sy; ew[ne] = 0; etp[ne] = 4; esp[ne] = 0; ehp[ne] = VS_HP0[4] + (bossN - 1) * 160; ne++; }
+        ne = 0; // le terrain se vide : c'est un vrai 1v1
+        bossType = (bossN - 1) % 3; // les 3 boss se succedent
+        int s = rnd(4);
+        ex[0] = (s == 0) ? -14.0f : (s == 1) ? SW + 14.0f : (s == 2) ? rnd(SW) * 1.0f : rnd(SW) * 1.0f;
+        ey[0] = (s == 2) ? -14.0f : (s == 3) ? SH + 14.0f : rnd(SH) * 1.0f;
+        ew[0] = 0; etp[0] = 4; esp[0] = 0;
+        ehp[0] = VS_HP0[4] + (bossN - 1) * 160;
+        ne = 1;
+        bossFight = true; bossDashT = 0.0f; bossDashCd = 1.8f; bossShotT = 1.2f;
+        for (int q2 = 0; q2 < 8; q2++) bpl[q2] = 0.0f;
         bossMsgT = 2.5f;
       }
       spawnT += dt;
-      float sInt = 1.5f - gameTime * 0.013f; if (sInt < 0.30f) sInt = 0.30f; // V5.36 : depart plus doux (moins d'ennemis au tout debut)
-      while (spawnT >= sInt) {
-        spawnT -= sInt;
-        if (ne < VS_NE) {
-          int t = 0; int r = rnd(100); // types deplaces selon le temps de survie
-          if (gameTime > 25 && r < 30) t = 1;
-          if (gameTime > 50 && r >= 30 && r < 50) t = 2;
-          if (gameTime > 80 && r >= 50 && r < 65) t = 3;
-          int s = rnd(4);
-          ex[ne] = (s == 0) ? -8.0f : (s == 1) ? SW + 8.0f : (s == 2) ? rnd(SW) * 1.0f : rnd(SW) * 1.0f;
-          ey[ne] = (s == 2) ? -8.0f : (s == 3) ? SH + 8.0f : rnd(SH) * 1.0f;
-          ew[ne] = rnd(628) / 100.0f; etp[ne] = (uint8_t)t;
-          esp[ne] = 0; // V5.34 : ennemis speciaux apres 40 s (RAPIDE, BLINDE, GEANT)
-          if (gameTime > 40 && rnd(100) < 12) esp[ne] = (uint8_t)(1 + rnd(3));
-          ehp[ne] = (int)(VS_HP0[t] * (1.0f + gameTime / 55.0f));
-          if (esp[ne] == 2) ehp[ne] = ehp[ne] * 9 / 5;   // BLINDE : PV presque doubles
-          if (esp[ne] == 3) ehp[ne] = ehp[ne] * 7 / 5;   // GEANT : PV accrus
-          ne++;
+      if (!bossFight) { // V5.38 : pendant le duel, RIEN d'autre n'apparait
+        float sInt = 1.5f - gameTime * 0.013f; if (sInt < 0.30f) sInt = 0.30f; // V5.36 : depart plus doux (moins d'ennemis au tout debut)
+        while (spawnT >= sInt) {
+          spawnT -= sInt;
+          if (ne < VS_NE) {
+            int t = 0; int r = rnd(100); // types deplaces selon le temps de survie
+            if (gameTime > 25 && r < 30) t = 1;
+            if (gameTime > 50 && r >= 30 && r < 50) t = 2;
+            if (gameTime > 80 && r >= 50 && r < 65) t = 3;
+            int s = rnd(4);
+            ex[ne] = (s == 0) ? -8.0f : (s == 1) ? SW + 8.0f : (s == 2) ? rnd(SW) * 1.0f : rnd(SW) * 1.0f;
+            ey[ne] = (s == 2) ? -8.0f : (s == 3) ? SH + 8.0f : rnd(SH) * 1.0f;
+            ew[ne] = rnd(628) / 100.0f; etp[ne] = (uint8_t)t;
+            esp[ne] = 0; // V5.34 : ennemis speciaux apres 40 s (RAPIDE, BLINDE, GEANT)
+            if (gameTime > 40 && rnd(100) < 12) esp[ne] = (uint8_t)(1 + rnd(3));
+            ehp[ne] = (int)(VS_HP0[t] * (1.0f + gameTime / 55.0f));
+            if (esp[ne] == 2) ehp[ne] = ehp[ne] * 9 / 5;   // BLINDE : PV presque doubles
+            if (esp[ne] == 3) ehp[ne] = ehp[ne] * 7 / 5;   // GEANT : PV accrus
+            ne++;
+          }
         }
       }
       // ---- tir automatique sur l'ennemi le plus proche (baguette magique)
@@ -7724,6 +7760,11 @@ static void vsGame() {
         float n = sqrtf(ddx * ddx + ddy * ddy); if (n < 1.0f) n = 1.0f;
         float s = VS_SPD[etp[i]];
         if (esp[i] == 1) s *= 1.4f; // RAPIDE
+        if (etp[i] == 4) { // V5.38 : le boss DASH par intermittence (courts et telegraphes : jamais durs a l'extreme)
+          bossDashCd -= dt;
+          if (bossDashCd <= 0.0f) { bossDashT = 0.35f; bossDashCd = 1.7f + rnd(10) * 0.1f + 0.25f * bossType; }
+          if (bossDashT > 0.0f) { bossDashT -= dt; s *= 4.0f; }
+        }
         if (etp[i] == 0) { // chauve-souris : ondule
           ew[i] += dt * 6.0f;
           float w = fsinf(ew[i]) * 30.0f;
@@ -7736,6 +7777,27 @@ static void vsGame() {
         int edmg = VS_DMG[etp[i]] + ((esp[i] == 2) ? 3 : 0) + ((esp[i] == 3) ? 5 : 0);
         if (gameTime < 30.0f && edmg > 3) edmg -= 3; // V5.36 : les 30 premieres secondes font moins mal
         if (invT <= 0.0f && ddx * ddx + ddy * ddy < rr * rr) { hp -= edmg; invT = 0.75f; if (hp <= 0) { hp = 0; dead = true; } }
+        if (etp[i] == 4) { // V5.38 : ATTAQUE A DISTANCE du boss : boule de feu visee
+          bossShotT -= dt;
+          if (bossShotT <= 0.0f) {
+            bossShotT = 1.25f + rnd(6) * 0.1f;
+            float dl = sqrtf(ddx * ddx + ddy * ddy); if (dl < 1.0f) dl = 1.0f;
+            for (int s2 = 0; s2 < 8; s2++) {
+              if (bpl[s2] > 0.0f) continue;
+              bpx2[s2] = ex[i]; bpy2[s2] = ey[i];
+              bvx2[s2] = ddx / dl * 95.0f; bvy2[s2] = ddy / dl * 95.0f;
+              bpl[s2] = 4.0f;
+              break;
+            }
+          }
+        }
+      }
+      for (int i = 0; i < 8; i++) { // V5.38 : boules de feu du boss : elles volent et blessent
+        if (bpl[i] <= 0.0f) continue;
+        bpl[i] -= dt;
+        bpx2[i] += bvx2[i] * dt; bpy2[i] += bvy2[i] * dt;
+        float ddx = bpx2[i] - vpx, ddy = bpy2[i] - vpy;
+        if (invT <= 0.0f && ddx * ddx + ddy * ddy < 49.0f) { hp -= 10; invT = 0.75f; bpl[i] = 0.0f; if (hp <= 0) { hp = 0; dead = true; } }
       }
       // ---- POUVOIRS : orbes (Bible), aura (Ail), foudre (Anneau), spirale epique (Haches)
       if (uWl[0] > 0) { // ORBES : cercles blancs autour de toi, blessent au contact
@@ -7800,6 +7862,7 @@ static void vsGame() {
         if (gxp[gs] == 0) gxp[gs] = 1;
         if (etp[j] == 4) { hp += 20; if (hp > maxHp) hp = maxHp; } // le boss soigne
         if (etp[j] == 4) { chOn = true; chX = ex[j]; chY = ey[j]; } // V5.35 : ... et lache un COFFRE
+        if (etp[j] == 4) { bossFight = false; for (int q2 = 0; q2 < 8; q2++) bpl[q2] = 0.0f; } // V5.38 : duel termine, le monde reprend son cours
         ne--;
         ex[j] = ex[ne]; ey[j] = ey[ne]; ehp[j] = ehp[ne]; etp[j] = etp[ne]; ew[j] = ew[ne]; esp[j] = esp[ne];
       }
@@ -7977,9 +8040,22 @@ static void vsGame() {
       int t = etp[i]; KDColor c = VS_COL[t];
       int rx = (int)ex[i], ry = (int)ey[i];
       if (esp[i] > 0 && t != 4) fRing(rx, ry, VS_RAD[t] + 3, VS_MCOL[esp[i]]); // V5.34 : halo des ennemis speciaux
-      if (t == 4) { // boss : gros cercle, yeux, barre de vie
-        oCirc(rx, ry, 12, c, KDColor::RGB24(0x6D0000));
-        fRect(rx - 5, ry - 4, 3, 3, C_WHT); fRect(rx + 2, ry - 4, 3, 3, C_WHT);
+      if (t == 4) { // V5.38 : BOSS : sprite detaile selon son type (cornes, yeux, bouche, telegraphes)
+        uint32_t bTop, bBot; const char *bName;
+        if (bossType == 0) { bTop = 0xE03B3B; bBot = 0x6D0000; bName = "CRIMSON"; }
+        else if (bossType == 1) { bTop = 0xB44BFF; bBot = 0x5A1F78; bName = "SPECTRE"; }
+        else { bTop = 0x3DDC55; bBot = 0x1F7A32; bName = "GOLEM"; }
+        if (bossDashT > 0.0f) fRing(rx, ry, 16, C_ORG); // halo orange : il dash !
+        oCirc(rx, ry, 12, KDColor::RGB24(bTop), KDColor::RGB24(bBot)); // corps bicolore
+        fRect(rx - 9, ry - 16, 3, 6, KDColor::RGB24(0xE8E0D0)); // cornes
+        fRect(rx + 6, ry - 16, 3, 6, KDColor::RGB24(0xE8E0D0));
+        px(rx - 8, ry - 17, C_WHT); px(rx + 7, ry - 17, C_WHT);
+        if (bossType == 1) { fRect(rx - 6, ry - 5, 4, 2, C_YEL); fRect(rx + 2, ry - 5, 4, 2, C_YEL); } // yeux en fente
+        else { fCirc(rx - 4, ry - 4, 2, C_WHT); fCirc(rx + 3, ry - 4, 2, C_WHT); px(rx - 4, ry - 4, C_RED); px(rx + 3, ry - 4, C_RED); }
+        fRect(rx - 5, ry + 3, 10, 3, C_BLK); // bouche
+        for (int tx2 = -4; tx2 <= 4; tx2 += 3) px(rx + tx2, ry + 3, C_WHT); // dents
+        if (bossShotT < 0.3f && bossFight) fRing(rx, ry, 15, C_YEL); // il va tirer : halo jaune
+        drawTextC(ry - 32, bName, KDColor::RGB24(bTop)); // son nom au-dessus
         int bw = ehp[i] * 28 / (VS_HP0[4] + (bossN - 1) * 160);
         if (bw < 0) bw = 0;
         if (bw > 28) bw = 28;
@@ -8059,13 +8135,27 @@ static void vsGame() {
       else if (pw[i] == 3) { fRect(x2 - 4, y2 - 1, 9, 2, C_GOLD); fRect(x2 - 1, y2 - 4, 2, 9, C_GOLD); } // croix
       else { fCirc(x2, y2, 4, KDColor::RGB24(0xFF8327)); fCirc(x2, y2, 2, C_YEL); } // feu
     }
+    for (int i = 0; i < 8; i++) { // V5.38 : boules de feu du boss
+      if (bpl[i] <= 0.0f) continue;
+      fCirc((int)bpx2[i], (int)bpy2[i], 3, KDColor::RGB24(0xFF6A00));
+      fCirc((int)bpx2[i], (int)bpy2[i], 1, C_YEL);
+    }
     // joueur (clignote s'il est blesse) + visee
     bool flash = (invT > 0.0f) && (((int)(invT * 12) & 1) == 0);
-    if (!flash) {
-      fCirc((int)vpx, (int)vpy, 5, C_YEL);
+    if (!flash) { // V5.38 : sprite du HEROS : petit chasseur a cape, chapeau et dague (jambes animees)
+      int hx = (int)vpx, hy = (int)vpy;
       int ed = faceR ? 1 : -1;
-      fRect((int)vpx + ed * 1 - 1, (int)vpy - 3, 2, 2, C_BLK); fRect((int)vpx + ed * 3 - 1, (int)vpy - 3, 2, 2, C_BLK);
-      fRect((int)vpx - 2, (int)vpy + 2, 4, 1, KDColor::RGB24(0xB08000));
+      bool mo = (kLeft || kRight || kUp || kDown);
+      int lg = (mo && (((int)(gameTime * 10.0f) & 1) != 0)) ? 1 : 0;
+      fRect(hx - 3, hy + 2 + lg, 2, 3 - lg, KDColor::RGB24(0x5A3A20)); // jambe gauche
+      fRect(hx + 1, hy + 3 - lg, 2, 2 + lg, KDColor::RGB24(0x5A3A20)); // jambe droite
+      fRect(hx - 4, hy - 1, 8, 4, KDColor::RGB24(0x7A3BB0)); // tunique violette
+      fRect((ed > 0) ? hx - 5 : hx + 3, hy - 1, 2, 5, KDColor::RGB24(0x8A2230)); // cape derriere lui
+      fRect(hx - 3, hy - 4, 6, 3, KDColor::RGB24(0xF2C898)); // tete
+      fRect(hx - 4, hy - 6, 8, 2, KDColor::RGB24(0x3A2A1A)); // chapeau
+      fRect(hx - 5, hy - 5, 10, 1, KDColor::RGB24(0x3A2A1A)); // bord du chapeau
+      px(hx + ed * 1 - 1, hy - 3, C_BLK); px(hx + ed * 2, hy - 3, C_BLK); // yeux vers la direction
+      fRect((ed > 0) ? hx + 4 : hx - 6, hy, 3, 1, KDColor::RGB24(0xE8E0D0)); // dague tendue devant
     }
     blit();
     // ---- mort : ecran de fin + records
@@ -8091,6 +8181,8 @@ static void vsGame() {
           maxHp = 100; hp = 100; lvl = 1; xp = 0; xpNeed = 7; kills = 0; bossN = 0;
           uDmg = uRate = uSpd = uHp = uMul = uMag = uReg = 0;
           fireT = invT = regT = gameTime = spawnT = bossMsgT = 0.0f; bossNext = 60;
+          bossFight = false; bossType = 0; // V5.38 : le duel est annule au rejouer
+          for (int q2 = 0; q2 < 8; q2++) bpl[q2] = 0.0f;
           orbA = foudT = novaT = novaFxT = foudFxT = knT = whT = axT = crT = waT = fiT = whFxT = healT = 0.0f; prevOK2 = false;
           chOn = false; pickChar = true; // V5.35 : nouveau perso au rejouer, coffre efface
           dead = false; lastMs = (int)Ion::Timing::millis();
@@ -9089,7 +9181,7 @@ static void dgGame() {
           pL2 = kLeft; pR2 = kRight; pU2 = kUp; pD2 = kDown; pOK2 = keyOK; pBk2 = keyBack;
           continue; // regenere avant de rendre (saute le tour des monstres)
         } else if (dgMap[py2 * DGW + px2] == 3) { dgMap[py2 * DGW + px2] = 0; pots++; snprintf(log1, 40, "POTION RAMASSEE"); }
-        else if (dgMap[py2 * DGW + px2] == 4) { dgMap[py2 * DGW + px2] = 0; gold += (role == 3) ? 22 : 15; snprintf(log1, 40, "+%d OR !", (role == 3) ? 22 : 15); } // V5.36 : moins d'or, voleur : +50%
+        else if (dgMap[py2 * DGW + px2] == 4) { dgMap[py2 * DGW + px2] = 0; gold += (role == 3) ? 10 : 7; snprintf(log1, 40, "+%d OR !", (role == 3) ? 10 : 7); } // V5.38 : 7 or par tas, voleur : +50%
         else if (dgMap[py2 * DGW + px2] == 5) { dgMap[py2 * DGW + px2] = 0; atk++; snprintf(log1, 40, "EPEE : ATK %d", atk); }
         else if (dgMap[py2 * DGW + px2] == 7) { // V5.35 : coffre : objet magique au hasard
           dgMap[py2 * DGW + px2] = 0;
