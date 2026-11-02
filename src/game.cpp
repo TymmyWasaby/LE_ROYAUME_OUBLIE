@@ -7461,7 +7461,7 @@ static void amongUsGame() {
 static void vsGame() {
   // ---- donnees des 5 types d'ennemis : chauve-souris, squelette, zombie, fantome, boss
   static const float VS_SPD[5] = { 48.0f, 34.0f, 24.0f, 40.0f, 15.0f };
-  static const int  VS_HP0[5]  = { 10, 18, 32, 14, 260 };
+  static const int  VS_HP0[5]  = { 10, 18, 32, 14, 1500 }; // V5.40 : boss taille pour durer 1 minute et plus
   static const int  VS_DMG[5]  = { 8, 10, 14, 12, 18 };
   static const int  VS_RAD[5]  = { 3, 4, 5, 4, 12 };
   static const int  VS_XP[5]   = { 1, 2, 3, 2, 15 };
@@ -7584,7 +7584,7 @@ static void vsGame() {
         ex[0] = (s == 0) ? -14.0f : (s == 1) ? SW + 14.0f : (s == 2) ? rnd(SW) * 1.0f : rnd(SW) * 1.0f;
         ey[0] = (s == 2) ? -14.0f : (s == 3) ? SH + 14.0f : rnd(SH) * 1.0f;
         ew[0] = 0; etp[0] = 4; esp[0] = 0;
-        ehp[0] = VS_HP0[4] + (bossN - 1) * 160;
+        ehp[0] = VS_HP0[4] + (bossN - 1) * 1000; // V5.40 : +1000 PV par boss : chaque duel dure 1 min+
         ne = 1;
         bossFight = true; bossDashT = 0.0f; bossDashCd = 1.8f; bossShotT = 1.2f;
         for (int q2 = 0; q2 < 8; q2++) bpl[q2] = 0.0f;
@@ -7862,7 +7862,7 @@ static void vsGame() {
         if (gxp[gs] == 0) gxp[gs] = 1;
         if (etp[j] == 4) { hp += 20; if (hp > maxHp) hp = maxHp; } // le boss soigne
         if (etp[j] == 4) { chOn = true; chX = ex[j]; chY = ey[j]; } // V5.35 : ... et lache un COFFRE
-        if (etp[j] == 4) { bossFight = false; for (int q2 = 0; q2 < 8; q2++) bpl[q2] = 0.0f; } // V5.38 : duel termine, le monde reprend son cours
+        if (etp[j] == 4) { bossFight = false; spawnT = 1.5f; for (int q2 = 0; q2 < 8; q2++) bpl[q2] = 0.0f; } // V5.40 : duel termine : les monstres reviennent vite, SANS le mur de 46 ennemis d'un coup (le compteur de spawn n'a pas accumule 60 s)
         ne--;
         ex[j] = ex[ne]; ey[j] = ey[ne]; ehp[j] = ehp[ne]; etp[j] = etp[ne]; ew[j] = ew[ne]; esp[j] = esp[ne];
       }
@@ -7901,6 +7901,11 @@ static void vsGame() {
           chOn = false;
           int cand[9], nc = 0;
           for (int w = 0; w < 9; w++) { if (uWl[w] < 5) { cand[nc] = w; nc++; } }
+          // V5.39 : le tirage et l'augmentation se font UNE SEULE FOIS, AVANT l'ecran
+          // (avant, c'etait dans la boucle d'affichage : chaque frame offrait un niveau !)
+          int pick = -1, pickLvl = 0;
+          if (nc > 0) { pick = cand[rnd(nc)]; uWl[pick]++; pickLvl = uWl[pick]; }
+          else { maxHp += 10; hp = maxHp; uDmg++; } // tous les pouvoirs sont epiques : petit lot de secours
           waitRelease(); bool pOK5 = false;
           while (true) { // revelation du contenu du coffre
             pollKeys();
@@ -7909,15 +7914,10 @@ static void vsGame() {
             bgPanel();
             drawTextC(16, "COFFRE DU BOSS !", C_GOLD);
             char c1[40];
-            if (nc > 0) {
-              int w = cand[rnd(nc)];
-              uWl[w]++;
-              if (uWl[w] >= 5) { snprintf(c1, 40, "%s EVOLUE !", VS_EPN[w]); drawTextC(48, c1, C_YEL); drawTextC(70, VS_EPD[w], C_GRE); }
-              else { snprintf(c1, 40, "%s : NIVEAU %d", VS_UPN[w + 7], uWl[w]); drawTextC(48, c1, C_WHT); }
-            } else { // tous les pouvoirs sont epiques : petit lot de secours
-              maxHp += 10; hp = maxHp; uDmg++;
-              drawTextC(48, "PV MAX +10, SOIN, +1 DEGATS", C_WHT);
-            }
+            if (pick >= 0) {
+              if (pickLvl >= 5) { snprintf(c1, 40, "%s EVOLUE !", VS_EPN[pick]); drawTextC(48, c1, C_YEL); drawTextC(70, VS_EPD[pick], C_GRE); }
+              else { snprintf(c1, 40, "%s : NIVEAU %d", VS_UPN[pick + 7], pickLvl); drawTextC(48, c1, C_WHT); }
+            } else { drawTextC(48, "PV MAX +10, SOIN, +1 DEGATS", C_WHT); }
             drawTextC(170, "OK POUR CONTINUER", C_GRE);
             blit(); Ion::Timing::msleep(30);
           }
@@ -8056,7 +8056,7 @@ static void vsGame() {
         for (int tx2 = -4; tx2 <= 4; tx2 += 3) px(rx + tx2, ry + 3, C_WHT); // dents
         if (bossShotT < 0.3f && bossFight) fRing(rx, ry, 15, C_YEL); // il va tirer : halo jaune
         drawTextC(ry - 32, bName, KDColor::RGB24(bTop)); // son nom au-dessus
-        int bw = ehp[i] * 28 / (VS_HP0[4] + (bossN - 1) * 160);
+        int bw = ehp[i] * 28 / (VS_HP0[4] + (bossN - 1) * 1000); // V5.40 : barre sur les nouveaux PV
         if (bw < 0) bw = 0;
         if (bw > 28) bw = 28;
         fRect(rx - 14, ry - 20, 28, 3, KDColor::RGB24(0x3A0A0A));
