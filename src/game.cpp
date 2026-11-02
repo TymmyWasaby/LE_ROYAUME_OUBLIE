@@ -6526,7 +6526,7 @@ static bool auWiringGame(int taskIdx) { // V5.35 : CABLAGE jouable — tu saisis
   int s = taskIdx * 7 + 5;
   for (int i = 3; i > 0; i--) { int j = s % (i + 1); s = s * 13 + 5; int tmp = perm[i]; perm[i] = perm[j]; perm[j] = tmp; }
   bool linked[4] = { false, false, false, false };
-  int side = 0, sel = 0, hold = -1, flashT = 0, okN = 0; // side : 0 = fils a gauche, 1 = bornes a droite
+  int side = 0, sel = 0, hold = -1, flashT = 0, okN = 0, dest[4] = { -1, -1, -1, -1 }; // V5.43 : dest[w] = LA borne ou le fil w est branche (fix : le trait restait sur la mauvaise borne)
   bool ok = false, pU = false, pD = false, pO = false, pB = false, pL2 = false;
   while (!ok) {
     pollKeys();
@@ -6534,14 +6534,14 @@ static bool auWiringGame(int taskIdx) { // V5.35 : CABLAGE jouable — tu saisis
     if (kDown && !pD) sel++;
     if (sel < 0) sel = 3;
     if (sel > 3) sel = 0;
-    if (kLeft && !pL2 && hold >= 0) { hold = -1; side = 0; waitRelease(); } // on repose le fil : retour aux fils
+    if (kLeft && !pL2 && hold >= 0) { sel = hold; hold = -1; side = 0; waitRelease(); } // on repose le fil : le curseur REVIENT sur ce fil (V5.43)
     if (keyOK && !pO) {
       if (side == 0) { // saisir un fil non branche
         if (!linked[sel]) { hold = sel; side = 1; sel = 0; waitRelease(); }
       } else if (hold >= 0) { // le brancher sur la borne visee
-        if (perm[sel] == hold) { linked[hold] = true; okN++; if (okN >= 4) ok = true; } // couleurs identiques : ca tient
+        if (perm[sel] == hold) { linked[hold] = true; dest[hold] = sel; okN++; if (okN >= 4) ok = true; } // couleurs identiques : ca tient (V5.43 : on retient la borne choisie)
         else flashT = 400; // borne d'une autre couleur : flash rouge
-        hold = -1; side = 0; waitRelease();
+        sel = hold; hold = -1; side = 0; waitRelease(); // V5.43 : le curseur reste sur le fil qu'on vient de brancher
       }
     }
     if (keyBack && !pB) { waitRelease(); return false; }
@@ -6554,7 +6554,7 @@ static bool auWiringGame(int taskIdx) { // V5.35 : CABLAGE jouable — tu saisis
       int r2 = (side == 1) ? sel : -1; // borne survolee quand on tient un fil
       fRect(64, y - 4, 12, 12, KDColor::RGB24(WC[w])); // fil gauche
       fRect(244, y - 4, 12, 12, KDColor::RGB24(WC[perm[w]])); // borne droite
-      if (linked[w]) { auLine(76, y + 2, 244, 74 + perm[w] * 26 + 2, KDColor::RGB24(WC[w])); fCirc(76, y + 2, 3, C_WHT); fCirc(244, 74 + perm[w] * 26 + 2, 3, C_WHT); } // branche : ligne solide + connecteurs
+      if (linked[w]) { int dy = 74 + dest[w] * 26 + 2; auLine(76, y + 2, 244, dy, KDColor::RGB24(WC[w])); fCirc(76, y + 2, 3, C_WHT); fCirc(244, dy, 3, C_WHT); } // branche : ligne solide vers LA borne choisie (V5.43)
       if (side == 0 && w == sel) { fRect(56, y - 8, 4, 20, C_YEL); } // curseur fil actif
       if (side == 1 && w == r2) { fRect(260, y - 8, 4, 20, C_YEL); } // curseur borne visee
     }
@@ -6570,6 +6570,98 @@ static bool auWiringGame(int taskIdx) { // V5.35 : CABLAGE jouable — tu saisis
     drawTextC(202, "RETOUR:ABANDONNER", C_GRE);
     blit();
     Ion::Timing::msleep(33);
+  }
+  waitRelease();
+  return true;
+}
+static bool auDataGame(int taskIdx) { // V5.44 : DONNEES — memoire : retiens la sequence de 4 fleches puis rejoue-la
+  waitRelease();
+  int seq[4]; int s = taskIdx * 11 + 3;
+  for (int i = 0; i < 4; i++) { seq[i] = s & 3; s = s * 5 + 7; } // 0=haut 1=bas 2=gauche 3=droite
+  for (int show = 0; show < 4; show++) { // phase 1 : le signal defile
+    for (int f = 0; f < 18; f++) {
+      pollKeys();
+      if (keyBack) { waitRelease(); return false; }
+      fRect(40, 36, 240, 150, KDColor::RGB24(0x1B1B25));
+      drawTextC(44, "DONNEES : REGARDE BIEN", C_YEL);
+      char lb[20]; snprintf(lb, 20, "SIGNAL %d/4", show + 1); drawTextC(62, lb, C_GRE);
+      int cx = SW / 2, cy = 116, d = seq[show];
+      if (d == 0) { fRect(cx - 12, cy - 12, 24, 6, C_WHT); fRect(cx - 6, cy - 18, 12, 6, C_WHT); fRect(cx - 18, cy - 6, 36, 14, C_WHT); fRect(cx - 5, cy + 8, 10, 26, C_WHT); }
+      else if (d == 1) { fRect(cx - 12, cy + 6, 24, 6, C_WHT); fRect(cx - 6, cy + 12, 12, 6, C_WHT); fRect(cx - 18, cy - 8, 36, 14, C_WHT); fRect(cx - 5, cy - 34, 10, 26, C_WHT); }
+      else if (d == 2) { fRect(cx - 12, cy - 12, 6, 24, C_WHT); fRect(cx - 18, cy - 6, 6, 12, C_WHT); fRect(cx - 6, cy - 18, 14, 36, C_WHT); fRect(cx + 8, cy - 5, 26, 10, C_WHT); }
+      else { fRect(cx + 6, cy - 12, 6, 24, C_WHT); fRect(cx + 12, cy - 6, 6, 12, C_WHT); fRect(cx - 8, cy - 18, 14, 36, C_WHT); fRect(cx - 34, cy - 5, 26, 10, C_WHT); }
+      for (int u = 0; u < 4; u++) fRect(100 + u * 40, 168, 20, 4, (u <= show) ? KDColor::RGB24(0x38FEDC) : KDColor::RGB24(0x2A2F3A));
+      blit(); Ion::Timing::msleep(33);
+    }
+  }
+  int pos = 0, flashT = 0;
+  bool pU = false, pD = false, pL = false, pR = false, pB = false;
+  while (true) { // phase 2 : rejouer la sequence
+    pollKeys();
+    int inp = -1;
+    if (kUp && !pU) inp = 0;
+    else if (kDown && !pD) inp = 1;
+    else if (kLeft && !pL) inp = 2;
+    else if (kRight && !pR) inp = 3;
+    if (inp >= 0) {
+      if (inp == seq[pos]) { pos++; if (pos >= 4) { waitRelease(); return true; } }
+      else { pos = 0; flashT = 400; } // rate : la saisie repart de zero
+    }
+    if (keyBack && !pB) { waitRelease(); return false; }
+    pU = kUp; pD = kDown; pL = kLeft; pR = kRight; pB = keyBack;
+    fRect(40, 36, 240, 150, KDColor::RGB24(0x1B1B25));
+    if (flashT > 0) { flashT -= 33; fRect(40, 36, 240, 3, KDColor::RGB24(0xC51111)); fRect(40, 183, 240, 3, KDColor::RGB24(0xC51111)); }
+    drawTextC(44, "DONNEES : REJOUVE LA SEQUENCE", C_YEL);
+    for (int u = 0; u < 4; u++) { // les cases saisies affichent la fleche attendue
+      int bx = 76 + u * 56;
+      rRect(bx, 84, 36, 36, 6, (u < pos) ? KDColor::RGB24(0x38FEDC) : KDColor::RGB24(0x2A2F3A));
+      if (u < pos) {
+        int cx = bx + 18, cy = 102, d2 = seq[u];
+        if (d2 == 0) { fRect(cx - 8, cy - 10, 16, 6, C_BLK); fRect(cx - 3, cy - 4, 6, 14, C_BLK); }
+        else if (d2 == 1) { fRect(cx - 8, cy + 4, 16, 6, C_BLK); fRect(cx - 3, cy - 10, 6, 14, C_BLK); }
+        else if (d2 == 2) { fRect(cx - 10, cy - 8, 6, 16, C_BLK); fRect(cx - 4, cy - 3, 14, 6, C_BLK); }
+        else { fRect(cx + 4, cy - 8, 6, 16, C_BLK); fRect(cx - 10, cy - 3, 14, 6, C_BLK); }
+      }
+    }
+    char pb[24]; snprintf(pb, 24, "SAISI : %d/4", pos); drawTextC(140, pb, pos >= 4 ? C_GREEN : C_WHT);
+    drawTextC(160, "FLECHES:SAISIR  RETOUR:ABANDON", C_GRE);
+    if (flashT > 0) drawTextC(176, "ERREUR ! ON RECOMMENCE", KDColor::RGB24(0xC51111));
+    blit(); Ion::Timing::msleep(33);
+  }
+}
+static bool auCalibGame(int taskIdx) { // V5.44 : ETALONNAGE — centre les 3 aiguilles dans la zone verte
+  waitRelease();
+  int off[3], cur = 0, flashT = 0; int s = taskIdx * 13 + 1;
+  for (int i = 0; i < 3; i++) { off[i] = (s % 40) - 20; s = s * 7 + 3; if (off[i] >= -5 && off[i] <= 5) off[i] = 13; }
+  bool done = false, pL2 = false, pR2 = false, pOK = false, pB = false;
+  while (!done) {
+    pollKeys();
+    if (kLeft && !pL2) off[cur] -= 2;
+    if (kRight && !pR2) off[cur] += 2;
+    if (off[cur] < -20) off[cur] = -20;
+    if (off[cur] > 20) off[cur] = 20;
+    if (keyOK && !pOK) {
+      if (off[cur] >= -5 && off[cur] <= 5) { cur++; if (cur >= 3) done = true; }
+      else flashT = 400;
+      waitRelease();
+    }
+    if (keyBack && !pB) { waitRelease(); return false; }
+    pL2 = kLeft; pR2 = kRight; pOK = keyOK; pB = keyBack;
+    fRect(40, 36, 240, 150, KDColor::RGB24(0x1B1B25));
+    if (flashT > 0) { flashT -= 33; fRect(40, 36, 240, 3, KDColor::RGB24(0xC51111)); fRect(40, 183, 240, 3, KDColor::RGB24(0xC51111)); }
+    drawTextC(44, "ETALONNAGE : CENTRE LES AIGUILLES", C_YEL);
+    for (int i = 0; i < 3; i++) { // trois jauges : l'aiguille glisse, la zone verte attend
+      int bx = 76 + i * 76;
+      fRect(bx, 90, 52, 60, KDColor::RGB24(0x11131A));
+      fRect(bx + 21, 90, 10, 60, KDColor::RGB24(0x1E4D2B));
+      if (i < cur) fRect(bx, 88, 52, 2, KDColor::RGB24(0x38E05C));
+      int nx = bx + 26 + off[i];
+      fRect(nx - 1, 96, 3, 48, (i < cur) ? C_GREEN : C_WHT);
+      if (i == cur) fRect(bx, 152, 52, 3, C_YEL);
+    }
+    char cb[24]; snprintf(cb, 24, "VALIDEES : %d/3", cur); drawTextC(164, cb, cur >= 3 ? C_GREEN : C_WHT);
+    drawTextC(178, "G/D:REGLER  OK:VERROUILLER", C_GRE);
+    blit(); Ion::Timing::msleep(33);
   }
   waitRelease();
   return true;
@@ -6785,16 +6877,12 @@ static void amongUsGame() {
           float tx = AU_TX[pTasks[pTaskI]] * 8.0f + 4.0f, ty = AU_TY[pTasks[pTaskI]] * 8.0f + 4.0f;
           float ddx = tx - auPx, ddy = ty - auPy;
           if (ddx * ddx + ddy * ddy < 13 * 13) {
-            if (pTasks[pTaskI] % 3 == 0) { // V5.26 : une tache sur trois = CABLAGE
-              if (!pOK && auWiringGame(pTasks[pTaskI])) {
-                pTaskI++; auTaskBar += 1.0f / totalTasks;
-                fxT = 0.45f; fxType = 2; fxX = auPx; fxY = auPy; // V5.29 : ANIMATION tache ok
-              }
-            } else {
-              pTaskProg += dt / 4.0f;
-              if (pTaskProg >= 1.0f) { pTaskProg = 0; pTaskI++; auTaskBar += 1.0f / totalTasks;
-                fxT = 0.45f; fxType = 2; fxX = auPx; fxY = auPy; } // V5.29 : ANIMATION tache ok
-            }
+            int tk = pTasks[pTaskI];
+            bool tkOk = false;
+            if (tk % 3 == 0) { if (!pOK) tkOk = auWiringGame(tk); } // V5.26 : CABLAGE
+            else if (tk % 3 == 1) { if (!pOK) tkOk = auDataGame(tk); } // V5.44 : DONNEES (memoire)
+            else { if (!pOK) tkOk = auCalibGame(tk); } // V5.44 : ETALONNAGE
+            if (tkOk) { pTaskI++; auTaskBar += 1.0f / totalTasks; fxT = 0.45f; fxType = 2; fxX = auPx; fxY = auPy; } // tache ok
           } else { pTaskProg = 0; }
         }
         // BOUTON D'URGENCE (equipage vivant, pas en reunion)
@@ -9074,14 +9162,14 @@ static void dgGame() {
       snprintf(log1, 40, "ETAGE 1 : TROUVE L'ESCALIER");
       // ---- V5.34 : choix de la classe (chaque partie, on repart du bon pied)
       waitRelease();
-      int rsel = 0; bool pU3 = false, pD3 = false, pOK3 = false, pBk3 = false;
+      int rsel = 0; bool pU3 = false, pD3 = false, pOK3 = false;
       while (true) {
         pollKeys();
         if (kUp && !pU3 && rsel > 0) rsel--;
         if (kDown && !pD3 && rsel < 3) rsel++;
         pU3 = kUp; pD3 = kDown;
         if (keyOK && !pOK3) { waitRelease(); break; }
-        pOK3 = keyOK; pBk3 = keyBack;
+        pOK3 = keyOK;
         bgPanel();
         drawTextC(10, "CHOISIS TON HEROS", C_YEL);
         for (int i = 0; i < 4; i++) {
@@ -9635,13 +9723,18 @@ static void adventureGame() {
         adText(0, "Ce soir, sa flamme vacille...", "puis s'eteint d'un coup.", "");
         adText(0, "Kael grimpe les marches quatre a", "quatre. Au sommet, la lanterne est", "vide. Le ciel aussi.");
         adText(0, "L'Etoile-Coeur a disparu. Sans", "elle, les marins perdent le nord.", "");
+        adText(0, "Dans le village en bas, on se", "rassemble sur la digue. Les vieux", "comptent les vagues. Les enfants");
+        adText(0, "cherchent une lune qui ne vient", "pas. Une cloche sonne, lointaine,", "comme un coeur qu'on oublie.");
         adText(0, "Kael ! crie Nol, le vieux pecheur.", "Quelqu'un doit rapporter l'Etoile,", "ou l'aube ne reviendra jamais.");
+        adText(0, "Pres de la lampe vide, un medaillon", "de cuivre : un visage barre d'une", "croix. Dessous, un nom : ELIEZER.");
+        adText(0, "Personne au village ne se souvient", "de ce nom. Le cuivre, lui, est", "encore chaud comme une main.");
         const char *o1[3] = { "PARTIR SUR-LE-CHAMP", "EMPORTER LA LANTERNE DE FER", "RESTER VEILLER LE VILLAGE" };
         int r = adChoice(0, o1, 3);
         if (r == 1) { lant = true; adText(0, "Kael decroche la vieille lanterne", "de fer. Elle est lourde comme une", "promesse. Elle servira."); }
         else if (r == 2) { gAdMax += 2; gAdHP = gAdMax; adText(0, "Une fillette glisse une pomme dans", "ton sac. Ton coeur est plus fort.", "(PV MAX +2)"); }
         else adText(0, "La mer gronde deja. Pas une minute", "a perdre. Kael serre son sac.", "");
-        adText(0, "La route du nord serpente entre les", "brumes... la ou la nuit semble", "avaler les etoiles.", "");
+        adText(0, "Kael remplit sa gourde a la", "citerne, embrasse Nol sur le front,", "et gravit la dune du nord.");
+        adText(0, "La route du nord serpente entre les", "brumes... la ou la nuit semble", "avaler les etoiles.");
       } else if (ch == 2) { // ---- CHAPITRE 2 : LA FORET DES MURMURES ----
         adText(1, "-- CHAPITRE 2 : LA FORET DES", "MURMURES --", "");
         adText(1, "Les arbres chuchotent des noms de", "marins disparus. La lune se cache", "derriere les branches.");
@@ -9657,6 +9750,7 @@ static void adventureGame() {
         } else {
           adText(1, "La renarde t'observe s'eloigner.", "Un froid bizarre tombe sur la", "foret.");
         }
+        adText(1, "La foret s'epaissit a chaque pas.", "Les lucioles mortes pendant aux", "branches comme des lampes veilles.");
         if (!dead) { // ---- l'epreuve des trois sentiers ----
           int sent = -1;
           while (sent != 1 && !dead) {
@@ -9674,9 +9768,11 @@ static void adventureGame() {
           }
         }
         if (!dead) adText(1, "Au bout de la foret, la montagne", "dresse son epaule de pierre.", "Une tempete se prepare.");
+        if (!dead && lys) adText(1, "Lys trottine devant, la queue", "haute, comme un drapeau roux qui", "dit : encore un effort.");
       } else if (ch == 3) { // ---- CHAPITRE 3 : LE COL DES VENTS ----
         adText(2, "-- CHAPITRE 3 : LE COL DES VENTS --", "", "");
         adText(2, "Le vent hurle comme une meute.", "Un eboulement bouche le col.", "Un mineur, Grum, est blesse.");
+        adText(2, "Sa jambe est prise sous un bloc.", "Sa lampe est cassee. Il rit pour", "ne pas crier : \"Classique, ici.\"");
         const char *o4[2] = { "CREUSER A DEUX (DUR)", "PASSER PAR LA CORNICHE (RISQUE)" };
         int r = adChoice(2, o4, 2);
         if (r == 0) {
@@ -9684,6 +9780,7 @@ static void adventureGame() {
           adText(2, "Vous poussez la pierre ensemble.", "Le rocher cede. (-1 PV) Grum", "sourit sous sa barbe grise.");
           adText(2, "Tiens, gamin. Une braise chaude", "de ma forge. Elle ne s'eteint", "jamais pour qui la merite.");
           braise = true;
+          adText(2, "Grum boitera, mais il vivra. Du", "haut du col, tu le vois agiter sa", "cape comme un au revoir.");
           if (gAdHP <= 0) dead = true;
         } else {
           if (lant) adText(2, "La lanterne de fer eclaire la", "corniche. Tu passes sans une", "egratignure.");
@@ -9704,7 +9801,10 @@ static void adventureGame() {
       } else if (ch == 4) { // ---- CHAPITRE 4 : LA CITE ENGLOUTIE ----
         adText(3, "-- CHAPITRE 4 : LA CITE ENGLOUTIE", "--", "");
         adText(3, "Sous la vague, une cite de corail", "veille. Des lanternes bleues", "flottent entre les tours.");
+        adText(3, "Tu plonges. L'eau est tiede et", "dense comme un sommeil. Quelque", "chose veille au fond, patient.");
+        if (braise) adText(3, "La braise de Grum palit sous", "l'onde... mais tient bon. Elle ne", "s'eteint jamais, meme ici.");
         adText(3, "Naia, gardienne des nereides,", "barre le palais de nacre :", "personne ne passe sans reponse.");
+        adText(3, "Autour d'elle flottent trois", "anneaux de nacre. L'eau chante", "une chanson a trois voix.");
         adText(3, "Trois anneaux chantent sous l'eau :", "le 1er chante ce que tu VOIS, le", "2e ce que tu CROIS, le 3e CE QUE");
         adText(3, "TU ES. Un seul dit la verite.", "", "");
         if (lys) adText(3, "Lys renifle l'eau : le troisieme", "anneau sonne comme un coeur.", "");
@@ -9728,6 +9828,7 @@ static void adventureGame() {
         adText(4, "L'Ombre se tourne. Sous le capu-", "chon brille un regard d'homme :", "Eliezer. L'ancien gardien.");
         adText(4, "J'ai veille ce phare quarante ans,", "dit-il. Le village m'a oublie le", "jour ou ma flamme a tremble.");
         adText(4, "Alors j'ai pris celle du ciel.", "", "");
+        adText(4, "Quarante hivers, seul, a garder", "leur sommeil. Et pas une visite,", "pas un mot, pas une lampe.");
         if (lys) { lys = false; foi = true; adText(4, "Lys pose sa tete contre ta main :", "quoiqu'il arrive, ne rends pas", "l'Etoile par peur. (FOI DE LYS)"); }
         { // premiere passe
           const char *o6[3] = { "TU N'ES QU'UN VOLEUR", "LE VILLAGE T'A OUBLIE, PAS MOI", "RENDS L'ETOILE OU SOUFFRE" };
@@ -9749,7 +9850,17 @@ static void adventureGame() {
             if (gAdHP <= 0) dead = true;
           }
         }
-        if (!dead) adText(4, "L'Etoile vibre entre les mains de", "l'ancien gardien. Il te la tend...", "et attend ta decision.", "");
+        if (!dead) { // troisieme passe (V5.44) : la lecon de Naia
+          const char *o10[3] = { "TU ES CE QUE TU FAIS", "JE NE TE CROIS PAS", "LES MOTS NE NOURRIRONT PERSONNE" };
+          int r = adChoice(4, o10, 3);
+          if (r == 0) adText(4, "Tu cites Naia, sous la cite", "engloutie. Eliezer ferme les yeux :", "elle me l'a appris aussi, avant.");
+          else {
+            gAdHP -= 1;
+            adText(4, "L'antre tremble. (-1 PV) Mais la", "lecon de nacre te repond au fond", "du coeur, intacte.");
+            if (gAdHP <= 0) dead = true;
+          }
+        }
+        if (!dead) adText(4, "L'Etoile vibre entre les mains de", "l'ancien gardien. Il te la tend...", "et attend ta decision.");
       } else { // ---- CHAPITRE 6 : LE CHOIX FINAL ----
         adText(4, "-- CHAPITRE 6 : LE CHOIX FINAL --", "", "");
         adText(4, "L'Etoile-Coeur brule doucement", "dans tes mains. Derriere toi,", "Eliezer attend, immobile.");
@@ -9766,15 +9877,18 @@ static void adventureGame() {
         if (ending == 1) {
           adText(5, "Kael lance l'Etoile. Elle remonte,", "s'attache au firmament, et l'aube", "se leve sur Astralie.");
           adText(5, "Le village grave une nouvelle", "constellation : le Veilleur.", "");
+          adText(5, "Chaque nuit, Nol montre aux", "enfants la nouvelle etoile :", "\"Celle-la, c'est nous tous.\"");
           adText(5, "Eliezer sourit une derniere fois,", "et la brume l'emporte en douceur.", "(FIN ETOILEE)");
         } else if (ending == 2) {
           adText(0, "Kael garde l'Etoile. Sa poitrine", "s'illumine. Le monde s'incline...", "mais la mer reste sombre.");
-          adText(0, "On ne raconte plus l'ancien", "gardien. On ne raconte plus Kael.", "Seule reste la lumiere.", "");
+          adText(0, "On ne raconte plus l'ancien", "gardien. On ne raconte plus Kael.", "Seule reste la lumiere.");
           adText(0, "(FIN COURONNEE)", "", "");
         } else {
           adText(5, "Les mains de Kael et d'Eliezer se", "posent ensemble sur l'Etoile.", "Elle se partage en deux flammes.");
           adText(5, "Deux phares veillent desormais sur", "Astralie. Et quand la nuit est tres", "claire, on voit deux gardiens");
+          adText(5, "Deux phares veillent desormais sur", "Astralie. Et quand la nuit est tres", "claire, on voit deux gardiens");
           adText(5, "sourire du haut des deux tours.", "(FIN DE L'AUBE)", "");
+          adText(5, "Nol raconte l'histoire aux", "enfants : la nuit n'est jamais", "trop longue a deux.");
         }
         adEnds |= (uint8_t)(1 << (ending - 1));
         adBestCh = 6;
@@ -9782,7 +9896,7 @@ static void adventureGame() {
         { // ecran final : fins trouvees
           int nf = ((adEnds & 1) ? 1 : 0) + ((adEnds & 2) ? 1 : 0) + ((adEnds & 4) ? 1 : 0);
           char fb[24]; snprintf(fb, 24, "FINS TROUVEES : %d/3", nf);
-          adText(5, fb, "Il existe d'autres chemins,", "d'autres allies, d'autres fins...", "");
+          adText(5, fb, "Il existe d'autres chemins,", "d'autres allies, d'autres fins...");
           const char *o8[2] = { "REJOUER L'HISTOIRE", "MENU" };
           if (adChoice(5, o8, 2) == 0) {
             ch = 0; // repart au chapitre 1
