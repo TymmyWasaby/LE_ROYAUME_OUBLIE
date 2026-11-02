@@ -9969,6 +9969,633 @@ static void adventureGame() {
   }
 }
 
+// ============== SOUL QUEST (V5.46) — hommage aux monstres du sous-sol ==============
+static void utHeart(int x, int y, KDColor c) { // le COEUR rouge : l'ame du heros
+  fRect(x - 3, y - 3, 3, 4, c); fRect(x + 1, y - 3, 3, 4, c);
+  fRect(x - 3, y + 1, 7, 2, c); fRect(x - 2, y + 3, 5, 2, c); fRect(x - 1, y + 5, 3, 1, c);
+}
+static void utBox(int x, int y, int w, int h) { // boite a bord blanc, fond noir : le style du sous-sol
+  fRect(x - 3, y - 3, w + 6, h + 6, C_WHT); fRect(x, y, w, h, C_BLK);
+}
+static void utFace(int cx, int cy, int eid) { // sprites pixel-art des monstres
+  if (eid == 0) { // FANTOME TRISTE : voile ondule, yeux vides
+    fRect(cx - 14, cy - 12, 28, 20, C_WHT);
+    fRect(cx - 11, cy + 8, 4, 6, C_WHT); fRect(cx - 4, cy + 8, 3, 8, C_WHT); fRect(cx + 2, cy + 8, 4, 6, C_WHT);
+    fRect(cx - 9, cy - 6, 5, 7, C_BLK); fRect(cx + 4, cy - 6, 5, 7, C_BLK);
+    px(cx - 7, cy - 4, C_WHT); px(cx + 6, cy - 4, C_WHT);
+  } else if (eid == 1) { // CRAPAUD RUSSE : grenouille aux gros yeux
+    fRect(cx - 12, cy - 4, 24, 12, C_WHT);
+    fRect(cx - 17, cy - 10, 8, 8, C_WHT); fRect(cx + 9, cy - 10, 8, 8, C_WHT);
+    fRect(cx - 16, cy - 9, 4, 4, C_BLK); fRect(cx + 12, cy - 9, 4, 4, C_BLK);
+    fRect(cx - 18, cy + 8, 7, 4, C_WHT); fRect(cx + 11, cy + 8, 7, 4, C_WHT);
+    fRect(cx - 3, cy - 1, 2, 2, C_BLK); fRect(cx + 1, cy - 1, 2, 2, C_BLK);
+  } else if (eid == 3) { // VESPER : chauve-souris aux crocs (V5.47)
+    fRect(cx - 6, cy - 10, 12, 12, C_WHT); // corps
+    fRect(cx - 16, cy - 14, 10, 8, C_WHT); fRect(cx + 6, cy - 14, 10, 8, C_WHT); // ailes hautes
+    fRect(cx - 20, cy - 8, 14, 6, C_WHT); fRect(cx + 6, cy - 8, 14, 6, C_WHT); // ailes basses
+    px(cx - 16, cy - 12, C_BLK); px(cx + 15, cy - 12, C_BLK); // trous d'ailes
+    fRect(cx - 4, cy - 7, 3, 3, C_BLK); fRect(cx + 1, cy - 7, 3, 3, C_BLK); // yeux
+    fRect(cx - 1, cy - 1, 2, 3, C_WHT); fRect(cx - 3, cy + 2, 2, 3, C_WHT); fRect(cx + 1, cy + 2, 2, 3, C_WHT); // crocs
+    fRect(cx - 5, cy - 14, 2, 4, C_WHT); fRect(cx + 3, cy - 14, 2, 4, C_WHT); // oreilles
+  } else if (eid == 4) { // REINE OSSEA : couronne d'or, crane severe, robe (V5.47)
+    fRect(cx - 13, cy - 16, 26, 18, C_WHT);
+    fRect(cx - 10, cy - 9, 7, 8, C_BLK); fRect(cx + 3, cy - 9, 7, 8, C_BLK);
+    px(cx - 7, cy - 6, KDColor::RGB24(0x35D4E8)); px(cx + 6, cy - 6, KDColor::RGB24(0x35D4E8));
+    fRect(cx - 2, cy - 3, 4, 5, C_BLK);
+    fRect(cx - 12, cy + 2, 24, 2, C_BLK);
+    for (int t = -9; t <= 9; t += 6) fRect(cx + t, cy + 2, 2, 2, C_WHT);
+    fRect(cx - 9, cy - 22, 18, 6, C_GOLD); // couronne
+    fRect(cx - 9, cy - 26, 4, 4, C_GOLD); fRect(cx + 5, cy - 26, 4, 4, C_GOLD); fRect(cx - 2, cy - 28, 4, 6, C_GOLD);
+    fRect(cx - 11, cy + 4, 22, 22, C_WHT); fRect(cx - 9, cy + 6, 18, 18, C_BLK); // robe
+    px(cx - 13, cy + 12, C_WHT); px(cx + 13, cy + 12, C_WHT);
+  } else if (eid == 5) { // DOGES JUMELLES : gardiennes a la hallebarde (V5.48)
+    fRect(cx - 26, cy - 10, 16, 16, C_WHT); fRect(cx + 10, cy - 10, 16, 16, C_WHT); // tetes
+    fRect(cx - 24, cy - 6, 3, 3, C_BLK); fRect(cx - 17, cy - 6, 3, 3, C_BLK);
+    fRect(cx + 12, cy - 6, 3, 3, C_BLK); fRect(cx + 19, cy - 6, 3, 3, C_BLK);
+    fRect(cx - 28, cy - 14, 6, 4, C_WHT); fRect(cx + 22, cy - 14, 6, 4, C_WHT); // oreilles
+    fRect(cx - 30, cy + 6, 60, 14, C_WHT); // armure commune
+    fRect(cx - 2, cy - 2, 4, 20, C_GOLD); // hallebarde
+    px(cx - 26, cy + 22, KDColor::RGB24(0xF5C518)); px(cx + 24, cy + 22, KDColor::RGB24(0xF5C518));
+  } else if (eid == 6) { // PYRA : salamandre de feu, crete ecarlate (V5.48)
+    fRect(cx - 12, cy - 8, 24, 16, C_ORG); // corps
+    fRect(cx - 16, cy - 12, 8, 12, C_ORG); // tete
+    px(cx - 14, cy - 9, C_BLK); px(cx - 10, cy - 9, C_BLK);
+    fRect(cx - 10, cy - 18, 4, 6, C_RED); fRect(cx - 4, cy - 16, 3, 4, C_RED); fRect(cx + 2, cy - 14, 3, 3, C_RED); // crete
+    fRect(cx + 12, cy + 2, 10, 6, C_RED); // queue flamme
+    fRect(cx - 9, cy + 8, 4, 8, C_WHT); fRect(cx - 2, cy + 8, 4, 8, C_WHT); // pattes
+    fRect(cx - 16, cy - 4, 4, 2, C_WHT); // sourcil determine
+  } else { // OSTEO, GARDIEN DES OS : crane ricanant aux orbites bleues
+    fRect(cx - 13, cy - 14, 26, 18, C_WHT);
+    fRect(cx - 17, cy - 6, 34, 9, C_WHT);
+    fRect(cx - 10, cy - 7, 7, 8, C_BLK); fRect(cx + 3, cy - 7, 7, 8, C_BLK);
+    px(cx - 7, cy - 4, KDColor::RGB24(0x35D4E8)); px(cx + 6, cy - 4, KDColor::RGB24(0x35D4E8));
+    fRect(cx - 2, cy - 1, 4, 5, C_BLK);
+    fRect(cx - 13, cy + 3, 26, 3, C_BLK);
+    for (int t = -10; t <= 10; t += 5) fRect(cx + t, cy + 3, 2, 3, C_WHT);
+    fRect(cx - 7, cy + 9, 14, 14, C_WHT); fRect(cx - 5, cy + 11, 10, 10, C_BLK);
+    px(cx - 9, cy + 14, C_WHT); px(cx + 9, cy + 14, C_WHT);
+  }
+}
+static void utKid(int x, int y) { // le heros : petit humain au pull raye
+  fRect(x - 5, y - 8, 10, 7, C_WHT);
+  fRect(x - 4, y - 1, 8, 8, KDColor::RGB24(0xB8B8C8));
+  fRect(x - 4, y + 1, 8, 2, C_WHT); fRect(x - 4, y + 5, 8, 2, C_WHT);
+  fRect(x - 3, y + 7, 2, 3, C_WHT); fRect(x + 1, y + 7, 2, 3, C_WHT);
+  px(x - 3, y - 5, C_BLK); px(x + 2, y - 5, C_BLK);
+}
+static void utNpc(int cx, int cy, int type) { // PNJ du monde (V5.47)
+  if (type == 1) { // LES JUMELLES MOUEES : deux blobs cote a cote
+    fCirc(cx - 6, cy - 4, 6, C_WHT); fCirc(cx + 7, cy - 4, 6, C_WHT);
+    px(cx - 8, cy - 5, C_BLK); px(cx - 4, cy - 5, C_BLK);
+    px(cx + 5, cy - 5, C_BLK); px(cx + 9, cy - 5, C_BLK);
+    fRect(cx - 10, cy + 2, 20, 6, C_WHT);
+  } else { // MOMO : araignee-couturiere au chapeau violet
+    fCirc(cx, cy - 4, 8, C_WHT);
+    fRect(cx - 12, cy + 1, 6, 8, C_WHT); fRect(cx - 6, cy + 1, 6, 10, C_WHT);
+    fRect(cx + 1, cy + 1, 6, 10, C_WHT); fRect(cx + 7, cy + 1, 6, 8, C_WHT); // pattes
+    px(cx - 3, cy - 6, C_BLK); px(cx + 3, cy - 6, C_BLK);
+    fRect(cx - 6, cy - 14, 12, 4, KDColor::RGB24(0xB44BFF)); // chapeau
+    fRect(cx - 8, cy - 11, 16, 2, KDColor::RGB24(0xB44BFF));
+  }
+}
+static void utDialog(const char *a, const char *b, const char *c, const char *d = nullptr) { (void)d; // boite de dialogue : OK pour continuer (4e ligne ignoree)
+  waitRelease();
+  bool pOK = false;
+  while (true) {
+    pollKeys();
+    if (keyOK && !pOK) { waitRelease(); return; }
+    pOK = keyOK;
+    fRect(0, 148, SW, SH - 148, C_BLK);
+    utBox(16, 154, 288, 58);
+    if (a[0]) drawTextSmall(24, 162, a, C_WHT);
+    if (b[0]) drawTextSmall(24, 176, b, C_WHT);
+    if (c[0]) drawTextSmall(24, 192, c, C_WHT);
+    drawTextC(210, "OK", C_GRE);
+    blit(); Ion::Timing::msleep(16);
+  }
+}
+static void utBattleFrame(int eid, int ehp, int ehp0, UtState *st, bool spar) { // fond de combat : monstre, nom, barres
+  static const char *UT_EN[7] = { "FANTOME TRISTE", "CRAPAUD RUSSE", "OSTEO", "VESPER", "REINE OSSEA", "DOGES JUMELLES", "PYRA" };
+  fRect(0, 0, SW, SH, C_BLK);
+  utFace(160, 58, eid);
+  drawTextC(88, UT_EN[eid], spar ? KDColor::RGB24(0xF5C518) : C_WHT); // nom JAUNE = epargnable
+  fRect(110, 104, 100, 6, KDColor::RGB24(0x3A3A3A));
+  int ew = 100 * ehp / ehp0; if (ew < 0) ew = 0;
+  fRect(110, 104, ew, 6, C_GOLD);
+  char hb[28]; snprintf(hb, 28, "KID  PV %d/20  G %d", st->php, st->gold);
+  drawTextSmall(48, 126, hb, C_WHT);
+  utHeart(236, 130, KDColor::RGB24(0xFF4040));
+}
+struct UtState { int php, atk, def, gold, inv[4]; }; // V5.47 : PV, arme (atk), armure (def), or, sac (id d'objet ou -1)
+static const char *UT_IN[3] = { "TARTINE", "THE FROID", "TARTINE DOREE" }; // objets soignants
+static const int UT_HEAL[3] = { 10, 15, 20 };
+static const int UT_IP[3] = { 8, 12, 20 };
+static const char *UT_WN[3] = { "BRANCHE", "COUTEAU ROUGI", "GALET ETOILE" }; // armes
+static const int UT_WA[3] = { 0, 4, 8 };
+static const int UT_WP[3] = { 0, 25, 60 };
+static const char *UT_AN[3] = { "PULL RAYE", "ECHARPE MOUEE", "CUIR SEC" }; // armures
+static const int UT_DA[3] = { 0, 1, 3 };
+static const int UT_AP[3] = { 0, 18, 45 };
+static void utShop(UtState *st) { // V5.47 : LA BOUTIQUE DE MOMO — objets, armes, armures
+  waitRelease();
+  utDialog("Momo tisse en fredonnant. Des fils,", "des tartines, des habits : tout pour", "survivre chez nous, petit humain !");
+  int sel = 0;
+  bool pU = false, pD = false, pOK = false;
+  while (true) {
+    pollKeys();
+    if (kUp && !pU && sel > 0) sel--;
+    if (kDown && !pD && sel < 8) sel++;
+    if (keyOK && !pOK) {
+      waitRelease();
+      int price = (sel < 3) ? UT_IP[sel] : ((sel < 6) ? UT_WP[sel - 3] : UT_AP[sel - 6]);
+      if (st->gold >= price) {
+        if (sel < 3) {
+          int sl = -1;
+          for (int q = 0; q < 4; q++) if (st->inv[q] < 0) { sl = q; break; }
+          if (sl < 0) utDialog("Ton sac est plein !", "Momo soupire, patiemment.", "");
+          else { st->gold -= price; st->inv[sl] = sel; char t[40]; snprintf(t, 40, "Momo glisse %s dans ton sac.", UT_IN[sel]); utDialog(t, "Elle vous sourit de toutes ses dents.", ""); }
+        } else if (sel < 6) {
+          if (st->atk == UT_WA[sel - 3]) utDialog("Tu le portes deja !", "", "");
+          else { st->gold -= price; st->atk = UT_WA[sel - 3]; char t[40]; snprintf(t, 40, "Tu prends %s.", UT_WN[sel - 3]); utDialog(t, "Il te va a ravir, dit-elle.", ""); }
+        } else {
+          if (st->def == UT_DA[sel - 6]) utDialog("Tu le portes deja !", "", "");
+          else { st->gold -= price; st->def = UT_DA[sel - 6]; char t[40]; snprintf(t, 40, "Tu enfiles %s.", UT_AN[sel - 6]); utDialog(t, "Tres elegante, couine Momo.", ""); }
+        }
+      } else utDialog("Il te manque des pieces...", "Reviens quand tu seras riche !", "");
+    }
+    if (keyBack) { waitRelease(); return; }
+    pU = kUp; pD = kDown; pOK = keyOK;
+    fRect(0, 0, SW, SH, C_BLK);
+    utNpc(272, 62, 0); // Momo tisse a droite
+    drawTextC(10, "LA BOUTIQUE DE MOMO", C_YEL);
+    for (int i = 0; i < 9; i++) {
+      char ln[48], tagb[16]; tagb[0] = 0;
+      const char *nm; int pr;
+      if (i < 3) { nm = UT_IN[i]; pr = UT_IP[i]; }
+      else if (i < 6) { nm = UT_WN[i - 3]; pr = UT_WP[i - 3]; if (st->atk == UT_WA[i - 3]) snprintf(tagb, 16, " (PORTE)"); }
+      else { nm = UT_AN[i - 6]; pr = UT_AP[i - 6]; if (st->def == UT_DA[i - 6]) snprintf(tagb, 16, " (PORTE)"); }
+      snprintf(ln, 48, "%s%s  %dG", nm, tagb, pr);
+      drawTextSmall(30, 36 + i * 16, ln, i == sel ? KDColor::RGB24(0xF5C518) : C_WHT);
+      if (i == sel) utHeart(20, 40 + i * 16, KDColor::RGB24(0xFF4040));
+    }
+    char gb[24]; snprintf(gb, 24, "TON OR : %dG", st->gold);
+    drawTextC(188, gb, C_GOLD);
+    drawTextC(206, "OK ACHETER  RETOUR PARTIR", C_GRE);
+    blit(); Ion::Timing::msleep(30);
+  }
+}
+static int utBattle(int eid, UtState *st, int phase) { // 0 defaite, 1 epargne/yield, 2 tue, 3 fuite (V5.48 : phase = duel Pyra)
+  static const char *FLAV[7][3] = {
+    { "Le fantome pleure en silence.", "Des larmes flottent dans l'air.", "Il hait les adieux." },
+    { "Le crapaud te fixe, sournois.", "Il saute de gauche a droite.", "Croaaa. Il prepare un truc." },
+    { "Osteo ricane dans ses os.", "Ses orbites brillent de bleu.", "Un vrai duel de gardien !" },
+    { "Vesper pique vers le plafond.", "Ses crocs cliquettent dans le noir.", "Elle chasse au sifflement." },
+    { "La reine te juge, severe.", "Elle murmure des noms anciens.", "Sa couronne pese des siecles." },
+    { "Les doges aboient a l'unisson.", "Elles tournent autour de toi.", "Deux hallebardes, un seul coeur." },
+    { "Pyra craque ses poings de feu.", "Elle sourit, surexcitee.", "Elle veut la couronne, elle !" },
+  };
+  static const char *ACTN[7][2] = { { "PARLER", "SALUER" }, { "FLATTER", "SNIFFER" }, { "BLAGUER", "DEFIER" }, { "SIFFLER", "JOUER" }, { "ECOUTER", "S'INCLINER" }, { "CARESSER", "SALUER" }, { "ENCOURAGER", "RAILLER" } };
+  static const char *ACTT[7][2] = {
+    { "Tu parles de la pluie. Il renifle,", "etale, un peu moins triste." },
+    { "Tu flattes son air malin. Il rougit", "de ses deux grosses joues." },
+    { "Tu blagues sur ses os. Il ricane", "de plus belle. Il t'apprecie !" },
+    { "Tu siffles son air de chasse.", "Vesper fredonne avec toi !" },
+    { "Tu ecoutes les noms anciens.", "La reine parle, et ca fait du bien." },
+    { "Tu caresses les deux doges.", "Elles battent de la queue, ravies !" },
+    { "Tu l'encourages, sincere.", "Pyra ecarquille les yeux : merci ?!" },
+  };
+  static const char *ACTT2[7][2] = { // reactions du 2e acte
+    { "Tu salue. Il incline son voile", "avec beaucoup de dignite." },
+    { "Tu renifles. Il sent la mare du", "soir. Il a l'air flatte." },
+    { "Tu le defies en duel honnete. Il", "te salue, guerrier a guerrier." },
+    { "Tu joues a cache-cache dans", "l'ombre. Elle adore ca, petit !" },
+    { "Tu t'inclines bien bas. La", "reine acquiesce, touchee." },
+    { "Tu salue la garde royale.", "Les doges se pavanent, flattees." },
+    { "Tu la railles gentiment. Elle", "hue... elle apprecie l'audace !" },
+  };
+  static const char *CHECK[7][2] = { // V5.48 : VERIFIER les stats du monstre
+    { "FANTOME TRISTE - ATQ 3 DEF 0.", "Fragile, et deja presque parti." },
+    { "CRAPAUD RUSSE - ATQ 4 DEF 0.", "Vaniteux, mais bonne pate." },
+    { "OSTEO - ATQ 5 DEF 1.", "Duel ritualiste. Honorable." },
+    { "VESPER - ATQ 4 DEF 0.", "Rapide. Aime les sifflements." },
+    { "REINE OSSEA - ATQ 6 DEF 2.", "Le Serment la tient debout." },
+    { "DOGES JUMELLES - ATQ 5 DEF 1.", "Deux soeurs, un serment commun." },
+    { "PYRA - ATQ 6 DEF 1.", "Elle veut prouver sa valeur." },
+  };
+  static const int EHP0[7] = { 30, 45, 130, 55, 220, 140, 90 };
+  static const int EDG[7] = { 9, 11, 15, 12, 16, 14, 13 };
+  static const int EATK[7] = { 3, 4, 5, 4, 6, 5, 6 };
+  static const int NEED[7] = { 2, 3, 4, 3, 5, 4, 2 }; // actes reussis pour epargner
+  static const int GOLDK[7] = { 15, 20, 60, 25, 120, 70, 35 }; // or si vaincu
+  static const int GOLDS[7] = { 10, 15, 40, 20, 100, 55, 30 }; // or si epargne
+  int ehp = EHP0[eid] + ((eid == 6) ? phase * 40 : 0), mercy = 0, turn = 0; // V5.48 : Pyra monte en puissance a chaque duel
+  int ehpMax = ehp;
+  bool q2 = false; // V5.48 : la reine se releve une fois
+  while (true) {
+    const char *flav = FLAV[eid][turn % 3];
+    // ---------- menu du joueur ----------
+    int msel = 0;
+    bool pL = false, pR = false, pOK = false, pB = false;
+    int action = -1;
+    while (action < 0) {
+      pollKeys();
+      if (kLeft && !pL && msel > 0) msel--;
+      if (kRight && !pR && msel < 3) msel++;
+      if (keyOK && !pOK) { waitRelease(); action = msel; }
+      if (keyBack && !pB) { waitRelease(); return 3; } // fuite : le monstre reste la
+      pL = kLeft; pR = kRight; pOK = keyOK; pB = keyBack;
+      utBattleFrame(eid, ehp, ehpMax, st, mercy >= NEED[eid]);
+      utBox(56, 148, 208, 64);
+      static const char *MB[4] = { "ATTAQ.", "ACTION", "OBJET", "MERCI" };
+      for (int b = 0; b < 4; b++) drawTextSmall(62 + b * 52, 156, MB[b], b == msel ? KDColor::RGB24(0xF5C518) : C_WHT);
+      utHeart(69 + msel * 52, 178, KDColor::RGB24(0xFF4040)); // le coeur sert de curseur
+      drawTextSmall(64, 192, flav, C_GRE);
+      blit(); Ion::Timing::msleep(16);
+    }
+    bool skipAtk = false; // V5.47 : vrai si le joueur a annule son action
+    if (action == 0) { // ---------- ATTAQUE : barre de frappe ----------
+      float pos = 60.0f; bool hitDone = false, pOK2 = false;
+      while (!hitDone) {
+        pollKeys();
+        pos += 2.6f; if (pos > 260.0f) pos = 60.0f;
+        if (keyOK && !pOK2) { waitRelease(); hitDone = true; }
+        pOK2 = keyOK;
+        utBattleFrame(eid, ehp, ehpMax, st, mercy >= NEED[eid]);
+        utBox(56, 148, 208, 64);
+        fRect(154, 152, 12, 56, KDColor::RGB24(0xF5C518)); // zone parfaite au centre
+        fRect((int)pos, 150, 4, 60, C_WHT); // la barre qui defile
+        drawTextC(198, "OK : FRAPPER", C_GRE);
+        blit(); Ion::Timing::msleep(16);
+      }
+      float dd = pos - 160.0f; if (dd < 0.0f) dd = -dd;
+      float acc = 1.0f - dd / 104.0f;
+      int dmg = (int)((EDG[eid] + st->atk) * (0.6f + 1.4f * acc)); // V5.47 : l'arme ajoute ses degats
+      ehp -= dmg;
+      utBattleFrame(eid, ehp, ehpMax, st, mercy >= NEED[eid]);
+      utBox(56, 148, 208, 64);
+      drawTextSmall(64, 160, acc > 0.85f ? "COUP PARFAIT !" : "TOUCHE !", C_WHT);
+      char dl[24]; snprintf(dl, 24, "DEGATS : %d", dmg);
+      drawTextSmall(64, 178, dl, C_WHT);
+      blit(); Ion::Timing::msleep(900);
+      if (ehp <= 0) {
+        if (eid == 4 && !q2) { // V5.48 : LA REINE SE RELEVE — deuxieme phase, plus rapide
+          q2 = true; ehp = 110;
+          utDialog("Le Serment la releve de force.", "Sa couronne s'embrase. La vraie", "reine commence maintenant.", "");
+        } else { st->gold += GOLDK[eid]; return 2; } // butin de poussiere
+      }
+      if (eid == 6 && ehp <= ehpMax * 3 / 10) { // V5.48 : dominee, Pyra jette l'eponge
+        st->gold += GOLDS[6];
+        utDialog("Pyra s'assoit, essoufflee.", "T'es... pas si mauvais, humain.", "Revanche plus tard, promis !", "");
+        return 1;
+      }
+    } else if (action == 1) { // ---------- ACTION : actes + VERIFIER (V5.48) ----------
+      int asel = 0, picked = -1;
+      bool pU3 = false, pD3 = false, pOK3 = false;
+      while (picked < 0) {
+        pollKeys();
+        if (kUp && !pU3 && asel > 0) asel--;
+        if (kDown && !pD3 && asel < 2) asel++;
+        if (keyOK && !pOK3) { waitRelease(); picked = asel; }
+        if (keyBack) { waitRelease(); picked = 9; } // annule : le tour n'est pas consomme
+        pU3 = kUp; pD3 = kDown; pOK3 = keyOK;
+        utBattleFrame(eid, ehp, ehpMax, st, mercy >= NEED[eid]);
+        utBox(56, 148, 208, 64);
+        drawTextSmall(70, 152, ACTN[eid][0], asel == 0 ? KDColor::RGB24(0xF5C518) : C_WHT);
+        drawTextSmall(70, 166, ACTN[eid][1], asel == 1 ? KDColor::RGB24(0xF5C518) : C_WHT);
+        drawTextSmall(70, 180, "VERIFIER", asel == 2 ? KDColor::RGB24(0xF5C518) : C_WHT);
+        drawTextSmall(70, 198, "RETOUR : ANNULER", C_GRE);
+        utHeart(58, 154 + asel * 14, KDColor::RGB24(0xFF4040));
+        blit(); Ion::Timing::msleep(16);
+      }
+      if (picked == 9) skipAtk = true; // annule : pas de tour gaspille
+      else if (picked == 2) utDialog(CHECK[eid][0], CHECK[eid][1], ""); // V5.48 : les stats du monstre
+      else {
+        mercy++;
+        if (picked == 0) utDialog(ACTT[eid][0], ACTT[eid][1], "");
+        else utDialog(ACTT2[eid][0], ACTT2[eid][1], "");
+      }
+    } else if (action == 2) { // ---------- OBJET : piocher dans le sac (V5.47) ----------
+      bool any = false;
+      for (int q = 0; q < 4; q++) if (st->inv[q] >= 0) any = true;
+      if (!any) {
+        utDialog("Ton sac est vide...", "", "");
+      } else {
+        int isel = 0, picked = -1;
+        bool pU3 = false, pD3 = false, pOK3 = false;
+        while (picked < 0) {
+          pollKeys();
+          if (kUp && !pU3 && isel > 0) isel--;
+          if (kDown && !pD3 && isel < 3) isel++;
+          if (keyOK && !pOK3) { waitRelease(); picked = isel; }
+          if (keyBack) { waitRelease(); picked = 4; } // annule : le tour n'est pas consomme
+          pU3 = kUp; pD3 = kDown; pOK3 = keyOK;
+          utBattleFrame(eid, ehp, ehpMax, st, mercy >= NEED[eid]);
+          utBox(56, 148, 208, 64);
+          for (int q = 0; q < 4; q++) {
+            if (st->inv[q] >= 0) drawTextSmall(70, 152 + q * 14, UT_IN[st->inv[q]], q == isel ? KDColor::RGB24(0xF5C518) : C_WHT);
+            else drawTextSmall(70, 152 + q * 14, "(vide)", C_GRE);
+          }
+          utHeart(58, 154 + isel * 14, KDColor::RGB24(0xFF4040));
+          drawTextSmall(70, 200, "RETOUR : ANNULER", C_GRE);
+          blit(); Ion::Timing::msleep(16);
+        }
+        if (picked == 4) skipAtk = true;
+        else if (st->inv[picked] >= 0) {
+          int id = st->inv[picked];
+          st->inv[picked] = -1;
+          int before = st->php; st->php += UT_HEAL[id]; if (st->php > 20) st->php = 20;
+          char it[40]; snprintf(it, 40, "Tu manges %s. +%d PV !", UT_IN[id], st->php - before);
+          utDialog(it, "", "");
+        } else skipAtk = true; // case vide : pas de tour gaspille
+      }
+    } else { // ---------- MERCI ----------
+      if (mercy >= NEED[eid]) {
+        st->gold += GOLDS[eid]; // V5.47 : la gratitude paie aussi
+        utDialog("Tu epargnes le monstre.", "Il s'incline, soulage, et s'ecarte.", "");
+        return 1;
+      }
+      utDialog("Tu proposes la paix.", "Il n'est pas encore pret a partir.", "");
+    }
+    if (skipAtk) continue; // annulation : pas de tour d'attaque
+    turn++;
+    // ---------- tour de l'ennemi : esquive dans la boite ----------
+    float hx = 160.0f, hy = 182.0f, ivl = 0.0f, t = 0.0f, sp1 = 0.35f, sp2 = 0.7f, sp3 = 1.6f;
+    float bxA[24], byA[24], bvx[24], bvy[24]; int bk[24]; int bn = 0; // V5.48 : bk 0=blanc 1=BLEU 2=VERT
+    bool atkDone = false;
+    while (!atkDone) {
+      pollKeys();
+      t += 0.016f; if (t >= 5.5f) atkDone = true;
+      if (kLeft) hx -= 1.1f; if (kRight) hx += 1.1f;
+      if (kUp) hy -= 1.1f; if (kDown) hy += 1.1f;
+      if (hx < 62) hx = 62; if (hx > 258) hx = 258;
+      if (hy < 154) hy = 154; if (hy > 206) hy = 206;
+      if (ivl > 0) ivl -= 0.016f;
+      if (eid == 0) { // FANTOME : larmes qui tombent
+        sp1 -= 0.016f;
+        if (sp1 <= 0 && bn < 24) { sp1 = 0.5f; bxA[bn] = 70 + rnd(140); byA[bn] = 152; bvx[bn] = 0; bvy[bn] = 46 + rnd(30); bk[bn] = 0; bn++; }
+      } else if (eid == 1) { // CRAPAUD : mouches qui traversent
+        sp1 -= 0.016f;
+        if (sp1 <= 0 && bn < 24) { sp1 = 0.45f; bool lr = rnd(2); bxA[bn] = lr ? 60 : 260; bvx[bn] = (lr ? 1 : -1) * (55 + rnd(40)); byA[bn] = 156 + rnd(46); bvy[bn] = 0; bk[bn] = 0; bn++; }
+      } else if (eid == 2) { // OSTEO : os glissants + gouttes bleues
+        sp1 -= 0.016f;
+        if (sp1 <= 0 && bn < 24) { sp1 = 0.85f; bool lr = rnd(2); bxA[bn] = lr ? 40 : 280; bvx[bn] = (lr ? 1 : -1) * 82; byA[bn] = 156 + rnd(46); bvy[bn] = 0; bk[bn] = 0; bn++; }
+        sp2 -= 0.016f;
+        if (sp2 <= 0 && bn < 24) { sp2 = 0.55f; bxA[bn] = 70 + rnd(140); byA[bn] = 152; bvx[bn] = 0; bvy[bn] = 58; bk[bn] = 0; bn++; }
+      } else if (eid == 3) { // VESPER : pluie d'echos qui piquent vers toi (V5.47)
+        sp1 -= 0.016f;
+        if (sp1 <= 0 && bn < 24) { sp1 = 0.4f; float sx = 70 + rnd(140); bxA[bn] = sx; byA[bn] = 152; bvx[bn] = (hx - sx) * 0.35f; bvy[bn] = 52 + rnd(26); bk[bn] = 0; bn++; }
+      } else if (eid == 5) { // DOGES : mouches jumees + OS BLEU balayant ta rangee (V5.48)
+        sp1 -= 0.016f;
+        if (sp1 <= 0 && bn < 23) { sp1 = 0.8f; int yy = 156 + rnd(46); bxA[bn] = 60; bvx[bn] = 62; byA[bn] = yy; bvy[bn] = 0; bk[bn] = 0; bn++; bxA[bn] = 260; bvx[bn] = -62; byA[bn] = yy; bvy[bn] = 0; bk[bn] = 0; bn++; }
+        sp2 -= 0.016f;
+        if (sp2 <= 0 && bn < 24) { sp2 = 2.4f; bool lr = rnd(2); bxA[bn] = lr ? 40 : 280; bvx[bn] = (lr ? 1 : -1) * 44; byA[bn] = hy; bvy[bn] = 0; bk[bn] = 1; bn++; } // os bleu : SURPLACE pour l'eviter !
+      } else if (eid == 6) { // PYRA : braises + flammes bleues montantes + etincelle verte (V5.48)
+        float ps = 1.0f + 0.35f * phase; // elle accelere a chaque revanche
+        sp1 -= 0.016f;
+        if (sp1 <= 0 && bn < 24) { sp1 = 0.5f / ps; float sx = 70 + rnd(140); bxA[bn] = sx; byA[bn] = 152; bvx[bn] = (hx - sx) * 0.3f; bvy[bn] = (46 + rnd(26)) * ps; bk[bn] = 0; bn++; }
+        sp2 -= 0.016f;
+        if (sp2 <= 0 && bn < 24) { sp2 = 1.4f / ps; bxA[bn] = 66 + rnd(150); byA[bn] = 210; bvx[bn] = 0; bvy[bn] = -60 * ps; bk[bn] = 1; bn++; } // flamme bleue : ne bouge pas !
+        sp3 -= 0.016f;
+        if (sp3 <= 0 && bn < 24) { sp3 = 3.2f; bxA[bn] = 80 + rnd(120); byA[bn] = 152; bvx[bn] = 0; bvy[bn] = 50; bk[bn] = 2; bn++; } // etincelle VERTE : elle soigne
+      } else { // REINE OSSEA : deux styles alternes selon le tour (V5.47) — phase 2 plus vivec (V5.48)
+        float qs = q2 ? 1.35f : 1.0f;
+        if ((turn & 1) == 0) { // style COURONNE : os des deux cotes + gouttes d'or
+          sp1 -= 0.016f;
+          if (sp1 <= 0 && bn < 24) { sp1 = 0.7f / qs; bool lr = rnd(2); bxA[bn] = lr ? 40 : 280; bvx[bn] = (lr ? 1 : -1) * 92 * qs; byA[bn] = 156 + rnd(46); bvy[bn] = 0; bk[bn] = 0; bn++; }
+          sp2 -= 0.016f;
+          if (sp2 <= 0 && bn < 24) { sp2 = 0.5f / qs; bxA[bn] = 70 + rnd(140); byA[bn] = 152; bvx[bn] = 0; bvy[bn] = 64 * qs; bk[bn] = 0; bn++; }
+          sp3 -= 0.016f;
+          if (sp3 <= 0 && bn < 24) { sp3 = 2.2f; bool lr = rnd(2); bxA[bn] = lr ? 40 : 280; bvx[bn] = (lr ? 1 : -1) * 40; byA[bn] = hy; bvy[bn] = 0; bk[bn] = 1; bn++; } // phase 2 : os bleu en prime
+        } else { // style SCEPTRE : gouttes rapides qui suivent le coeur
+          sp1 -= 0.016f;
+          if (sp1 <= 0 && bn < 24) { sp1 = 0.3f / qs; float sx = 70 + rnd(140); bxA[bn] = sx; byA[bn] = 152; bvx[bn] = (hx - sx) * 0.5f; bvy[bn] = (70 + rnd(30)) * qs; bk[bn] = 0; bn++; }
+        }
+      }
+      for (int i = 0; i < bn; i++) { bxA[i] += bvx[i] * 0.016f; byA[i] += bvy[i] * 0.016f; }
+      for (int i = bn - 1; i >= 0; i--) { // ramasse les projectiles sortis
+        if (bxA[i] < 40 || bxA[i] > 280 || byA[i] > 212 || byA[i] < 146) {
+          bxA[i] = bxA[bn - 1]; byA[i] = byA[bn - 1]; bvx[i] = bvx[bn - 1]; bvy[i] = bvy[bn - 1];
+          bk[i] = bk[bn - 1];
+          bn--;
+        }
+      }
+      if (ivl <= 0) { // contact (V5.48 : BLEU ne blesse que si tu bouges, VERT soigne)
+        bool moving2 = kLeft || kRight || kUp || kDown;
+        for (int i = 0; i < bn; i++) {
+          float dx2 = bxA[i] - hx, dy2 = byA[i] - hy;
+          float rad = ((bvx[i] != 0 && (eid == 2 || eid == 4)) || eid == 3) ? 10.0f : 6.0f; // les longues projectiles
+          if (dx2 * dx2 + dy2 * dy2 < rad * rad) {
+            if (bk[i] == 2) { st->php += 1; if (st->php > 20) st->php = 20; bxA[i] = -999.0f; } // etincelle verte : +1 PV
+            else if (bk[i] == 1 && !moving2) { } // bleu traverse l'ame immobile : aucun mal
+            else { st->php -= (EATK[eid] > st->def) ? (EATK[eid] - st->def) : 1; ivl = 0.8f; }
+            break;
+          }
+        }
+      }
+      utBattleFrame(eid, ehp, ehpMax, st, mercy >= NEED[eid]);
+      utBox(56, 148, 208, 64);
+      for (int i = 0; i < bn; i++) { // projectiles : blancs, BLEUS (surplace !), VERTS (soignent)
+        KDColor bc = (bk[i] == 1) ? KDColor::RGB24(0x35D4E8) : ((bk[i] == 2) ? C_GREEN : C_WHT);
+        if (bvx[i] != 0 && (eid == 2 || eid == 4)) fRect((int)bxA[i] - 13, (int)byA[i] - 2, 26, 5, bc); // os
+        else if (bk[i] == 1 && bvy[i] < 0) fRect((int)bxA[i] - 2, (int)byA[i] - 8, 5, 16, bc); // flamme bleue montante
+        else if (bk[i] == 1 && bvx[i] != 0) fRect((int)bxA[i] - 15, (int)byA[i] - 3, 30, 7, bc); // os bleu des doges
+        else if (bvy[i] == 0) fCirc((int)bxA[i], (int)byA[i], 3, bc); // mouche
+        else fRect((int)bxA[i] - 2, (int)byA[i] - 3, 4, 6, bc); // goutte/larme
+      }
+      if (bn > 0 && (eid == 5 || eid == 6 || (eid == 4 && q2))) drawTextC(216, "BLEU = SURPLACE !", C_CYN); // astuce vitale
+      if (ivl <= 0 || (((int)(t * 12)) & 1)) utHeart((int)hx, (int)hy, KDColor::RGB24(0xFF4040)); // clignote quand touche
+      drawTextC(220, "ESQUIVE !", C_GRE);
+      blit(); Ion::Timing::msleep(16);
+      if (st->php <= 0) return 0;
+    }
+  }
+}
+static void utGame() { // V5.47 : SOUL QUEST — 6 salles, boutique de Momo, equipement, la reine d'os
+  waitRelease();
+  while (true) { // ecran titre
+    pollKeys();
+    if (keyOK) { waitRelease(); break; }
+    if (keyBack || kHome) return;
+    fRect(0, 0, SW, SH, C_BLK);
+    drawTextC(44, "SOUL", C_WHT); drawTextC(70, "QUEST", C_WHT);
+    utHeart(160, 110, KDColor::RGB24(0xFF4040));
+    drawTextC(150, "OK : COMMENCER", C_GRE);
+    blit(); Ion::Timing::msleep(30);
+  }
+  utDialog("Tu glisses dans le monde souterrain,", "scelle depuis mille ans par le", "Serment d'Os.");
+  utDialog("Ici, chaque monstre reve du ciel.", "Certains t'attaqueront. D'autres", "t'offriront du fil et des tartines.");
+  utDialog("Ta determination : 20 PV, une", "branche, un pull raye, 12 pieces.", "");
+  UtState st; st.php = 20; st.atk = 0; st.def = 0; st.gold = 12;
+  st.inv[0] = 0; st.inv[1] = 0; st.inv[2] = -1; st.inv[3] = -1;
+  int spared = 0, kills = 0, room = 0, qres = 0;
+  static const int UT_RE[10] = { 0, 1, -1, 3, 6, 2, 5, 6, 6, 4 }; // monstre de la salle (-1 : boutique) — V5.48 : Pyra aux duels 1-3, doges, reine
+  static const int UT_RPH[10] = { 0, 0, 0, 0, 0, 0, 0, 1, 2, 0 }; // V5.48 : numero du duel Pyra (0,1,2)
+  static const int UT_RNPC[10] = { -1, 1, 0, -1, 1, -1, -1, -1, 1, -1 }; // PNJ lore : 1 = jumelles
+  static const int UT_RSTAR[10] = { 1, 0, 1, 1, 0, 0, 0, 1, 0, 0 }; // etoile de repos ?
+  static const char *UT_RN[10] = { "LES RUINES MOUSSES", "LA MARE PALE", "LA RUELLE AUX FILS", "LE COL DES OMBRES", "LE PONT DES ECHOS", "LA SALLE DES GARDIENS", "LES CHAMBRES JUMELLES", "LA FORGE ETEINTE", "LA DERNIERE ETAPE", "LE TRONE D'OS" };
+  bool done[10] = { false, false, false, false, false, false, false, false, false, false };
+  bool pyraFriend = false, pyraGift = false; // V5.48 : Pyra devient une alliee apres le 3e duel
+  float px2 = 40.0f, py2 = 100.0f;
+  static const char *RDLG[7][3] = {
+    { "Snif... un humain ?", "Personne ne me salue, jamais.", "Veux-tu m'ecouter, toi ?" },
+    { "Croaaa ! Un humain dans la mare !", "On va bien s'amuser...", "Essaie donc de m'attraper !" },
+    { "HALTE, voyageur.", "Je garde la porte de la reine.", "Montre-moi ton ame !" },
+    { "Un humain dans MON col !", "Siffle avec moi... si tu oses !", "Mes crocs ont faim !" },
+    { "Une ame humaine, enfin.", "Pour mes gardenes d'os et mes", "reves de ciel. Ton ame. Donne." },
+    { "HALTE ! Gardes royales !", "Deux soeurs, deux hallebardes,", "et une seule envie : jouer !" },
+    { "Bien joue, humain...", "mais la couronne est a MOI.", "Prepare-toi !" },
+  };
+  static const char *SPDLG[7][3] = {
+    { "Le fantome sourit a travers ses", "larmes. Il flotte vers la sortie,", "libere d'un poids tres ancien." },
+    { "Le crapaud cligne de ses gros yeux", "et te laisse passer. Un contrat", "d'honneur lie desormais vos ames." },
+    { "Osteo retire son chapeau d'os.", "Passe, ami. La reine t'attendra", "longtemps, mais pas aujourd'hui." },
+    { "Vesper roucoule, satisfaite.", "Elle t'indique le passage secret", "du col, aile deployee." },
+    { "La reine pose sa couronne.", "\"Tu m'as ecoutee, comme lui", "jadis... Va, petit. Le ciel est a toi.\"" },
+    { "Les doges battent de la queue.", "Elles t'adoptent comme troisieme", "soeur d'armes. Grosse ceremonie !" },
+    { "Pyra renonce a la couronne.", "Elle veut etre... ton amie ?", "Personne ne lui avait jamais propose." },
+  };
+  static const char *PYP[3][3] = { // V5.48 : ce que dit Pyra avant chaque duel
+    { "HALTE ! Je suis PYRA !", "La future reine du sous-sol !", "Duel numero UN. En garde !" },
+    { "Deuxieme duel, humain !", "J'ai vingt idees de flammes", "et aucune pitie ! ... un peu." },
+    { "Dernier duel. Le vrai.", "Celui qui compte. Si je perds,", "je te suivrai jusqu'au trone." },
+  };
+  static const char *TWL1[3][3] = { // les jumelles mouees, selon la salle (V5.47)
+    { "Nous sommes les jumelles mouees.", "On garde la memoire du Serment", "d'Os. Chut. Ne le dis a personne." },
+    { "La reine n'a pas toujours ete", "d'os. Le Serment lui a pris son", "coeur, puis le reste, tu vois." },
+    { "Epargner est plus dur que frapper.", "Mais c'est la seule facon de", "fissurer le Serment. Crois-nous." },
+  };
+  bool pOK3 = false;
+  while (true) { // ================= boucle du monde =================
+    pollKeys();
+    float ox = px2, oy = py2;
+    if (kLeft) px2 -= 1.3f; if (kRight) px2 += 1.3f;
+    if (kUp) py2 -= 1.3f; if (kDown) py2 += 1.3f;
+    bool doorOpen = done[room] || UT_RE[room] < 0; // V5.47 : la boutique n'a pas de gardien
+    if (px2 < 12) px2 = 12; if (px2 > (doorOpen ? 306 : 294)) px2 = (doorOpen ? 306 : 294);
+    if (py2 < 52) py2 = 52; if (py2 > 138) py2 = 138;
+    if (UT_RE[room] >= 0 && !done[room] && px2 > 216 && px2 < 286 && py2 > 66 && py2 < 136) { px2 = ox; py2 = oy; } // le monstre bloque
+    if (keyOK && !pOK3) {
+      if (UT_RE[room] >= 0 && !done[room] && px2 > 214 && px2 < 288 && py2 > 62 && py2 < 140) { // ---------- COMBAT ----------
+        waitRelease();
+        if (UT_RE[room] == 6) utDialog(PYP[UT_RPH[room]][0], PYP[UT_RPH[room]][1], PYP[UT_RPH[room]][2]); // V5.48 : Pyra a un mot avant chaque duel
+        else utDialog(RDLG[UT_RE[room]][0], RDLG[UT_RE[room]][1], RDLG[UT_RE[room]][2]);
+        int res = 0;
+        while (true) {
+          res = utBattle(UT_RE[room], &st, UT_RPH[room]);
+          if (res != 0) break;
+          st.php = 20; // defaite : le jeu offre une deuxieme chance
+          int gsel = 0; bool pU4 = false, pD4 = false, pOK4 = false;
+          bool retry = true;
+          while (true) {
+            pollKeys();
+            if (kUp && !pU4 && gsel > 0) gsel--;
+            if (kDown && !pD4 && gsel < 1) gsel++;
+            if (keyOK && !pOK4) { waitRelease(); retry = (gsel == 0); break; }
+            pU4 = kUp; pD4 = kDown; pOK4 = keyOK;
+            fRect(0, 0, SW, SH, C_BLK);
+            drawTextC(40, "GAME OVER", C_WHT);
+            utHeart(160, 76, KDColor::RGB24(0xFF4040));
+            fRect(154, 74, 3, 3, C_BLK); fRect(163, 74, 3, 3, C_BLK); // le coeur se fend
+            drawTextC(100, "TU RESTE DECIDE...", C_GRE);
+            drawTextC(128, gsel == 0 ? "> SE RELEVER" : "SE RELEVER", C_WHT);
+            drawTextC(146, gsel == 1 ? "> RENTRER CHEZ TOI" : "RENTRER CHEZ TOI", C_WHT);
+            blit(); Ion::Timing::msleep(30);
+          }
+          if (!retry) return;
+        }
+        if (UT_RE[room] == 6 && (res == 1 || res == 2)) { // V5.48 : PYRA — elle ne meurt jamais, elle progresse
+          done[room] = true; spared++;
+          if (res == 2) utDialog("Pyra s'effondre... puis se releve,", "furieuse et encore plus motivee.", "\"REVANCHE !\"", "");
+          else utDialog(SPDLG[6][0], SPDLG[6][1], SPDLG[6][2]);
+          if (UT_RPH[room] == 2) {
+            pyraFriend = true;
+            utDialog("Elle marche desormais avec toi.", "Sans rien dire. Une alliee,", "c'est nouveau pour elle.", "");
+          }
+        } else if (res == 1) {
+          spared++; done[room] = true;
+          utDialog(SPDLG[UT_RE[room]][0], SPDLG[UT_RE[room]][1], SPDLG[UT_RE[room]][2]);
+          if (room == 9) qres = 1;
+        }
+        else if (res == 2) {
+          kills++; done[room] = true;
+          utDialog("Le monstre s'effrite en poussiere.", "Son ame s'envole, etroite et pale.", "");
+          if (room == 9) qres = 2;
+        }
+        else utDialog("Tu recules prudemment.", "Le monstre reste la, patient.", "");
+      } else if (UT_RE[room] < 0 && px2 > 214 && px2 < 288 && py2 > 62 && py2 < 140) { // ---------- BOUTIQUE DE MOMO ----------
+        waitRelease();
+        utShop(&st);
+      } else if (UT_RNPC[room] == 1 && px2 < 130 && py2 > 62 && py2 < 140) { // ---------- LES JUMELLES ----------
+        waitRelease();
+        int ti = (room == 1) ? 0 : ((room == 4) ? 1 : 2);
+        utDialog(TWL1[ti][0], TWL1[ti][1], TWL1[ti][2]);
+      } else if (room == 7 && done[0] && px2 > 96 && px2 < 152 && py2 > 60) { // V5.48 : on RECROISE le fantome pres du feu
+        waitRelease();
+        utDialog("Le fantome a quitte ses ruines.", "Il compte les etoiles pres du feu", "et te fait un signe timide.", "");
+      } else if (room == 7 && done[3] && px2 > 158 && px2 < 214 && py2 > 60) { // ... et Vesper, endormie
+        waitRelease();
+        utDialog("Vesper dort la tete en bas,", "rassasiee de voyages. Elle", "ronronne en te voyant.", "");
+      } else if (room == 9 && pyraFriend && !pyraGift && px2 > 120 && px2 < 185) { // V5.48 : Pyra t'attend avant le trone
+        waitRelease();
+        utDialog("\"T'as l'air nerveux, humain.\"", "Tiens. Deux tartines dorees.", "Vas-y, champion. Je te regarde !", "");
+        st.inv[2] = 2; st.inv[3] = 2; pyraGift = true;
+      } else if (UT_RSTAR[room] && px2 < 110 && py2 < 78) { // l'etoile : point de repos
+        waitRelease();
+        st.php = 20;
+        utDialog("L'etoile scintille doucement.", "Ton ame se repose. PV AU MAX !", "");
+      }
+    }
+    pOK3 = keyOK;
+    if (keyBack || kHome) return;
+    // ---------- rendu du monde ----------
+    fRect(0, 0, SW, SH, C_BLK);
+    fRect(0, 34, SW, 3, C_WHT); fRect(0, 146, SW, 3, KDColor::RGB24(0x606060));
+    fRect(0, 37, 3, 109, C_WHT); fRect(317, 37, 3, 109, C_WHT);
+    for (int g = 0; g < 6; g++) { int gx = 30 + g * 50; fRect(gx, 130, 2, 6, KDColor::RGB24(0x3A5A2A)); fRect(gx + 5, 132, 2, 4, KDColor::RGB24(0x3A5A2A)); } // herbe
+    drawTextSmall(8, 10, UT_RN[room], C_GRE); // V5.47 : nom de la salle
+    if (UT_RSTAR[room]) { fCirc(80, 56, 4, C_GOLD); px(80, 48, C_WHT); px(72, 56, C_WHT); px(88, 56, C_WHT); px(80, 64, C_WHT); } // etoile de repos
+    if (UT_RNPC[room] == 1) utNpc(90, 100, 1); // les jumelles, a gauche
+    if (UT_RE[room] >= 0 && !done[room]) utFace(250, 100, UT_RE[room]); // le gardien
+    else if (UT_RE[room] < 0) utNpc(250, 100, 0); // Momo derriere son comptoir
+    if (room == 7) { // V5.48 : le feu de camp des allies
+      fRect(146, 100, 8, 6, KDColor::RGB24(0x6A4A2A)); // buche
+      fCirc(150, 94, 5, C_ORG); fCirc(150, 90, 3, C_YEL); // flammes
+      if (done[0]) utFace(120, 92, 0); // le fantome epargne, recroise ici
+      if (done[3]) utFace(190, 92, 3); // Vesper, endormie
+    }
+    if (room == 9 && pyraFriend) utFace(150, 100, 6); // V5.48 : Pyra t'accompagne jusqu'au trone
+    if (room < 9 && doorOpen) { fRect(304, 76, 12, 40, C_WHT); fRect(307, 79, 6, 34, C_BLK); } // porte ouverte
+    utKid((int)px2, (int)py2);
+    char sdb[32]; snprintf(sdb, 32, "PV %d/20  OR %dG", st.php, st.gold);
+    drawTextSmall(8, 20, sdb, C_WHT);
+    blit(); Ion::Timing::msleep(16);
+    if (room < 9 && doorOpen && px2 > 300) { room++; px2 = 16; waitRelease(); }
+    if (room == 9 && done[9]) break; // la reine passee : la fin
+  }
+  if (qres == 1) utDialog("La reine pose sa couronne au sol.", "Le Serment d'Os se fissure, puis", "s'effrite, libere comme un voeu.");
+  else utDialog("Le trone est vide. Le Serment d'Os", "se dissout dans la poussiere du", "jardin, sans personne pour le voir.");
+  utDialog("Derriere le trone, un escalier de", "lumiere monte vers le ciel. Les", "monstres se pressent autour de toi.");
+  { // ---------- ecran de fin ----------
+    const char *fin = (kills == 0) ? "FIN : L'AMITIE SOUS LA TERRE" : ((qres == 2) ? "FIN : LA POUSSIERE" : "FIN : LE CHEMIN MIXTE");
+    const char *fl = (kills == 0) ? "Personne n'est tombe en poussiere." : ((qres == 2) ? "La couronne roule sur le sol." : "Certains t'attendent encore, la haut.");
+    while (true) {
+      pollKeys();
+      if (keyOK) { waitRelease(); return; }
+      fRect(0, 0, SW, SH, C_BLK);
+      utHeart(160, 50, KDColor::RGB24(0xFF4040));
+      drawTextC(78, fin, C_WHT);
+      drawTextC(106, fl, C_GRE);
+      char sb[32]; snprintf(sb, 32, "EPARGNES %d  VAINCUS %d", spared, kills);
+      drawTextC(130, sb, C_GOLD);
+      if (kills == 0) drawTextC(150, "Momo, les jumelles et la reine", C_GRE);
+      if (pyraFriend) drawTextC(162, "Pyra est deja la-haut a crier ton nom.", C_ORG); // V5.48
+      else drawTextC(150, "Le ciel est libre, au moins.", C_GRE);
+      drawTextC(182, "OK : MENU", C_GRE);
+      blit(); Ion::Timing::msleep(30);
+    }
+  }
+}
+
 static int launcherScreen() {
   int sel = 0, drawn = -1;
   bool pL = false, pR = false, pU = false, pD = false, pOK = false, pB = false;
@@ -9976,21 +10603,21 @@ static int launcherScreen() {
   while (true) {
     pollKeys();
     if (kLeft && !pL && sel > 0) sel--;
-    if (kRight && !pR && sel < 6) sel++;
+    if (kRight && !pR && sel < 7) sel++;
     if (kUp && !pU && sel >= 4) sel -= 4;
-    if (kDown && !pD && sel < 4) { sel += 4; if (sel > 6) sel = 6; }
+    if (kDown && !pD && sel < 4) { sel += 4; if (sel > 7) sel = 7; }
     if (keyOK && !pOK) { waitRelease(); return sel; }
     if (keyBack && !pB) { waitRelease(); return -1; }
     if (kHome) return -1;
     if (drawn != sel) {
       drawn = sel;
       for (int y = 0; y < SH; y++) { int x = 0; while (x < SW) { int band = (x + y * 2) / 40; int xe = (band + 1) * 40 - y * 2 - 1; if (xe >= SW) xe = SW - 1; fillSpan(y, x, xe, (band % 2) ? KDColor::RGB24(0x151A22) : KDColor::RGB24(0x1B222D)); x = xe + 1; } }
-      drawTextC(8, "MINI GAMES : 7 JEUX", C_YEL);
+      drawTextC(8, "MINI GAMES : 8 JEUX", C_YEL);
       fRect(SW / 2 - 60, 20, 120, 2, C_BTND);
-      static const KDColor HIL[7] = { KDColor::RGB24(0xF5C518), KDColor::RGB24(0xC51111), KDColor::RGB24(0xB44BFF),
+      static const KDColor HIL[8] = { KDColor::RGB24(0xF5C518), KDColor::RGB24(0xC51111), KDColor::RGB24(0xB44BFF),
                                       KDColor::RGB24(0x35D4E8), KDColor::RGB24(0x3DDC55), KDColor::RGB24(0xFF8327),
-                                      KDColor::RGB24(0xF2E8C8) };
-      for (int i = 0; i < 7; i++) { // V5.42 : 7 jeux en 2 rangees de 4 cartes de 76 px
+                                      KDColor::RGB24(0xF2E8C8), KDColor::RGB24(0xFF4040) }; // V5.46 : 8e carte rouge = SOUL QUEST
+      for (int i = 0; i < 8; i++) { // V5.42 : 8 jeux en 2 rangees de 4 cartes de 76 px
         int cx0 = 2 + (i % 4) * 80, cy0 = (i < 4) ? 26 : 114;
         rRect(cx0, cy0, 76, 78, 8, sel == i ? HIL[i] : KDColor::RGB24(0x2E3A4A));
         fRect(cx0 + 3, cy0 + 3, 70, 72, sel == i ? KDColor::RGB24(0x22282F) : KDColor::RGB24(0x1B222D));
@@ -10001,6 +10628,11 @@ static int launcherScreen() {
         else if (i == 3) { fRect(icx - 6, icy - 6, 12, 16, KDColor::RGB24(0x9A9AA8)); fRect(icx - 8, icy - 10, 16, 5, KDColor::RGB24(0x35D4E8)); fRect(icx - 3, icy + 12, 2, 2, C_YEL); fRect(icx + 1, icy + 12, 2, 2, C_YEL); }
         else if (i == 4) { fRect(icx - 12, icy - 12, 24, 24, KDColor::RGB24(0x3D7A20)); fRect(icx - 2, icy - 12, 3, 24, KDColor::RGB24(0x2E5A16)); fRect(icx - 12, icy - 2, 24, 3, KDColor::RGB24(0x2E5A16)); fCirc(icx - 6, icy - 6, 3, KDColor::RGB24(0x151515)); fCirc(icx + 6, icy + 6, 3, C_WHT); }
         else if (i == 5) { fRect(icx - 12, icy - 12, 24, 24, KDColor::RGB24(0x6A5A4A)); fRect(icx - 4, icy - 2, 8, 14, KDColor::RGB24(0x7A5432)); fRect(icx - 12, icy - 12, 24, 3, KDColor::RGB24(0x8A7A6A)); fCirc(icx + 8, icy - 6, 2, C_GOLD); }
+        else if (i == 7) { // V5.46 : SOUL QUEST : coeur rouge sur fond noir
+          fRect(cx0 + 3, cy0 + 3, 70, 72, C_BLK);
+          rRect(cx0 + 6, cy0 + 6, 64, 66, 4, C_WHT);
+          utHeart(icx, icy - 2, KDColor::RGB24(0xFF4040));
+        }
         else { // V5.42 : AVENTURE : livre ouvert + etoile
           fRect(icx - 11, icy + 3, 22, 12, KDColor::RGB24(0x7A5432));
           fRect(icx - 1, icy + 3, 2, 12, KDColor::RGB24(0x4A2E1A));
@@ -10016,7 +10648,8 @@ static int launcherScreen() {
       drawText(2 + 38 - textW("OTHELLO") / 2, 114 + 60, "OTHELLO", C_WHT); drawText(2 + 38 - textW("IA OU AMI") / 2, 114 + 72, "IA OU AMI", C_GRE);
       drawText(82 + 38 - textW("DONJON") / 2, 114 + 60, "DONJON", C_WHT); drawText(82 + 38 - textW("ROGUE") / 2, 114 + 72, "ROGUE", C_GRE);
       drawText(162 + 38 - textW("AVENTURE") / 2, 114 + 60, "AVENTURE", C_WHT); drawText(162 + 38 - textW("HISTOIRE") / 2, 114 + 72, "HISTOIRE", C_GRE);
-      static const char *HINTS[7] = { "COMBAT 3V3 ARCADE", "IMPOSTEUR OU EQUIPAGE ?", "SURVIS AUX VAGUES !", "DEFENDS TA BASE !", "REVERSI VS IA OU AMI", "DESCENDS LE DONJON !", "REPRENDS L'ETOILE !" };
+      drawText(242 + 38 - textW("SOUL") / 2, 114 + 60, "SOUL", C_WHT); drawText(242 + 38 - textW("QUEST") / 2, 114 + 72, "QUEST", C_GRE);
+      static const char *HINTS[8] = { "COMBAT 3V3 ARCADE", "IMPOSTEUR OU EQUIPAGE ?", "SURVIS AUX VAGUES !", "DEFENDS TA BASE !", "REVERSI VS IA OU AMI", "DESCENDS LE DONJON !", "REPRENDS L'ETOILE !", "EPOIGNE OU DETRUIS..." };
       drawTextC(212, HINTS[sel], C_GRE);
     }
     pL = kLeft; pR = kRight; pU = kUp; pD = kDown; pOK = keyOK; pB = keyBack;
@@ -10030,7 +10663,7 @@ void ion_main(int argc, char *argv[]) {
   if (!acc.name[0]) { namePicker(); waitRelease(); } // pseudo au premier lancement (V5.11)
   int myBrawler = 0;
   const char *mainItems[10] = {"JOUER", "ENTRAINEMENT", "BRAWLERS", "BOUTIQUE", "CARRIERE", "EMOTES", "QUETES DU JOUR", "ROUTE DES TROPHEES", "PARAMETRES", "AIDE"};
-  while (true) { // V5.18 : LANCEUR — le projet contient SEPT jeux maintenant ! (V5.42 : + Aventure)
+  while (true) { // V5.18 : LANCEUR — le projet contient HUIT jeux maintenant ! (V5.46 : + Soul Quest)
     int game = launcherScreen();
     waitRelease();
     if (game < 0) return; // BACK au lanceur = quitter l'app
@@ -10040,6 +10673,7 @@ void ion_main(int argc, char *argv[]) {
     if (game == 4) { otGame(); waitRelease(); continue; } // OTHELLO MINI (V5.32)
     if (game == 5) { dgGame(); waitRelease(); continue; } // DONJON ROGUELIKE MINI (V5.32)
     if (game == 6) { adventureGame(); waitRelease(); continue; } // AVENTURE : LA DERNIERE ETOILE (V5.42)
+    if (game == 7) { utGame(); waitRelease(); continue; } // SOUL QUEST (V5.46)
   while (true) { // menu BRAWL MICROSTARS
     gTitleAnim = true; // brawlers qui defilent derriere le menu principal (V5.11)
     gPortrait = myBrawler; // V5.14 : portrait du brawler courant au menu principal
