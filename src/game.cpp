@@ -3091,7 +3091,7 @@ static void updateAI(Ent &e, float dt) {
   float dx = wx - e.x, dy = wy - e.y;
   float len = sqrtf(dx * dx + dy * dy);
   if (len > 10) {
-    float sp = 72 + 24 * sk;
+    float sp = 62 + 20 * sk; // V5.36 : bots ralentis aussi
     if (e.isBoss) sp *= 0.6f; // V5.16 : le mega robot est lent et massif
     if (e.speedBuffT > 0) sp *= 1.3f; // boost de vitesse (super de Carl, Max, Stu...)
     if (e.boostT > 0) sp *= 1.7f; // super de Carl
@@ -3272,7 +3272,7 @@ static void updateMatch(float dt) {
   sEmP = kPlus; sEmM = kMinus;
   if (gEmoteT > 0) gEmoteT -= (int)(dt * 1000);
   if (me.alive) {
-    float spd = 88.0f;
+    float spd = 78.0f; // V5.36 : tout le monde ralentit (c'etait trop rapide)
     if (me.speedBuffT > 0) spd *= 1.3f;
     if (me.boostT > 0) spd *= 1.7f; // super de Carl : vitesse spectaculaire
     if (me.hyperT > 0) spd *= 1.15f;
@@ -6357,18 +6357,25 @@ static void auBotWalk(AuBot &b, float dt, float spd) {
   if (auFree(b.x + oxp * step, b.y + oyp * step)) { b.x += oxp * step; b.y += oyp * step; b.stuck = 0; return; }
   if (auFree(b.x - oxp * step, b.y - oyp * step)) { b.x -= oxp * step; b.y -= oyp * step; b.stuck = 0; return; }
   b.stuck += dt;
-  if (b.stuck > 0.5f) { // secours rapide : il se repositionne sur la case LIBRE voisine la plus proche du but
+  if (b.stuck > 0.5f) { // V5.36 : secours : il se repositionne vers le MILIEU de la piece ou du couloir
     b.stuck = 0;
     int bx = (int)(b.x / 8.0f), by = (int)(b.y / 8.0f);
-    float bestD = 1e9; int bestX = -1, bestY = -1;
+    float bestS = 1e9; int bestX = -1, bestY = -1;
     for (int dy2 = -1; dy2 <= 1; dy2++)
       for (int dx2 = -1; dx2 <= 1; dx2++) {
         int X = bx + dx2, Y = by + dy2;
         if (X < 0 || Y < 0 || X >= AUW || Y >= AUH || auCell(X, Y) == '#') continue;
+        int open = 0; // cases libres autour : plus il y en a, plus on est au centre de la zone
+        for (int y3 = Y - 1; y3 <= Y + 1; y3++)
+          for (int x3 = X - 1; x3 <= X + 1; x3++) {
+            if (x3 < 0 || y3 < 0 || x3 >= AUW || y3 >= AUH) continue;
+            if (auCell(x3, y3) != '#') open++;
+          }
         float fx = X * 8.0f + 4.0f, fy = Y * 8.0f + 4.0f;
         float ddx2 = fx - b.dx, ddy2 = fy - b.dy;
         float d2 = ddx2 * ddx2 + ddy2 * ddy2;
-        if (d2 < bestD) { bestD = d2; bestX = X; bestY = Y; }
+        float score = (9 - open) * 400.0f + d2; // d'abord le maximum d'espace libre, puis la distance au but
+        if (score < bestS) { bestS = score; bestX = X; bestY = Y; }
       }
     if (bestX >= 0) { b.x = bestX * 8.0f + 4.0f; b.y = bestY * 8.0f + 4.0f; auSetDest(b, b.dx, b.dy); }
   }
@@ -6853,18 +6860,30 @@ static void amongUsGame() {
     if (meetT <= 0 && !doTally) {
       for (int i = 0; i < auBotN; i++) {
         AuBot &b = auB[i];
-        if (!b.alive) { // FANTOME errant : traverse les murs
-          b.t -= dt;
-          if (b.t <= 0) {
-            b.t = 1.5f + rnd(20) * 0.1f;
-            b.dx = rnd(3) - 1; b.dy = rnd(3) - 1;
-            if (!b.dx && !b.dy) b.dx = 1;
+        if (!b.alive) { // V5.36 : FANTOME actif : finit ses taches, puis observe les vivants
+          if (!b.imp && b.taskI < 4) { // il continue ses taches (comme dans le vrai jeu)
+            float tx = AU_TX[b.tasks[b.taskI]] * 8.0f + 4.0f, ty = AU_TY[b.tasks[b.taskI]] * 8.0f + 4.0f;
+            if (b.pn == 0 || b.dx != tx || b.dy != ty) auSetDest(b, tx, ty);
+            if (auBotArrived(b)) { b.taskI++; auTaskBar += 1.0f / totalTasks; b.state = 0; }
+          } else { // taches finies : il suit le vivant le plus proche pour voir ce qu'il fait
+            if (b.pn == 0 || auBotArrived(b) || b.stuck > 0.25f) {
+              float bd = 1e9; float fx2 = b.x, fy2 = b.y; bool found = false;
+              for (int w = 0; w < auBotN; w++) {
+                if (!auB[w].alive) continue;
+                float ddx2 = auB[w].x - b.x, ddy2 = auB[w].y - b.y;
+                float d2 = ddx2 * ddx2 + ddy2 * ddy2;
+                if (d2 > 28.0f * 28.0f && d2 < bd) { bd = d2; fx2 = auB[w].x; fy2 = auB[w].y; found = true; }
+              }
+              if (!meImp && !pGhost) {
+                float ddx2 = auPx - b.x, ddy2 = auPy - b.y;
+                float d2 = ddx2 * ddx2 + ddy2 * ddy2;
+                if (d2 > 28.0f * 28.0f && d2 < bd) { bd = d2; fx2 = auPx; fy2 = auPy; found = true; }
+              }
+              if (found) auSetDest(b, fx2, fy2);
+              b.stuck = 0;
+            }
           }
-          float mv = 45.0f * dt;
-          b.x += b.dx * mv; b.y += b.dy * mv;
-          if (b.x < 4 || b.x > AUW * 8 - 4) { b.dx = -b.dx; b.x += b.dx * mv * 2; }
-          if (b.y < 4 || b.y > AUH * 8 - 4) { b.dy = -b.dy; b.y += b.dy * mv * 2; }
-          if (b.taskI < 4) { b.taskI = 4; } // ses taches sont mortes avec lui
+          auBotWalk(b, dt, 50.0f);
           continue;
         }
         b.t -= dt;
@@ -7538,7 +7557,7 @@ static void vsGame() {
         bossMsgT = 2.5f;
       }
       spawnT += dt;
-      float sInt = 1.1f - gameTime * 0.011f; if (sInt < 0.30f) sInt = 0.30f;
+      float sInt = 1.5f - gameTime * 0.013f; if (sInt < 0.30f) sInt = 0.30f; // V5.36 : depart plus doux (moins d'ennemis au tout debut)
       while (spawnT >= sInt) {
         spawnT -= sInt;
         if (ne < VS_NE) {
@@ -7711,11 +7730,12 @@ static void vsGame() {
           ex[i] += (ddx / n * s - ddy / n * w) * dt;
           ey[i] += (ddy / n * s + ddx / n * w) * dt;
         } else { ex[i] += ddx / n * s * dt; ey[i] += ddy / n * s * dt; }
-        // contact : degats au joueur (immunite 0.6 s apres un coup)
+        // contact : degats au joueur (immunite 0.75 s apres un coup)
         int rr = VS_RAD[etp[i]] + 5 + ((esp[i] == 3) ? 2 : 0);
         ddx = vpx - ex[i]; ddy = vpy - ey[i];
         int edmg = VS_DMG[etp[i]] + ((esp[i] == 2) ? 3 : 0) + ((esp[i] == 3) ? 5 : 0);
-        if (invT <= 0.0f && ddx * ddx + ddy * ddy < rr * rr) { hp -= edmg; invT = 0.6f; if (hp <= 0) { hp = 0; dead = true; } }
+        if (gameTime < 30.0f && edmg > 3) edmg -= 3; // V5.36 : les 30 premieres secondes font moins mal
+        if (invT <= 0.0f && ddx * ddx + ddy * ddy < rr * rr) { hp -= edmg; invT = 0.75f; if (hp <= 0) { hp = 0; dead = true; } }
       }
       // ---- POUVOIRS : orbes (Bible), aura (Ail), foudre (Anneau), spirale epique (Haches)
       if (uWl[0] > 0) { // ORBES : cercles blancs autour de toi, blessent au contact
@@ -9062,14 +9082,14 @@ static void dgGame() {
         if (dgMap[py2 * DGW + px2] == 2) { // ---- ESCALIER : etage suivant
           floor++;
           hp += 4; if (hp > maxHp) hp = maxHp;
-          gold += (role == 3) ? 15 : 10; // le voleur ramasse plus en descandant
+          gold += (role == 3) ? 9 : 6; // V5.36 : moins d'or a la descente (le jeu etait trop facile)
           genFloor = true;
           if (floor % 5 == 0) snprintf(log1, 40, "ETAGE %d : MARCHAND !", floor); // V5.34
           else snprintf(log1, 40, "DESCENTE A L'ETAGE %d", floor);
           pL2 = kLeft; pR2 = kRight; pU2 = kUp; pD2 = kDown; pOK2 = keyOK; pBk2 = keyBack;
           continue; // regenere avant de rendre (saute le tour des monstres)
         } else if (dgMap[py2 * DGW + px2] == 3) { dgMap[py2 * DGW + px2] = 0; pots++; snprintf(log1, 40, "POTION RAMASSEE"); }
-        else if (dgMap[py2 * DGW + px2] == 4) { dgMap[py2 * DGW + px2] = 0; gold += (role == 3) ? 38 : 25; snprintf(log1, 40, "+%d OR !", (role == 3) ? 38 : 25); } // voleur : +50%
+        else if (dgMap[py2 * DGW + px2] == 4) { dgMap[py2 * DGW + px2] = 0; gold += (role == 3) ? 22 : 15; snprintf(log1, 40, "+%d OR !", (role == 3) ? 22 : 15); } // V5.36 : moins d'or, voleur : +50%
         else if (dgMap[py2 * DGW + px2] == 5) { dgMap[py2 * DGW + px2] = 0; atk++; snprintf(log1, 40, "EPEE : ATK %d", atk); }
         else if (dgMap[py2 * DGW + px2] == 7) { // V5.35 : coffre : objet magique au hasard
           dgMap[py2 * DGW + px2] = 0;
@@ -9094,6 +9114,15 @@ static void dgGame() {
           hp -= DG_EAT[etp2[i]];
           snprintf(log1, 40, "LE %s TE FRAPPE : -%d", DG_EN[etp2[i]], DG_EAT[etp2[i]]);
           if (hp <= 0) { hp = 0; break; }
+          }
+        } else if (adx + ady > 7) { // V5.36 : trop loin pour te sentir : pas de rush groupe, il erre
+          if (rnd(100) < 40) {
+            int d4 = rnd(4);
+            int tx2 = ex2[i] + ((d4 == 0) ? 1 : ((d4 == 1) ? -1 : 0));
+            int ty2 = ey2[i] + ((d4 == 2) ? 1 : ((d4 == 3) ? -1 : 0));
+            bool occ2 = (tx2 == px2 && ty2 == py2);
+            if (!occ2) for (int j = 0; j < ne; j++) if (j != i && ex2[j] == tx2 && ey2[j] == ty2) { occ2 = true; break; }
+            if (dgMap[ty2 * DGW + tx2] != 1 && !occ2) { ex2[i] = tx2; ey2[i] = ty2; }
           }
         } else { // sinon il s'approche : axe le plus long d'abord, l'autre en secours
           int sx = (dx > 0) ? 1 : -1, sy = (dy > 0) ? 1 : -1;
@@ -9245,7 +9274,7 @@ static int launcherScreen() {
     if (drawn != sel) {
       drawn = sel;
       for (int y = 0; y < SH; y++) { int x = 0; while (x < SW) { int band = (x + y * 2) / 40; int xe = (band + 1) * 40 - y * 2 - 1; if (xe >= SW) xe = SW - 1; fillSpan(y, x, xe, (band % 2) ? KDColor::RGB24(0x151A22) : KDColor::RGB24(0x1B222D)); x = xe + 1; } }
-      drawTextC(8, "MICRO GAMES : 6 JEUX", C_YEL);
+      drawTextC(8, "MINI GAMES : 6 JEUX", C_YEL);
       fRect(SW / 2 - 60, 20, 120, 2, C_BTND);
       static const KDColor HIL[6] = { KDColor::RGB24(0xF5C518), KDColor::RGB24(0xC51111), KDColor::RGB24(0xB44BFF),
                                       KDColor::RGB24(0x35D4E8), KDColor::RGB24(0x3DDC55), KDColor::RGB24(0xFF8327) };
