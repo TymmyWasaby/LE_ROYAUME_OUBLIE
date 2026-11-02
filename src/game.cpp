@@ -10074,6 +10074,7 @@ static void utDialog(const char *a, const char *b, const char *c, const char *d 
     blit(); Ion::Timing::msleep(16);
   }
 }
+struct UtState { int php, atk, def, gold, inv[4]; }; // V5.47 : PV, arme (atk), armure (def), or, sac (id d'objet ou -1)
 static void utBattleFrame(int eid, int ehp, int ehp0, UtState *st, bool spar) { // fond de combat : monstre, nom, barres
   static const char *UT_EN[7] = { "FANTOME TRISTE", "CRAPAUD RUSSE", "OSTEO", "VESPER", "REINE OSSEA", "DOGES JUMELLES", "PYRA" };
   fRect(0, 0, SW, SH, C_BLK);
@@ -10086,7 +10087,6 @@ static void utBattleFrame(int eid, int ehp, int ehp0, UtState *st, bool spar) { 
   drawTextSmall(48, 126, hb, C_WHT);
   utHeart(236, 130, KDColor::RGB24(0xFF4040));
 }
-struct UtState { int php, atk, def, gold, inv[4]; }; // V5.47 : PV, arme (atk), armure (def), or, sac (id d'objet ou -1)
 static const char *UT_IN[3] = { "TARTINE", "THE FROID", "TARTINE DOREE" }; // objets soignants
 static const int UT_HEAL[3] = { 10, 15, 20 };
 static const int UT_IP[3] = { 8, 12, 20 };
