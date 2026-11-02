@@ -1346,12 +1346,13 @@ static int tdBestW = 0, tdWavesT = 0, tdKillsT = 0; // V5.32 : stats Tower Defen
 static int tdMapMax = 1; // V5.33 : cartes Tower Defense debloquees (1 = PRES, 2 = GROTTES, 3 = VOLCAN)
 static int otWins = 0, otLosses = 0, otDraws = 0; // V5.32 : stats Othello (victoires, defaites, matchs nuls)
 static int rgBestF = 0, rgKillsT = 0, rgFloorsT = 0; // V5.32 : stats Donjon (record etage, kills totaux, etages totaux)
+static int adBestCh = 0; static uint8_t adEnds = 0; // V5.42 : aventure (chapitre max atteint 0-6, fins debloquees bits 0-2)
 #define SAVE_NAME "minibs.sav"
 #define SAVE_BACKUP "minibs.bak" // V5.14 : double record anti-corruption
 static int gFps60 = 0; // V5.14 : option "60 FPS" (0 = 30 fps par defaut, plus fluide a 1 mais plus gourmand)
 static int gFpsShow = 0; // V5.16 : afficher le compteur FPS en match
 static void saveAcc() {
-  uint8_t buf[808]; // V5.33 : 808 octets reels (+2 tdMapMax cartes TD)
+  uint8_t buf[814]; // V5.42 : 814 octets reels (+6 : aventure g)
   int p = 0;
   for (int i = 0; i < 55; i++) {
     buf[p++] = (uint8_t)acc.b[i].level;
@@ -1410,6 +1411,9 @@ static void saveAcc() {
   buf[p++] = (uint8_t)(rgBestF >> 8);  buf[p++] = (uint8_t)(rgBestF & 0xFF); // V5.32 : stats Donjon
   buf[p++] = (uint8_t)(rgKillsT >> 8); buf[p++] = (uint8_t)(rgKillsT & 0xFF);
   buf[p++] = (uint8_t)(rgFloorsT >> 8); buf[p++] = (uint8_t)(rgFloorsT & 0xFF);
+  buf[p++] = (uint8_t)adBestCh;  // V5.42 : ligne g = Aventure (808-814)
+  buf[p++] = (uint8_t)adEnds;
+  buf[p++] = 0; buf[p++] = 0; buf[p++] = 0; buf[p++] = 0; // reserve pour la suite
   ef_write(SAVE_NAME, buf, (uint32_t)p);
   ef_write(SAVE_BACKUP, buf, (uint32_t)p); // V5.14 : sauvegarde de secours anti-corruption
   // V5.18 : methode NumPlay — on copie TOUTE la sauvegarde dans un SCRIPT PYTHON
@@ -1458,7 +1462,14 @@ static void saveAcc() {
   py[q++] = '"'; py[q++] = '\n';
   const char *lf = "f = \""; // V5.33 : ligne f = Donjon (6 octets)
   while (*lf) { py[q++] = *lf++; }
-  for (int i = 802; i < p; i++) {
+  for (int i = 802; i < p && i < 808; i++) {
+    py[q++] = "0123456789ABCDEF"[(buf[i] >> 4) & 15];
+    py[q++] = "0123456789ABCDEF"[buf[i] & 15];
+  }
+  py[q++] = '"'; py[q++] = '\n';
+  const char *lg = "g = \""; // V5.42 : ligne g = Aventure (6 octets)
+  while (*lg) { py[q++] = *lg++; }
+  for (int i = 808; i < p; i++) {
     py[q++] = "0123456789ABCDEF"[(buf[i] >> 4) & 15];
     py[q++] = "0123456789ABCDEF"[buf[i] & 15];
   }
@@ -1486,15 +1497,15 @@ static bool loadAcc() {
   uint32_t len = 0;
   const uint8_t *buf = ef_read(SAVE_NAME, &len);
   // V5.14 : double record anti-corruption — si le record principal est perdu/corrompu, on tente la copie de secours
-  bool bad = !buf || (len != 231 && len != 331 && len != 361 && len != 433 && len != 444 && len != 445 && len != 776 && len != 782 && len != 788 && len != 796 && len != 802 && len != 808);
+  bool bad = !buf || (len != 231 && len != 331 && len != 361 && len != 433 && len != 444 && len != 445 && len != 776 && len != 782 && len != 788 && len != 796 && len != 802 && len != 808 && len != 814); // V5.42 : 814 = + aventure
   if (bad) {
     buf = ef_read(SAVE_BACKUP, &len);
-    bad = !buf || (len != 231 && len != 331 && len != 361 && len != 433 && len != 444 && len != 445 && len != 776 && len != 782 && len != 788 && len != 796 && len != 802 && len != 808);
+    bad = !buf || (len != 231 && len != 331 && len != 361 && len != 433 && len != 444 && len != 445 && len != 776 && len != 782 && len != 788 && len != 796 && len != 802 && len != 808 && len != 814);
   }
   // V5.18 : DERNIER recours (methode NumPlay) — la copie PYTHON de la sauvegarde.
   // minibs_saves.py survit a la reinstal de l'app : on decode son hex et on relit tout.
   if (bad) {
-    static uint8_t pyBuf[808];
+    static uint8_t pyBuf[814]; // V5.42 : 814 (ligne g)
     uint32_t plen = 0;
     const uint8_t *py = ef_read("minibs_saves.py", &plen);
     if (py && plen > 10) {
@@ -1504,6 +1515,7 @@ static bool loadAcc() {
       int nD = pyHex(py, plen, 'd', pyBuf + 788, 8);   // V5.33 : ligne d = Tower Defense (8 octets)
       int nE = pyHex(py, plen, 'e', pyBuf + 796, 6);  // V5.33 : ligne e = Othello
       int nF = pyHex(py, plen, 'f', pyBuf + 802, 6);  // V5.33 : ligne f = Donjon
+      int nG = pyHex(py, plen, 'g', pyBuf + 808, 6); // V5.42 : ligne g = Aventure
       if (nA >= 776) { // nouveau format multi-lignes : une ligne par jeu
         buf = pyBuf;
         if (nB < 6) len = 776;
@@ -1511,7 +1523,8 @@ static bool loadAcc() {
         else if (nD < 8) len = 788;
         else if (nE < 6) len = 796;
         else if (nF < 6) len = 802;
-        else len = 808;
+        else if (nG < 2) len = 808;
+        else len = 814;
         bad = false;
       } else { // ancien format historique (s = "...") : compatibilite
         int st = 0, d = 0;
@@ -1573,7 +1586,7 @@ static bool loadAcc() {
   winStreak   = (buf[p] << 8) | buf[p + 1];
   if (winStreak < 0) winStreak = 0;
   // ---- V5.10 : carriere, skins, emotes (absents des vieilles sauvegardes) ----
-  if (len == 433 || len == 444 || len == 445 || len == 776 || len == 782 || len == 788 || len == 796 || len == 802 || len == 808) { // V5.18 FIX : 776/782 sinon la carriere etait sautee et le reste DECALE !
+  if (len == 433 || len == 444 || len == 445 || len == 776 || len == 782 || len == 788 || len == 796 || len == 802 || len == 808 || len == 814) { // V5.18 FIX : 776/782 sinon la carriere etait sautee et le reste DECALE ! (V5.42 : +814)
     p += 2;
     acc.matches = (buf[p] << 8) | buf[p + 1]; p += 2;
     acc.wins = (buf[p] << 8) | buf[p + 1]; p += 2;
@@ -1589,16 +1602,16 @@ static bool loadAcc() {
     acc.emoteP = acc.emoteM = 0;
   }
   // ---- V5.11 : pseudo + record survie (444 = format actuel) ----
-  if (len == 444 || len == 445 || len == 776 || len == 782 || len == 788 || len == 796 || len == 802 || len == 808) { // V5.17 FIX : 776/782 sinon le pseudo etait PERDU au chargement !
+  if (len == 444 || len == 445 || len == 776 || len == 782 || len == 788 || len == 796 || len == 802 || len == 808 || len == 814) { // V5.17 FIX : 776/782 sinon le pseudo etait PERDU au chargement ! (V5.42 : +814)
     for (int i = 0; i < 9; i++) acc.name[i] = (char)buf[p++];
     acc.name[8] = 0;
     acc.bestWave = (buf[p] << 8) | buf[p + 1];
     if (acc.bestWave < 0 || acc.bestWave > 999) acc.bestWave = 0;
     p += 2;
   } else { acc.name[0] = 0; acc.bestWave = 0; }
-  if (len == 445 || len == 776 || len == 782 || len == 788 || len == 796 || len == 802 || len == 808) gFps60 = (buf[p++] != 0); // V5.14 : option 60 FPS persistee
+  if (len == 445 || len == 776 || len == 782 || len == 788 || len == 796 || len == 802 || len == 808 || len == 814) gFps60 = (buf[p++] != 0); // V5.14 : option 60 FPS persistee (V5.42 : +814)
   // ---- V5.16 : stats par brawler (formats 776 et 782) ----
-  if (len == 776 || len == 782 || len == 788 || len == 796 || len == 802 || len == 808) {
+  if (len == 776 || len == 782 || len == 788 || len == 796 || len == 802 || len == 808 || len == 814) { // V5.42 : +814
     for (int i = 0; i < 55; i++) {
       acc.pMatches[i] = buf[p++]; acc.pWins[i] = buf[p++];
       acc.pKills[i] = (buf[p] << 8) | buf[p + 1]; p += 2;
@@ -1632,7 +1645,7 @@ static bool loadAcc() {
       if (tdMapMax < 1) tdMapMax = 1;
       if (tdMapMax > 5) tdMapMax = 5;
     }
-    if (len == 802 || len == 808) { // V5.33 : stats Othello
+    if (len == 802 || len == 808 || len == 814) { // V5.33 : stats Othello (V5.42 : +814)
       otWins = (buf[p] << 8) | buf[p + 1]; p += 2;
       otLosses = (buf[p] << 8) | buf[p + 1]; p += 2;
       otDraws = (buf[p] << 8) | buf[p + 1]; p += 2;
@@ -1640,13 +1653,17 @@ static bool loadAcc() {
       if (otLosses < 0) otLosses = 0;
       if (otDraws < 0) otDraws = 0;
     }
-    if (len == 808) { // V5.33 : stats Donjon Roguelike
+    if (len == 808 || len == 814) { // V5.33 : stats Donjon Roguelike (V5.42 : +814)
       rgBestF = (buf[p] << 8) | buf[p + 1]; p += 2;
       rgKillsT = (buf[p] << 8) | buf[p + 1]; p += 2;
       rgFloorsT = (buf[p] << 8) | buf[p + 1]; p += 2;
       if (rgBestF < 0 || rgBestF > 9999) rgBestF = 0;
       if (rgKillsT < 0) rgKillsT = 0;
       if (rgFloorsT < 0) rgFloorsT = 0;
+    }
+    if (len == 814) { // V5.42 : aventure (ligne g)
+      adBestCh = buf[p++]; if (adBestCh < 0 || adBestCh > 6) adBestCh = 0;
+      adEnds = buf[p++];
     }
   }
   for (int i = 0; i < 9; i++) if (acc.name[i] != 0 && (acc.name[i] < ' ' || acc.name[i] > 'z')) acc.name[i] = 0; // sanity
@@ -9433,6 +9450,362 @@ static void dgGame() {
 
 // ------------------------- LANCEUR : 6 jeux dans l'app ----------------
 
+// ============== AVENTURE : LA DERNIERE ETOILE (V5.42) ==================
+// Roman interactif en 6 chapitres. Kael, gardien du phare d'Astralie, part
+// reprendre l'Etoile-Coeur volee par l'Ombre. Les choix comptent : allies,
+// reliques et PV menent a TROIS fins differentes.
+// FLECHES : choisir | OK : valider | RETOUR : valider aussi (anti-blocage).
+
+static int gAdHP = 6, gAdMax = 6, gAdCh = 1; // etat de la partie en cours
+
+static void adScene(int sc) { // fond pixel-art par chapitre
+  fRect(0, 0, SW, SH, KDColor::RGB24(0x0A0E1A)); // nuit profonde
+  for (int i = 0; i < 34; i++) { // etoiles de fond (tournent selon le chapitre)
+    int sx = (i * 89 + sc * 17) % SW, sy = ((i * 43 + sc * 11) % 130) + 6;
+    if ((i + sc) % 4) px(sx, sy, KDColor::RGB24(0x6A7590)); else px(sx, sy, C_WHT);
+  }
+  if (sc == 0) { // LE PHARE : falaise, mer grise, lanterne ETEINTE
+    fRect(0, 148, SW, SH - 148, KDColor::RGB24(0x18283C));
+    for (int x = 0; x < SW; x += 9) fRect(x, 150 + ((x / 9) & 1) * 3, 9, 2, KDColor::RGB24(0x243850));
+    fRect(0, 138, SW, 12, KDColor::RGB24(0x22321E));
+    fRect(122, 52, 30, 88, KDColor::RGB24(0x3A3A4A));
+    for (int j = 0; j < 5; j++) fRect(122, 60 + j * 16, 30, 2, KDColor::RGB24(0x2E2E3A));
+    fRect(124, 40, 26, 12, KDColor::RGB24(0x25252F));
+    fRect(130, 42, 14, 8, KDColor::RGB24(0x101018)); // lanterne vide
+  } else if (sc == 1) { // LA FORET : troncs, feuillage, lune
+    fCirc(270, 40, 14, KDColor::RGB24(0x8A93B0)); fCirc(270, 40, 17, KDColor::RGB24(0x4A5468));
+    for (int x = 6; x < SW; x += 26) { // rangee d'arbres
+      fRect(x, 60, 10, 90, KDColor::RGB24(0x2A2018));
+      fCirc(x + 5, 55, 16, KDColor::RGB24(0x1E3A1C));
+      fCirc(x + 5, 42, 12, KDColor::RGB24(0x25481F));
+    }
+    fRect(0, 140, SW, 4, KDColor::RGB24(0x1A1410));
+    fRect(0, 144, SW, SH - 144, KDColor::RGB24(0x142010));
+  } else if (sc == 2) { // LE COL DES VENTS : pics enneiges, tempete
+    for (int i = 0; i < 40; i++) px((i * 53 + (Ion::Timing::millis() / 30)) % SW, 20 + (i * 29) % 120, KDColor::RGB24(0x8A93B0)); // neige qui vole
+    fRect(0, 150, 130, SH - 150, KDColor::RGB24(0x3A4A5E));
+    fRect(190, 150, SW - 190, SH - 150, KDColor::RGB24(0x3A4A5E));
+    for (int t = 0; t < 4; t++) { // sommets triangulaires
+      int bx = t * 90 - 20;
+      for (int j = 0; j < 70; j++) { int w = j * 2; fRect(bx + 45 - w / 2, 150 - j, w, 1, KDColor::RGB24(0x4E5E72)); }
+      for (int j = 0; j < 26; j++) { int w = j; fRect(bx + 45 - w / 2, 80 - j, w + 1, 1, C_WHT); }
+    }
+    fRect(0, 150, SW, 4, KDColor::RGB24(0x9ABAD0));
+  } else if (sc == 3) { // LA CITE ENGLOUTIE : surface, tours de corail, lanternes
+    for (int x = 0; x < SW; x += 8) fRect(x, 8 + ((x / 8) & 1) * 2, 8, 3, KDColor::RGB24(0x2A4A6E));
+    for (int t = 0; t < 5; t++) { // tours
+      int bx = 20 + t * 66, h = 40 + (t % 3) * 18;
+      fRect(bx, 150 - h, 18, h, KDColor::RGB24(0x2E6A8E));
+      fRect(bx, 150 - h, 18, 3, KDColor::RGB24(0x4A8AB0));
+      fCirc(bx + 9, 150 - h - 4, 3, KDColor::RGB24(0x66D8E8)); // lanterne bleue
+    }
+    fRect(0, 150, SW, SH - 150, KDColor::RGB24(0x14283E));
+    for (int x = 0; x < SW; x += 11) fRect(x, 156 + ((x / 11) & 1) * 3, 11, 2, KDColor::RGB24(0x1E3450));
+  } else if (sc == 4) { // L'ANTRE DE L'OMBRE : cristaux noirs, etoile prisonniere
+    for (int i = 0; i < 12; i++) { // stalactites
+      int bx = i * 27; int h2 = 14 + (i * 13) % 26;
+      fRect(bx + 12 - h2 / 2, 0, h2, 26, KDColor::RGB24(0x1A1424));
+      fRect(bx + 12 - h2 / 4, 0, h2 / 2, 16, KDColor::RGB24(0x241A30));
+    }
+    fRect(0, 146, SW, SH - 146, KDColor::RGB24(0x0E0A16));
+    fRect(146, 66, 28, 26, KDColor::RGB24(0x1A1226)); // trone
+    fRect(150, 92, 20, 54, KDColor::RGB24(0x241A30));
+    fCirc(160, 56, 7, C_GOLD); // L'ETOILE-COEUR, prisonniere
+    fRing(160, 56, 10, KDColor::RGB24(0x8A6D00));
+    px(160, 44, C_WHT); px(148, 56, C_WHT); px(172, 56, C_WHT); px(160, 68, C_WHT);
+    for (int i = 0; i < 5; i++) { // cristaux noirs
+      fRect(24 + i * 64, 118, 8, 30, KDColor::RGB24(0x1E1430));
+      fRect(26 + i * 64, 112, 4, 10, KDColor::RGB24(0x2A1A40));
+    }
+  } else { // L'AUBE : horizon clair, grande etoile revenue, phare rallume
+    fRect(0, 100, SW, SH - 100, KDColor::RGB24(0x8A5A3E));
+    for (int j = 0; j < 30; j++) { int w = j * 20; fRect(160 - w / 2, 100 - j * 3, w, 3, KDColor::RGB24(j < 12 ? 0xE8A03B : 0xC9783B)); }
+    fCirc(160, 46, 9, C_WHT); // grande etoile
+    fRing(160, 46, 14, C_YEL); fRing(160, 46, 20, KDColor::RGB24(0x8A6D00));
+    px(160, 20, C_WHT); px(132, 46, C_WHT); px(188, 46, C_WHT);
+    fRect(122, 70, 30, 40, KDColor::RGB24(0x3A3A4A)); // le phare, rallume
+    fRect(130, 62, 14, 8, C_YEL);
+    fRect(0, 108, SW, 4, KDColor::RGB24(0x22321E));
+  }
+}
+
+static void adHUD() { // cœurs de PV + numero de chapitre
+  for (int i = 0; i < gAdMax / 2; i++) {
+    int hx = 10 + i * 11, hy = 8;
+    bool full = gAdHP >= (i + 1) * 2, half = (gAdHP == i * 2 + 1);
+    KDColor c = (full || half) ? C_RED : KDColor::RGB24(0x3A1520);
+    fRect(hx - 4, hy - 2, 3, 3, c); fRect(hx + 1, hy - 2, 3, 3, full ? c : KDColor::RGB24(0x3A1520));
+    fRect(hx - 3, hy, 6, 3, c); px(hx - 1, hy + 3, c);
+  }
+  char cb[16]; snprintf(cb, 16, "CH.%d", gAdCh); drawText(SW - 36, 6, cb, C_GRE);
+}
+
+// texte narratif a effet machine a ecrire ; OK complete, OK encore avance
+static void adText(int sc, const char *a, const char *b, const char *c) {
+  const char *ls[3]; ls[0] = a; ls[1] = b; ls[2] = c;
+  int ln[3], tot = 0;
+  for (int i = 0; i < 3; i++) { ln[i] = (int)strlen(ls[i]); tot += ln[i]; }
+  int shown = 0; bool done = (tot == 0);
+  int lastM = (int)Ion::Timing::millis();
+  waitRelease();
+  bool pOK = false;
+  while (true) {
+    pollKeys();
+    if (!done) {
+      int m = (int)Ion::Timing::millis();
+      if (m - lastM >= 20) { lastM = m; shown += 2; if (shown >= tot) { shown = tot; done = true; } }
+    }
+    if (keyOK && !pOK) {
+      if (done) { waitRelease(); return; }
+      shown = tot; done = true; // premier appui : texte complet
+    }
+    pOK = keyOK;
+    adScene(sc);
+    adHUD();
+    fRect(0, 146, SW, SH - 146, KDColor::RGB24(0x12101E));
+    fRect(0, 146, SW, 1, KDColor::RGB24(0x3A2A55));
+    int rem = shown;
+    for (int i = 0; i < 3; i++) {
+      int take = (rem < ln[i]) ? rem : ln[i];
+      char part[52];
+      if (take > 50) take = 50;
+      for (int k = 0; k < take; k++) part[k] = ls[i][k];
+      part[take] = 0;
+      if (part[0]) drawText(10, 154 + i * 14, part, C_WHT);
+      rem -= take;
+    }
+    if (done) drawTextC(212, "OK POUR CONTINUER", C_GRE);
+    blit();
+    Ion::Timing::msleep(12);
+  }
+}
+
+// choix multiples : renvoie 0..n-1 (OK ou RETOUR valident)
+static int adChoice(int sc, const char *opts[], int n) {
+  int sel = 0; bool pU = false, pD = false;
+  waitRelease();
+  while (true) {
+    pollKeys();
+    if (kUp && !pU && sel > 0) sel--;
+    if (kDown && !pD && sel < n - 1) sel++;
+    pU = kUp; pD = kDown;
+    if (keyOK || keyBack) { waitRelease(); return sel; }
+    adScene(sc);
+    adHUD();
+    fRect(0, 146, SW, SH - 146, KDColor::RGB24(0x12101E));
+    fRect(0, 146, SW, 1, KDColor::RGB24(0x3A2A55));
+    for (int i = 0; i < n; i++) {
+      rRect(10, 151 + i * 15, 300, 13, 3, sel == i ? C_YEL : KDColor::RGB24(0x2E2440));
+      drawText(16, 154 + i * 15, opts[i], sel == i ? C_BLK : C_WHT);
+    }
+    drawTextC(214, "FLECHES + OK", C_GRE);
+    blit();
+    Ion::Timing::msleep(16);
+  }
+}
+
+static void adventureGame() {
+  waitRelease();
+  gAdHP = 6; gAdMax = 6;
+  int ch = 1;
+  bool lant = false, lys = false, braise = false, larme = false, foi = false; // reliques et allies
+  adText(0, "LA DERNIERE ETOILE", "Un conte de la mer d'Astralie.", "");
+  { // menu de depart
+    char rep[24];
+    const char *opts[3]; int n = 1;
+    opts[0] = "NOUVELLE HISTOIRE";
+    if (adBestCh >= 1 && adBestCh < 6) { snprintf(rep, 24, "REPRENDRE AU CH.%d", adBestCh + 1); opts[1] = rep; n = 2; }
+    int r = adChoice(0, opts, n);
+    if (r == 1) { // on reprend : le heros avait tout gagne jusque la
+      ch = adBestCh + 1;
+      if (ch >= 3) { lant = true; lys = true; }
+      if (ch >= 4) braise = true;
+      if (ch >= 5) larme = true;
+    }
+  }
+  while (ch <= 6) { // ================= boucle des chapitres =================
+    gAdCh = ch;
+    bool dead = false;
+    while (true) { // tentatives (rejouables apres defaite)
+      dead = false;
+      gAdHP = gAdMax;
+      if (ch == 1) { // ---- CHAPITRE 1 : LE PHARE ETEINT ----
+        adText(0, "-- CHAPITRE 1 : LE PHARE ETEINT --", "", "");
+        adText(0, "Depuis cent ans, le phare d'Astralie", "veille sur la mer des brumes.", "");
+        adText(0, "Ce soir, sa flamme vacille...", "puis s'eteint d'un coup.", "");
+        adText(0, "Kael grimpe les marches quatre a", "quatre. Au sommet, la lanterne est", "vide. Le ciel aussi.");
+        adText(0, "L'Etoile-Coeur a disparu. Sans", "elle, les marins perdent le nord.", "");
+        adText(0, "Kael ! crie Nol, le vieux pecheur.", "Quelqu'un doit rapporter l'Etoile,", "ou l'aube ne reviendra jamais.");
+        const char *o1[3] = { "PARTIR SUR-LE-CHAMP", "EMPORTER LA LANTERNE DE FER", "RESTER VEILLER LE VILLAGE" };
+        int r = adChoice(0, o1, 3);
+        if (r == 1) { lant = true; adText(0, "Kael decroche la vieille lanterne", "de fer. Elle est lourde comme une", "promesse. Elle servira."); }
+        else if (r == 2) { gAdMax += 2; gAdHP = gAdMax; adText(0, "Une fillette glisse une pomme dans", "ton sac. Ton coeur est plus fort.", "(PV MAX +2)"); }
+        else adText(0, "La mer gronde deja. Pas une minute", "a perdre. Kael serre son sac.", "");
+        adText(0, "La route du nord serpente entre les", "brumes... la ou la nuit semble", "avaler les etoiles.", "");
+      } else if (ch == 2) { // ---- CHAPITRE 2 : LA FORET DES MURMURES ----
+        adText(1, "-- CHAPITRE 2 : LA FORET DES", "MURMURES --", "");
+        adText(1, "Les arbres chuchotent des noms de", "marins disparus. La lune se cache", "derriere les branches.");
+        adText(1, "Un gemissement... Une renarde", "rousse, prise dans un collet,", "te fixe de ses yeux d'or.");
+        const char *o2[2] = { "LA LIBERER (LE PIEGE EST INSTABLE)", "L'IGNORER ET PASSER SON CHEMIN" };
+        int r = adChoice(1, o2, 2);
+        if (r == 0) {
+          gAdHP -= 1;
+          adText(1, "Le collet claque sur ta main", "pendant que la renarde s'echappe.", "(-1 PV) Elle te regarde...");
+          adText(1, "Elle s'assoit devant toi et attend.", "Lys te suivra. Elle sent ce que", "les yeux ne voient pas.");
+          lys = true;
+          if (gAdHP <= 0) dead = true;
+        } else {
+          adText(1, "La renarde t'observe s'eloigner.", "Un froid bizarre tombe sur la", "foret.");
+        }
+        if (!dead) { // ---- l'epreuve des trois sentiers ----
+          int sent = -1;
+          while (sent != 1 && !dead) {
+            adText(1, "Trois sentiers s'ouvrent. Une seule", "sortie. Deux menent aux illusions", "de la foret.");
+            if (lys) adText(1, "Lys renifle l'air : elle gronde", "doucement vers les racines.", "");
+            const char *o3[3] = { "LE SENTIER DES RIEURS", "LE SENTIER DES RACINES", "LE SENTIER DES ROCHERS" };
+            int r2 = adChoice(1, o3, 3);
+            if (r2 == 1) adText(1, "Les racines forment un pont solide.", "La foret te laisse passer.", "");
+            else {
+              gAdHP -= 1;
+              adText(1, "Le sentier se dissous en brume", "blanche. Des rires glaces te", "repoussent. (-1 PV)");
+              if (gAdHP <= 0) dead = true;
+            }
+            sent = r2;
+          }
+        }
+        if (!dead) adText(1, "Au bout de la foret, la montagne", "dresse son epaule de pierre.", "Une tempete se prepare.");
+      } else if (ch == 3) { // ---- CHAPITRE 3 : LE COL DES VENTS ----
+        adText(2, "-- CHAPITRE 3 : LE COL DES VENTS --", "", "");
+        adText(2, "Le vent hurle comme une meute.", "Un eboulement bouche le col.", "Un mineur, Grum, est blesse.");
+        const char *o4[2] = { "CREUSER A DEUX (DUR)", "PASSER PAR LA CORNICHE (RISQUE)" };
+        int r = adChoice(2, o4, 2);
+        if (r == 0) {
+          gAdHP -= 1;
+          adText(2, "Vous poussez la pierre ensemble.", "Le rocher cede. (-1 PV) Grum", "sourit sous sa barbe grise.");
+          adText(2, "Tiens, gamin. Une braise chaude", "de ma forge. Elle ne s'eteint", "jamais pour qui la merite.");
+          braise = true;
+          if (gAdHP <= 0) dead = true;
+        } else {
+          if (lant) adText(2, "La lanterne de fer eclaire la", "corniche. Tu passes sans une", "egratignure.");
+          else {
+            gAdHP -= 1;
+            adText(2, "Sans lumiere, tu glisses sur la", "glace. (-1 PV) Tu atteins le col", "tremblant.");
+            if (gAdHP <= 0) dead = true;
+          }
+        }
+        if (!dead) {
+          adText(2, "Au sommet, la neige te mord les", "doigts. Au loin... une mer inter-", "ieure, et une cite sous l'eau.");
+          if (!braise && !dead) {
+            gAdHP -= 1;
+            adText(2, "Le froid du sommet te serre", "jusqu'a l'os. (-1 PV)", "");
+            if (gAdHP <= 0) dead = true;
+          } else if (!dead) adText(2, "La braise de Grum rechauffe ta", "poche comme un petit soleil.", "");
+        }
+      } else if (ch == 4) { // ---- CHAPITRE 4 : LA CITE ENGLOUTIE ----
+        adText(3, "-- CHAPITRE 4 : LA CITE ENGLOUTIE", "--", "");
+        adText(3, "Sous la vague, une cite de corail", "veille. Des lanternes bleues", "flottent entre les tours.");
+        adText(3, "Naia, gardienne des nereides,", "barre le palais de nacre :", "personne ne passe sans reponse.");
+        adText(3, "Trois anneaux chantent sous l'eau :", "le 1er chante ce que tu VOIS, le", "2e ce que tu CROIS, le 3e CE QUE");
+        adText(3, "TU ES. Un seul dit la verite.", "", "");
+        if (lys) adText(3, "Lys renifle l'eau : le troisieme", "anneau sonne comme un coeur.", "");
+        int r = -1;
+        while (r != 2 && !dead) {
+          const char *o5[3] = { "LE 1ER ANNEAU (CE QUE TU VOIS)", "LE 2E ANNEAU (CE QUE TU CROIS)", "LE 3E ANNEAU (CE QUE TU ES)" };
+          r = adChoice(3, o5, 3);
+          if (r == 2) {
+            adText(3, "Les eaux s'ecartent. Tu es ce que", "tu fais, dit Naia. Et elle pleure", "une larme bleue pour ta route.");
+            larme = true;
+          } else {
+            gAdHP -= 1;
+            adText(3, "L'anneau ment : un courant noir", "te serre. (-1 PV) Naia releve", "l'enigme, une derniere fois.");
+            if (gAdHP <= 0) dead = true;
+          }
+        }
+        if (!dead) adText(3, "Derriere le palais, une faille", "descend vers un antre ou aucune", "lumiere n'entre jamais.");
+      } else if (ch == 5) { // ---- CHAPITRE 5 : L'ANTRE DE L'OMBRE ----
+        adText(4, "-- CHAPITRE 5 : L'ANTRE DE", "L'OMBRE --", "");
+        adText(4, "L'antre respire. Sur un trone de", "cristaux noirs brille l'Etoile-", "Coeur, volee au ciel.");
+        adText(4, "L'Ombre se tourne. Sous le capu-", "chon brille un regard d'homme :", "Eliezer. L'ancien gardien.");
+        adText(4, "J'ai veille ce phare quarante ans,", "dit-il. Le village m'a oublie le", "jour ou ma flamme a tremble.");
+        adText(4, "Alors j'ai pris celle du ciel.", "", "");
+        if (lys) { lys = false; foi = true; adText(4, "Lys pose sa tete contre ta main :", "quoiqu'il arrive, ne rends pas", "l'Etoile par peur. (FOI DE LYS)"); }
+        { // premiere passe
+          const char *o6[3] = { "TU N'ES QU'UN VOLEUR", "LE VILLAGE T'A OUBLIE, PAS MOI", "RENDS L'ETOILE OU SOUFFRE" };
+          int r = adChoice(4, o6, 3);
+          if (r == 1) adText(4, "Un frisson traverse l'antre. Le", "voile de l'Ombre se fend, juste", "un peu.");
+          else {
+            gAdHP -= 1;
+            adText(4, "Un courant noir te frappe de", "flanc. (-1 PV) L'Ombre grince :", "tu ne sais rien du vide.");
+            if (gAdHP <= 0) dead = true;
+          }
+        }
+        if (!dead) { // deuxieme passe
+          const char *o7[3] = { "COMMENT AS-TU PU DISPARAITRE ?", "JE TE CROIS. MONTRE TA FLAMME", "ASSEZ DE MOTS" };
+          int r = adChoice(4, o7, 3);
+          if (r == 1) adText(4, "Eliezer ouvre sa paupiere pale : une", "flamme minuscule y danse encore.", "Elle attend depuis si longtemps.");
+          else {
+            gAdHP -= 1;
+            adText(4, "Les cristaux hurlent. (-1 PV)", "L'Ombre se referme sur elle-meme.", "");
+            if (gAdHP <= 0) dead = true;
+          }
+        }
+        if (!dead) adText(4, "L'Etoile vibre entre les mains de", "l'ancien gardien. Il te la tend...", "et attend ta decision.", "");
+      } else { // ---- CHAPITRE 6 : LE CHOIX FINAL ----
+        adText(4, "-- CHAPITRE 6 : LE CHOIX FINAL --", "", "");
+        adText(4, "L'Etoile-Coeur brule doucement", "dans tes mains. Derriere toi,", "Eliezer attend, immobile.");
+        const char *oF[3]; int nF = 2;
+        oF[0] = "RENDRE L'ETOILE AU CIEL";
+        oF[1] = "LA GARDER : DEVENIR LA LUMIERE";
+        if (braise && larme && foi) { oF[2] = "PARTAGER LA FLAMME A DEUX"; nF = 3; }
+        int rF = adChoice(4, oF, nF);
+        int ending;
+        if (rF == 0) ending = 1;        // FIN ETOILEE
+        else if (rF == 1 && nF == 2) ending = 2; // FIN COURONNEE
+        else if (rF == 2) ending = 3;   // FIN DE L'AUBE
+        else ending = 2;
+        if (ending == 1) {
+          adText(5, "Kael lance l'Etoile. Elle remonte,", "s'attache au firmament, et l'aube", "se leve sur Astralie.");
+          adText(5, "Le village grave une nouvelle", "constellation : le Veilleur.", "");
+          adText(5, "Eliezer sourit une derniere fois,", "et la brume l'emporte en douceur.", "(FIN ETOILEE)");
+        } else if (ending == 2) {
+          adText(0, "Kael garde l'Etoile. Sa poitrine", "s'illumine. Le monde s'incline...", "mais la mer reste sombre.");
+          adText(0, "On ne raconte plus l'ancien", "gardien. On ne raconte plus Kael.", "Seule reste la lumiere.", "");
+          adText(0, "(FIN COURONNEE)", "", "");
+        } else {
+          adText(5, "Les mains de Kael et d'Eliezer se", "posent ensemble sur l'Etoile.", "Elle se partage en deux flammes.");
+          adText(5, "Deux phares veillent desormais sur", "Astralie. Et quand la nuit est tres", "claire, on voit deux gardiens");
+          adText(5, "sourire du haut des deux tours.", "(FIN DE L'AUBE)", "");
+        }
+        adEnds |= (uint8_t)(1 << (ending - 1));
+        adBestCh = 6;
+        saveAcc();
+        { // ecran final : fins trouvees
+          int nf = ((adEnds & 1) ? 1 : 0) + ((adEnds & 2) ? 1 : 0) + ((adEnds & 4) ? 1 : 0);
+          char fb[24]; snprintf(fb, 24, "FINS TROUVEES : %d/3", nf);
+          adText(5, fb, "Il existe d'autres chemins,", "d'autres allies, d'autres fins...", "");
+          const char *o8[2] = { "REJOUER L'HISTOIRE", "MENU" };
+          if (adChoice(5, o8, 2) == 0) {
+            ch = 0; // repart au chapitre 1
+            lant = lys = braise = larme = foi = false;
+            gAdMax = 6;
+            break;
+          }
+          return; // menu
+        }
+      }
+      if (!dead) break; // chapitre reussi
+      // ---- defaite : on se releve, ou on rentre ----
+      gAdHP = gAdMax;
+      adText(4, "L'obscurite t'emporte... mais une", "histoire inachevee refuse de finir.", "");
+      const char *o9[2] = { "SE RELEVER ET REESSAYER", "ABANDONNER (MENU)" };
+      if (adChoice(4, o9, 2) != 0) return;
+    }
+    if (ch > adBestCh) { adBestCh = ch; saveAcc(); }
+    ch++;
+    if (ch > 6) ch = 6; // (le chapitre 6 se termine par un retour ou un rejouer)
+  }
+}
+
 static int launcherScreen() {
   int sel = 0, drawn = -1;
   bool pL = false, pR = false, pU = false, pD = false, pOK = false, pB = false;
@@ -9440,38 +9813,47 @@ static int launcherScreen() {
   while (true) {
     pollKeys();
     if (kLeft && !pL && sel > 0) sel--;
-    if (kRight && !pR && sel < 5) sel++;
-    if (kUp && !pU && sel >= 3) sel -= 3;
-    if (kDown && !pD && sel + 3 < 6) sel += 3;
+    if (kRight && !pR && sel < 6) sel++;
+    if (kUp && !pU && sel >= 4) sel -= 4;
+    if (kDown && !pD && sel < 4) { sel += 4; if (sel > 6) sel = 6; }
     if (keyOK && !pOK) { waitRelease(); return sel; }
     if (keyBack && !pB) { waitRelease(); return -1; }
     if (kHome) return -1;
     if (drawn != sel) {
       drawn = sel;
       for (int y = 0; y < SH; y++) { int x = 0; while (x < SW) { int band = (x + y * 2) / 40; int xe = (band + 1) * 40 - y * 2 - 1; if (xe >= SW) xe = SW - 1; fillSpan(y, x, xe, (band % 2) ? KDColor::RGB24(0x151A22) : KDColor::RGB24(0x1B222D)); x = xe + 1; } }
-      drawTextC(8, "MINI GAMES : 6 JEUX", C_YEL);
+      drawTextC(8, "MINI GAMES : 7 JEUX", C_YEL);
       fRect(SW / 2 - 60, 20, 120, 2, C_BTND);
-      static const KDColor HIL[6] = { KDColor::RGB24(0xF5C518), KDColor::RGB24(0xC51111), KDColor::RGB24(0xB44BFF),
-                                      KDColor::RGB24(0x35D4E8), KDColor::RGB24(0x3DDC55), KDColor::RGB24(0xFF8327) };
-      for (int i = 0; i < 6; i++) { // 2 rangees de 3 cartes de 98 px
-        int cx0 = 3 + (i % 3) * 108, cy0 = (i < 3) ? 30 : 114;
-        rRect(cx0, cy0, 98, 78, 10, sel == i ? HIL[i] : KDColor::RGB24(0x2E3A4A));
-        fRect(cx0 + 4, cy0 + 4, 90, 70, sel == i ? KDColor::RGB24(0x22282F) : KDColor::RGB24(0x1B222D));
-        int icx = cx0 + 49, icy = cy0 + 24;
-        if (i == 0) { oCirc(icx, icy, 12, KDColor::RGB24(0xF5C518), KDColor::RGB24(0x8A6D00)); fRect(icx - 8, icy + 10, 16, 3, KDColor::RGB24(0x8A6D00)); }
+      static const KDColor HIL[7] = { KDColor::RGB24(0xF5C518), KDColor::RGB24(0xC51111), KDColor::RGB24(0xB44BFF),
+                                      KDColor::RGB24(0x35D4E8), KDColor::RGB24(0x3DDC55), KDColor::RGB24(0xFF8327),
+                                      KDColor::RGB24(0xF2E8C8) };
+      for (int i = 0; i < 7; i++) { // V5.42 : 7 jeux en 2 rangees de 4 cartes de 76 px
+        int cx0 = 2 + (i % 4) * 80, cy0 = (i < 4) ? 26 : 114;
+        rRect(cx0, cy0, 76, 78, 8, sel == i ? HIL[i] : KDColor::RGB24(0x2E3A4A));
+        fRect(cx0 + 3, cy0 + 3, 70, 72, sel == i ? KDColor::RGB24(0x22282F) : KDColor::RGB24(0x1B222D));
+        int icx = cx0 + 38, icy = cy0 + 22;
+        if (i == 0) { oCirc(icx, icy, 11, KDColor::RGB24(0xF5C518), KDColor::RGB24(0x8A6D00)); fRect(icx - 8, icy + 9, 16, 3, KDColor::RGB24(0x8A6D00)); }
         else if (i == 1) drawBean(icx, icy, KDColor::RGB24(0xC51111), false);
-        else if (i == 2) { oCirc(icx, icy, 12, KDColor::RGB24(0xB44BFF), KDColor::RGB24(0x5A1F78)); fRect(icx - 5, icy - 3, 2, 2, C_RED); fRect(icx + 3, icy - 3, 2, 2, C_RED); fRect(icx - 3, icy + 6, 6, 2, C_WHT); }
+        else if (i == 2) { oCirc(icx, icy, 11, KDColor::RGB24(0xB44BFF), KDColor::RGB24(0x5A1F78)); fRect(icx - 5, icy - 3, 2, 2, C_RED); fRect(icx + 3, icy - 3, 2, 2, C_RED); fRect(icx - 3, icy + 6, 6, 2, C_WHT); }
         else if (i == 3) { fRect(icx - 6, icy - 6, 12, 16, KDColor::RGB24(0x9A9AA8)); fRect(icx - 8, icy - 10, 16, 5, KDColor::RGB24(0x35D4E8)); fRect(icx - 3, icy + 12, 2, 2, C_YEL); fRect(icx + 1, icy + 12, 2, 2, C_YEL); }
         else if (i == 4) { fRect(icx - 12, icy - 12, 24, 24, KDColor::RGB24(0x3D7A20)); fRect(icx - 2, icy - 12, 3, 24, KDColor::RGB24(0x2E5A16)); fRect(icx - 12, icy - 2, 24, 3, KDColor::RGB24(0x2E5A16)); fCirc(icx - 6, icy - 6, 3, KDColor::RGB24(0x151515)); fCirc(icx + 6, icy + 6, 3, C_WHT); }
-        else { fRect(icx - 12, icy - 12, 24, 24, KDColor::RGB24(0x6A5A4A)); fRect(icx - 4, icy - 2, 8, 14, KDColor::RGB24(0x7A5432)); fRect(icx - 12, icy - 12, 24, 3, KDColor::RGB24(0x8A7A6A)); fCirc(icx + 8, icy - 6, 2, C_GOLD); }
+        else if (i == 5) { fRect(icx - 12, icy - 12, 24, 24, KDColor::RGB24(0x6A5A4A)); fRect(icx - 4, icy - 2, 8, 14, KDColor::RGB24(0x7A5432)); fRect(icx - 12, icy - 12, 24, 3, KDColor::RGB24(0x8A7A6A)); fCirc(icx + 8, icy - 6, 2, C_GOLD); }
+        else { // V5.42 : AVENTURE : livre ouvert + etoile
+          fRect(icx - 11, icy + 3, 22, 12, KDColor::RGB24(0x7A5432));
+          fRect(icx - 1, icy + 3, 2, 12, KDColor::RGB24(0x4A2E1A));
+          fRect(icx - 9, icy + 5, 7, 1, C_GOLD); fRect(icx + 3, icy + 5, 7, 1, C_GOLD);
+          fCirc(icx, icy - 7, 3, C_GOLD);
+          px(icx - 6, icy - 7, C_WHT); px(icx + 6, icy - 7, C_WHT); px(icx, icy - 13, C_WHT); px(icx, icy - 1, C_WHT);
+        }
       }
-      drawText(6 + 49 - textW("BRAWL") / 2, 30 + 62, "BRAWL", C_WHT); drawText(6 + 49 - textW("MICRO") / 2, 30 + 74, "MICRO", C_GRE);
-      drawText(114 + 49 - textW("AMONG") / 2, 30 + 62, "AMONG", C_WHT); drawText(114 + 49 - textW("US") / 2, 30 + 74, "US", C_GRE);
-      drawText(222 + 49 - textW("VAMPIRE") / 2, 30 + 62, "VAMPIRE", C_WHT); drawText(222 + 49 - textW("MINI") / 2, 30 + 74, "MINI", C_GRE);
-      drawText(6 + 49 - textW("TOWER") / 2, 114 + 62, "TOWER", C_WHT); drawText(6 + 49 - textW("DEF") / 2, 114 + 74, "DEF", C_GRE);
-      drawText(114 + 49 - textW("OTHELLO") / 2, 114 + 62, "OTHELLO", C_WHT); drawText(114 + 49 - textW("IA OU AMI") / 2, 114 + 74, "IA OU AMI", C_GRE);
-      drawText(222 + 49 - textW("DONJON") / 2, 114 + 62, "DONJON", C_WHT); drawText(222 + 49 - textW("ROGUE") / 2, 114 + 74, "ROGUE", C_GRE);
-      static const char *HINTS[6] = { "COMBAT 3V3 ARCADE", "IMPOSTEUR OU EQUIPAGE ?", "SURVIS AUX VAGUES !", "DEFENDS TA BASE !", "REVERSI VS IA OU AMI", "DESCENDS LE DONJON !" };
+      drawText(2 + 38 - textW("BRAWL") / 2, 26 + 60, "BRAWL", C_WHT); drawText(2 + 38 - textW("MICRO") / 2, 26 + 72, "MICRO", C_GRE);
+      drawText(82 + 38 - textW("AMONG") / 2, 26 + 60, "AMONG", C_WHT); drawText(82 + 38 - textW("US") / 2, 26 + 72, "US", C_GRE);
+      drawText(162 + 38 - textW("VAMPIRE") / 2, 26 + 60, "VAMPIRE", C_WHT); drawText(162 + 38 - textW("MINI") / 2, 26 + 72, "MINI", C_GRE);
+      drawText(242 + 38 - textW("TOWER") / 2, 26 + 60, "TOWER", C_WHT); drawText(242 + 38 - textW("DEF") / 2, 26 + 72, "DEF", C_GRE);
+      drawText(2 + 38 - textW("OTHELLO") / 2, 114 + 60, "OTHELLO", C_WHT); drawText(2 + 38 - textW("IA OU AMI") / 2, 114 + 72, "IA OU AMI", C_GRE);
+      drawText(82 + 38 - textW("DONJON") / 2, 114 + 60, "DONJON", C_WHT); drawText(82 + 38 - textW("ROGUE") / 2, 114 + 72, "ROGUE", C_GRE);
+      drawText(162 + 38 - textW("AVENTURE") / 2, 114 + 60, "AVENTURE", C_WHT); drawText(162 + 38 - textW("HISTOIRE") / 2, 114 + 72, "HISTOIRE", C_GRE);
+      static const char *HINTS[7] = { "COMBAT 3V3 ARCADE", "IMPOSTEUR OU EQUIPAGE ?", "SURVIS AUX VAGUES !", "DEFENDS TA BASE !", "REVERSI VS IA OU AMI", "DESCENDS LE DONJON !", "REPRENDS L'ETOILE !" };
       drawTextC(212, HINTS[sel], C_GRE);
     }
     pL = kLeft; pR = kRight; pU = kUp; pD = kDown; pOK = keyOK; pB = keyBack;
@@ -9485,7 +9867,7 @@ void ion_main(int argc, char *argv[]) {
   if (!acc.name[0]) { namePicker(); waitRelease(); } // pseudo au premier lancement (V5.11)
   int myBrawler = 0;
   const char *mainItems[10] = {"JOUER", "ENTRAINEMENT", "BRAWLERS", "BOUTIQUE", "CARRIERE", "EMOTES", "QUETES DU JOUR", "ROUTE DES TROPHEES", "PARAMETRES", "AIDE"};
-  while (true) { // V5.18 : LANCEUR — le projet contient SIX jeux maintenant ! (V5.32 : Vampire, Tower Defense, Othello, Donjon)
+  while (true) { // V5.18 : LANCEUR — le projet contient SEPT jeux maintenant ! (V5.42 : + Aventure)
     int game = launcherScreen();
     waitRelease();
     if (game < 0) return; // BACK au lanceur = quitter l'app
@@ -9494,6 +9876,7 @@ void ion_main(int argc, char *argv[]) {
     if (game == 3) { tdGame(); waitRelease(); continue; } // TOWER DEFENSE MINI (V5.32)
     if (game == 4) { otGame(); waitRelease(); continue; } // OTHELLO MINI (V5.32)
     if (game == 5) { dgGame(); waitRelease(); continue; } // DONJON ROGUELIKE MINI (V5.32)
+    if (game == 6) { adventureGame(); waitRelease(); continue; } // AVENTURE : LA DERNIERE ETOILE (V5.42)
   while (true) { // menu BRAWL MICROSTARS
     gTitleAnim = true; // brawlers qui defilent derriere le menu principal (V5.11)
     gPortrait = myBrawler; // V5.14 : portrait du brawler courant au menu principal
