@@ -51,14 +51,30 @@ static void initTrig() { for (int i = 0; i < 256; i++) { double a = i * 0.024543
 static float fcosf(float a) { return gTrigC[(int)(a * 40.743692f) & 255]; }
 static float fsinf(float a) { return gTrigS[(int)(a * 40.743692f) & 255]; }
 
-// V5.51 : FRAME BUFFER DEMI-RESOLUTION — tout est dessine en RAM dans une grille
-// de HW*HH pixels (35 Ko seulement, 4x moins qu'un ecran complet), puis etire x2
-// par blit(). L'ecran ne montre jamais une image a moitie construite : zero
-// scintillement, et la RAM reste largement dans le budget d'une app externe.
-static const int HW = SW / 2, HH = SH / 2; // grille interne : 160x111
-static KDColor VRAM[HW * HH]; // ~35 Ko en .bss (statique, jamais sur la pile)
+// V5.52 : FRAME BUFFER 8 BITS A PALETTE — PLEINE RESOLUTION 320x222 (rendu 100% net,
+// comme a l'epoque du dessin direct) pour seulement 1 octet par pixel : 71 Ko au lieu
+// de 142 Ko, ce qui rentre dans le budget RAM (~100 Ko) d'une app externe. Les couleurs
+// passent par une palette de 256 teintes ; au-dela, la teinte la plus proche est utilisee.
+static uint8_t VRAM[SW * SH]; // 71 Ko en .bss (statique, jamais sur la pile)
+static KDColor PAL[256]; static int palN = 0;
+static KDColor palLastC; static uint8_t palLastI = 0; static bool palHasLast = false;
+static uint8_t palIdx(KDColor c) { // traduit une couleur en indice de palette (cache couleur courante)
+  if (palHasLast && c.red() == palLastC.red() && c.green() == palLastC.green() && c.blue() == palLastC.blue()) return palLastI;
+  for (int i = 0; i < palN; i++)
+    if (PAL[i].red() == c.red() && PAL[i].green() == c.green() && PAL[i].blue() == c.blue()) {
+      palLastC = c; palLastI = (uint8_t)i; palHasLast = true; return (uint8_t)i;
+    }
+  if (palN < 256) { PAL[palN] = c; palLastC = c; palLastI = (uint8_t)palN; palHasLast = true; return (uint8_t)palN++; }
+  int bi = 0; long bd = 1L << 30; // palette pleine : teinte la plus proche (cas tres rare)
+  for (int i = 0; i < 256; i++) {
+    long dr = PAL[i].red() - c.red(), dg = PAL[i].green() - c.green(), db = PAL[i].blue() - c.blue();
+    long d = 4 * dr * dr + 9 * dg * dg + db * db;
+    if (d < bd) { bd = d; bi = i; }
+  }
+  palLastC = c; palLastI = (uint8_t)bi; palHasLast = true; return (uint8_t)bi;
+}
 static void px(int x, int y, KDColor c) {
-  if (x >= 0 && x < SW && y >= 0 && y < SH) VRAM[(long)(y / 2) * HW + (x / 2)] = c;
+  if (x >= 0 && x < SW && y >= 0 && y < SH) VRAM[(long)y * SW + x] = palIdx(c);
 }
 static void fRect(int x, int y, int w, int h, KDColor c) {
   if (w < 0) { x += w; w = -w; } if (h < 0) { y += h; h = -h; }
@@ -66,10 +82,10 @@ static void fRect(int x, int y, int w, int h, KDColor c) {
   if (x + w > SW) w = SW - x;
   if (y + h > SH) h = SH - y;
   if (w <= 0 || h <= 0) return;
-  int x0 = x / 2, x1 = (x + w - 1) / 2, y0 = y / 2, y1 = (y + h - 1) / 2; // V5.51 : coords demi-resolution
-  for (int j = y0; j <= y1; j++) {
-    KDColor *d = VRAM + (long)j * HW + x0;
-    for (int i = x0; i <= x1; i++) d[i - x0] = c;
+  uint8_t pi = palIdx(c);
+  for (int j = 0; j < h; j++) {
+    uint8_t *d = VRAM + (long)(y + j) * SW + x;
+    for (int i = 0; i < w; i++) d[i] = pi;
   }
 }
 // ligne de travail : les primitives a motif remplissent rowBuf puis poussent les runs
@@ -88,15 +104,16 @@ static void rowFlush(int y, int x0, int x1) {
     if (!rowSet[x]) { x++; continue; }
     int s = x;
     while (x <= xe && rowSet[x]) x++;
-    for (int i = s; i < x; i++) VRAM[(long)(y / 2) * HW + (i / 2)] = rowBuf[i]; // V5.51 : vers le frame buffer demi-resolution
+    for (int i = s; i < x; i++) VRAM[(long)y * SW + i] = palIdx(rowBuf[i]); // V5.52 : vers le frame buffer 8 bits
   }
 }
 static void fillSpan(int y, int x0, int x1, KDColor c) {
   if (y < 0 || y >= SH || x0 > x1) return;
   if (x0 < 0) x0 = 0;
   if (x1 >= SW) x1 = SW - 1;
-  int a = x0 / 2, b = x1 / 2; // V5.51 : coords demi-resolution
-  for (int i = a; i <= b; i++) VRAM[(long)(y / 2) * HW + i] = c;
+  uint8_t pi = palIdx(c); // V5.52 : pleine resolution
+  uint8_t *d = VRAM + (long)y * SW;
+  for (int i = x0; i <= x1; i++) d[i] = pi;
 }
 static void rRect(int x, int y, int w, int h, int r, KDColor c) {
   for (int j = 0; j < h; j++) {
@@ -171,13 +188,12 @@ static void shadow(int cx, int cy, int rx, int ry) {
     rowFlush(cy + j, cx - rx, cx + rx);
   }
 }
-static void blit() { // V5.51 : etire la grille 160x111 en 320x222, ligne par ligne (buffer ecran de 2 lignes seulement)
-  static KDColor up[2 * SW]; // 1,3 Ko : deux lignes ecran
-  for (int qy = 0; qy < HH; qy++) {
-    const KDColor *src = VRAM + (long)qy * HW;
-    for (int i = 0; i < HW; i++) { up[2 * i] = src[i]; up[2 * i + 1] = src[i]; } // chaque pixel devient 2x2
-    Ion::Display::pushRect(KDRect(0, 2 * qy, SW, 1), up);
-    if (2 * qy + 1 < SH) Ion::Display::pushRect(KDRect(0, 2 * qy + 1, SW, 1), up);
+static void blit() { // V5.52 : decode la palette ligne par ligne et pousse l'image complete
+  static KDColor up[SW]; // 640 octets : une ligne ecran
+  for (int y = 0; y < SH; y++) {
+    const uint8_t *src = VRAM + (long)y * SW;
+    for (int x = 0; x < SW; x++) up[x] = (src[x] < palN) ? PAL[src[x]] : KDColor::RGB24(0);
+    Ion::Display::pushRect(KDRect(0, y, SW, 1), up);
   }
 }
 
@@ -9596,39 +9612,26 @@ static void dgGame() {
 
 static int gAdHP = 6, gAdMax = 6, gAdCh = 1; // etat de la partie en cours
 
-// V5.51 : police 3x5 a points 2x2 — chaque point devient exactement un pixel de la
-// grille demi-resolution, donc un bloc 2x2 net a l'ecran. La police 1x d'avant
-// fusionnait en bouillie apres l'etirement x2. Advance 7px : 37 chars max par ligne.
-static const uint8_t FONT3[26][5] = {
-  {7,5,7,5,5},{6,5,6,5,6},{7,4,4,4,7},{6,5,5,5,6},{7,4,7,4,7},{7,4,7,4,4},{7,4,5,5,7},
-  {5,5,7,5,5},{7,2,2,2,7},{1,1,1,5,7},{5,5,6,5,5},{4,4,4,4,7},{5,7,7,5,5},{6,5,5,5,5},
-  {7,5,5,5,7},{7,5,7,4,4},{7,5,5,7,1},{7,5,7,6,5},{7,4,7,1,7},{7,2,2,2,2},{5,5,5,5,7},
-  {5,5,5,5,2},{5,5,7,7,5},{5,5,2,5,5},{5,5,2,2,2},{7,1,2,4,7}
-};
-static const uint8_t FNT3D[10][5] = { {7,5,5,5,7},{2,6,2,2,7},{7,1,7,4,7},{7,1,7,1,7},{5,5,7,1,1},{7,4,7,1,7},{7,4,7,5,7},{7,1,1,2,2},{7,5,7,5,7},{7,5,7,1,7} };
-static void drawTextSmall(int x, int y, const char *s, KDColor c) { // V5.51 : rendue nette en demi-resolution
+static void drawTextSmall(int x, int y, const char *s, KDColor c) { // V5.45 : police 1x (6px/char) — nette, le framebuffer est de nouveau pleine resolution (V5.52)
   while (*s) {
     char ch = *s++;
     if (ch >= 'a' && ch <= 'z') ch -= 32;
-    if (ch == ' ') { x += 7; continue; }
-    if (ch == '-') { fRect(x, y + 4, 6, 2, c); x += 7; continue; }
-    if (ch == '!') { fRect(x, y, 2, 6, c); fRect(x, y + 8, 2, 2, c); x += 7; continue; }
-    if (ch == ':') { fRect(x, y + 2, 2, 2, c); fRect(x, y + 6, 2, 2, c); x += 7; continue; }
-    if (ch == '.') { fRect(x, y + 8, 2, 2, c); x += 7; continue; }
-    if (ch == ',') { fRect(x, y + 8, 2, 2, c); fRect(x, y + 10, 2, 2, c); x += 7; continue; }
-    if (ch == '\'') { fRect(x, y, 2, 3, c); x += 7; continue; }
-    if (ch == '?') { fRect(x, y, 6, 2, c); fRect(x + 4, y + 2, 2, 2, c); fRect(x + 2, y + 4, 2, 2, c); fRect(x + 2, y + 8, 2, 2, c); x += 7; continue; }
+    if (ch == ' ') { x += 4; continue; }
+    if (ch == '-') { fRect(x, y + 2, 4, 1, c); x += 6; continue; }
+    if (ch == '!') { fRect(x, y, 1, 5, c); x += 4; continue; }
+    if (ch == ':') { fRect(x, y, 1, 1, c); fRect(x, y + 3, 1, 1, c); x += 4; continue; }
+    if (ch == '.') { fRect(x, y + 4, 1, 1, c); x += 4; continue; }
+    if (ch == '\'') { fRect(x, y, 1, 2, c); x += 4; continue; }
+    if (ch == '?') { fRect(x, y, 1, 2, c); fRect(x + 2, y, 1, 1, c); fRect(x + 1, y + 2, 1, 2, c); x += 5; continue; }
     if (ch >= 'A' && ch <= 'Z') {
-      const uint8_t *g = FONT3[ch - 'A'];
-      for (int r = 0; r < 5; r++) for (int col = 0; col < 3; col++)
-        if (g[r] & (4 >> col)) fRect(x + col * 2, y + r * 2, 2, 2, c);
-      x += 7;
+      for (int r = 0; r < 5; r++) { uint8_t row = FONTA[ch - 'A'][r]; int col = 0;
+        while (col < 5) { if (row & (0x10 >> col)) { int st = col; while (col < 5 && (row & (0x10 >> col))) col++; fRect(x + st, y + r, col - st, 1, c); } else col++; } }
+      x += 6;
     } else if (ch >= '0' && ch <= '9') {
-      const uint8_t *g = FNT3D[ch - '0'];
-      for (int r = 0; r < 5; r++) for (int col = 0; col < 3; col++)
-        if (g[r] & (4 >> col)) fRect(x + col * 2, y + r * 2, 2, 2, c);
-      x += 7;
-    } else x += 7;
+      for (int r = 0; r < 5; r++) { uint8_t row = FONT5[ch - '0'][r]; int col = 0;
+        while (col < 5) { if (row & (0x10 >> col)) { int st = col; while (col < 5 && (row & (0x10 >> col))) col++; fRect(x + st, y + r, col - st, 1, c); } else col++; } }
+      x += 6;
+    } else x += 6;
   }
 }
 static void adScene(int sc) { // fond pixel-art par chapitre
@@ -10899,6 +10902,7 @@ void ion_main(int argc, char *argv[]) {
 extern "C" int main(int argc, char *argv[]) {
   np_app_begin();
   initTrig(); // tables cos/sin precalculees (V5.10)
+  palN = 1; PAL[0] = KDColor::RGB24(0); // V5.52 : la palette demarre sur le noir
   ion_main(argc, argv);
   return np_app_end();
 }
