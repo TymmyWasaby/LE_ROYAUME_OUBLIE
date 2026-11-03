@@ -5170,6 +5170,7 @@ static void namePicker() {
       return;
     }
     prevOK = keyOK; prevBack = keyBack;
+    blit(); // V5.51
     Ion::Timing::msleep(60);
   }
 }
@@ -5268,6 +5269,7 @@ static int brawlerPicker(int startSel, const char *title = "CHOISIS TON BRAWLER"
     if (keyOK && !prevOK && isUnlocked(curB)) { prevOK = true; return curB; }
     if (keyBack && !prevBack) { prevBack = true; return -1; }
     prevOK = keyOK; prevBack = keyBack;
+    blit(); // V5.51
     Ion::Timing::msleep(60);
   }
 }
@@ -5480,6 +5482,7 @@ static void brawlerMenu(int myBrawler) {
       }
       if (keyOK || keyBack) { prevOK = keyOK; prevBack = keyBack; break; }
       prevOK = keyOK; prevBack = keyBack;
+      blit(); // V5.51
       Ion::Timing::msleep(80);
     }
   }
@@ -5654,6 +5657,7 @@ static void resultScreen(int result, int myBrawler) {
       opened = true;
     }
     prevOK = keyOK;
+    blit(); // V5.51
     Ion::Timing::msleep(60);
   }
 }
@@ -5664,7 +5668,7 @@ static void playMatch(int myBrawler, int selMode) {
   while (matchResult == -2) {
     int t0 = (int)Ion::Timing::millis();
     updateMatch(1.0f / (gFps60 ? 60.0f : 30.0f)); // V5.14 : option 60 FPS
-    renderMatch();
+    renderMatch(); blit(); // V5.51 : pousse la frame
     int frameMs = (int)Ion::Timing::millis() - t0;
     gFrameMs = (gFrameMs * 3.0f + frameMs) / 4.0f; // V5.16 : EMA pour le compteur FPS
     int target = gFps60 ? 16 : 33;
@@ -5676,7 +5680,7 @@ static void playMatch(int myBrawler, int selMode) {
     while (slowT < 900) {
       int t0 = (int)Ion::Timing::millis();
       updateMatch(1.0f / 90.0f); // 3x plus lent : on savoure le moment
-      renderMatch();
+      renderMatch(); blit(); // V5.51 : pousse la frame
       int frameMs = (int)Ion::Timing::millis() - t0;
       Ion::Timing::msleep(frameMs < 33 ? 33 - frameMs : 1);
       slowT += 33;
@@ -6977,6 +6981,7 @@ static void amongUsGame() {
         pollKeys();
         if (keyOK) { waitRelease(); resumed = true; }
         else if (keyBack) { endScreen = 4; break; }
+        blit(); // V5.51 : l'ecran de pause reste visible
         Ion::Timing::msleep(40);
       }
     }
@@ -9135,6 +9140,7 @@ static void otGame() {
       if (kHome) return;
       otDraw(bo, ccx, ccy, (turn == 1) ? pm : ai, (turn == 1) ? np : na,
              (turn == 1) ? "A TOI DE JOUER" : "AU BLANC DE JOUER", C_YEL, duo ? 0 : lvl + 1);
+      blit(); // V5.51
       Ion::Timing::msleep(30);
     }
     if (quit) return;
@@ -9590,26 +9596,39 @@ static void dgGame() {
 
 static int gAdHP = 6, gAdMax = 6, gAdCh = 1; // etat de la partie en cours
 
-static void drawTextSmall(int x, int y, const char *s, KDColor c) { // V5.45 : police 1x (6px/char) pour l'histoire — le texte 10px debordait de l'ecran
+// V5.51 : police 3x5 a points 2x2 — chaque point devient exactement un pixel de la
+// grille demi-resolution, donc un bloc 2x2 net a l'ecran. La police 1x d'avant
+// fusionnait en bouillie apres l'etirement x2. Advance 7px : 37 chars max par ligne.
+static const uint8_t FONT3[26][5] = {
+  {7,5,7,5,5},{6,5,6,5,6},{7,4,4,4,7},{6,5,5,5,6},{7,4,7,4,7},{7,4,7,4,4},{7,4,5,5,7},
+  {5,5,7,5,5},{7,2,2,2,7},{1,1,1,5,7},{5,5,6,5,5},{4,4,4,4,7},{5,7,7,5,5},{6,5,5,5,5},
+  {7,5,5,5,7},{7,5,7,4,4},{7,5,5,7,1},{7,5,7,6,5},{7,4,7,1,7},{7,2,2,2,2},{5,5,5,5,7},
+  {5,5,5,5,2},{5,5,7,7,5},{5,5,2,5,5},{5,5,2,2,2},{7,1,2,4,7}
+};
+static const uint8_t FNT3D[10][5] = { {7,5,5,5,7},{2,6,2,2,7},{7,1,7,4,7},{7,1,7,1,7},{5,5,7,1,1},{7,4,7,1,7},{7,4,7,5,7},{7,1,1,2,2},{7,5,7,5,7},{7,5,7,1,7} };
+static void drawTextSmall(int x, int y, const char *s, KDColor c) { // V5.51 : rendue nette en demi-resolution
   while (*s) {
     char ch = *s++;
     if (ch >= 'a' && ch <= 'z') ch -= 32;
-    if (ch == ' ') { x += 4; continue; }
-    if (ch == '-') { fRect(x, y + 2, 4, 1, c); x += 6; continue; }
-    if (ch == '!') { fRect(x, y, 1, 5, c); x += 4; continue; }
-    if (ch == ':') { fRect(x, y, 1, 1, c); fRect(x, y + 3, 1, 1, c); x += 4; continue; }
-    if (ch == '.') { fRect(x, y + 4, 1, 1, c); x += 4; continue; }
-    if (ch == '\'') { fRect(x, y, 1, 2, c); x += 4; continue; }
-    if (ch == '?') { fRect(x, y, 1, 2, c); fRect(x + 2, y, 1, 1, c); fRect(x + 1, y + 2, 1, 2, c); x += 5; continue; }
+    if (ch == ' ') { x += 7; continue; }
+    if (ch == '-') { fRect(x, y + 4, 6, 2, c); x += 7; continue; }
+    if (ch == '!') { fRect(x, y, 2, 6, c); fRect(x, y + 8, 2, 2, c); x += 7; continue; }
+    if (ch == ':') { fRect(x, y + 2, 2, 2, c); fRect(x, y + 6, 2, 2, c); x += 7; continue; }
+    if (ch == '.') { fRect(x, y + 8, 2, 2, c); x += 7; continue; }
+    if (ch == ',') { fRect(x, y + 8, 2, 2, c); fRect(x, y + 10, 2, 2, c); x += 7; continue; }
+    if (ch == '\'') { fRect(x, y, 2, 3, c); x += 7; continue; }
+    if (ch == '?') { fRect(x, y, 6, 2, c); fRect(x + 4, y + 2, 2, 2, c); fRect(x + 2, y + 4, 2, 2, c); fRect(x + 2, y + 8, 2, 2, c); x += 7; continue; }
     if (ch >= 'A' && ch <= 'Z') {
-      for (int r = 0; r < 5; r++) { uint8_t row = FONTA[ch - 'A'][r]; int col = 0;
-        while (col < 5) { if (row & (0x10 >> col)) { int st = col; while (col < 5 && (row & (0x10 >> col))) col++; fRect(x + st, y + r, col - st, 1, c); } else col++; } }
-      x += 6;
+      const uint8_t *g = FONT3[ch - 'A'];
+      for (int r = 0; r < 5; r++) for (int col = 0; col < 3; col++)
+        if (g[r] & (4 >> col)) fRect(x + col * 2, y + r * 2, 2, 2, c);
+      x += 7;
     } else if (ch >= '0' && ch <= '9') {
-      for (int r = 0; r < 5; r++) { uint8_t row = FONT5[ch - '0'][r]; int col = 0;
-        while (col < 5) { if (row & (0x10 >> col)) { int st = col; while (col < 5 && (row & (0x10 >> col))) col++; fRect(x + st, y + r, col - st, 1, c); } else col++; } }
-      x += 6;
-    } else x += 6;
+      const uint8_t *g = FNT3D[ch - '0'];
+      for (int r = 0; r < 5; r++) for (int col = 0; col < 3; col++)
+        if (g[r] & (4 >> col)) fRect(x + col * 2, y + r * 2, 2, 2, c);
+      x += 7;
+    } else x += 7;
   }
 }
 static void adScene(int sc) { // fond pixel-art par chapitre
@@ -10676,7 +10695,7 @@ static void utGame() { // V5.47 : SOUL QUEST — 6 salles, boutique de Momo, equ
     }
     if (room == 9 && pyraFriend) utFace(150, 100, 6); // V5.48 : Pyra t'accompagne jusqu'au trone
     if (room > 0) { fRect(0, 76, 12, 40, C_WHT); fRect(0, 79, 6, 34, C_BLK); } // V5.49 : porte de retour, toujours ouverte
-    if (room < 9 && doorOpen) { fRect(304, 76, 12, 40, C_WHT); fRect(307, 79, 6, 34, C_BLK); } // porte ouverte
+    if (room < 19 && doorOpen) { fRect(304, 76, 12, 40, C_WHT); fRect(307, 79, 6, 34, C_BLK); } // porte ouverte (V5.50 : 19 salles)
     utKid((int)px2, (int)py2);
     char sdb[32]; snprintf(sdb, 32, "PV %d/20  OR %dG", st.php, st.gold);
     drawTextSmall(8, 20, sdb, C_WHT);
@@ -10764,6 +10783,7 @@ static int launcherScreen() {
       drawText(242 + 38 - textW("SOUL") / 2, 114 + 60, "SOUL", C_WHT); drawText(242 + 38 - textW("QUEST") / 2, 114 + 72, "QUEST", C_GRE);
       static const char *HINTS[8] = { "COMBAT 3V3 ARCADE", "IMPOSTEUR OU EQUIPAGE ?", "SURVIS AUX VAGUES !", "DEFENDS TA BASE !", "REVERSI VS IA OU AMI", "DESCENDS LE DONJON !", "REPRENDS L'ETOILE !", "EPOIGNE OU DETRUIS..." };
       drawTextC(212, HINTS[sel], C_GRE);
+      blit(); // V5.51 : le framebuffer doit etre pousse — sinon le lanceur reste invisible !
     }
     pL = kLeft; pR = kRight; pU = kUp; pD = kDown; pOK = keyOK; pB = keyBack;
     Ion::Timing::msleep(40);
