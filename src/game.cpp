@@ -51,11 +51,11 @@ static void initTrig() { for (int i = 0; i < 256; i++) { double a = i * 0.024543
 static float fcosf(float a) { return gTrigC[(int)(a * 40.743692f) & 255]; }
 static float fsinf(float a) { return gTrigS[(int)(a * 40.743692f) & 255]; }
 
-// Rendu DIRECT a l'ecran via EADK, sans frame buffer (economise ~150 Ko de RAM,
-// indispensable sur N0110/N0115 ou la RAM des apps externes est limitee).
-// Chaque primitive pousse ses lignes au fur et a mesure, comme NumPlay.
+// V5.49 : FRAME BUFFER — tout est dessine en RAM (VRAM) puis pousse d'un seul coup
+// par blit(). L'ecran ne montre plus jamais une image a moitie construite : zero scintillement.
+static KDColor VRAM[SW * SH]; // ~142 Ko en .bss (statique, jamais sur la pile)
 static void px(int x, int y, KDColor c) {
-  if (x >= 0 && x < SW && y >= 0 && y < SH) Ion::Display::pushRect(KDRect(x, y, 1, 1), &c);
+  if (x >= 0 && x < SW && y >= 0 && y < SH) VRAM[(long)y * SW + x] = c;
 }
 static void fRect(int x, int y, int w, int h, KDColor c) {
   if (w < 0) { x += w; w = -w; } if (h < 0) { y += h; h = -h; }
@@ -63,7 +63,8 @@ static void fRect(int x, int y, int w, int h, KDColor c) {
   if (x + w > SW) w = SW - x;
   if (y + h > SH) h = SH - y;
   if (w <= 0 || h <= 0) return;
-  Ion::Display::pushRectUniform(KDRect(x, y, w, h), c);
+  KDColor *d = VRAM + (long)y * SW + x;
+  for (int j = 0; j < h; j++) { for (int i = 0; i < w; i++) d[i] = c; d += SW; }
 }
 // ligne de travail : les primitives a motif remplissent rowBuf puis poussent les runs
 static KDColor rowBuf[SW];
@@ -81,15 +82,14 @@ static void rowFlush(int y, int x0, int x1) {
     if (!rowSet[x]) { x++; continue; }
     int s = x;
     while (x <= xe && rowSet[x]) x++;
-    Ion::Display::pushRect(KDRect(s, y, x - s, 1), rowBuf + s);
+    for (int i = s; i < x; i++) VRAM[(long)y * SW + i] = rowBuf[i]; // V5.49 : vers le frame buffer
   }
 }
 static void fillSpan(int y, int x0, int x1, KDColor c) {
   if (y < 0 || y >= SH || x0 > x1) return;
   if (x0 < 0) x0 = 0;
   if (x1 >= SW) x1 = SW - 1;
-  for (int x = x0; x <= x1; x++) rowBuf[x] = c;
-  Ion::Display::pushRect(KDRect(x0, y, x1 - x0 + 1, 1), rowBuf + x0);
+  for (int x = x0; x <= x1; x++) VRAM[(long)y * SW + x] = c; // V5.49 : vers le frame buffer
 }
 static void rRect(int x, int y, int w, int h, int r, KDColor c) {
   for (int j = 0; j < h; j++) {
@@ -164,7 +164,7 @@ static void shadow(int cx, int cy, int rx, int ry) {
     rowFlush(cy + j, cx - rx, cx + rx);
   }
 }
-static void blit() { /* rendu direct : rien a pousser */ }
+static void blit() { Ion::Display::pushRectContinuous(KDRect(0, 0, SW, SH), VRAM); } // V5.49 : une seule poussee, image complete
 
 // ------------------------- Palette -----------------------------------
 #define C_BG     KDColor::RGB24(0x1B2A41)
@@ -10471,7 +10471,7 @@ static void utGame() { // V5.47 : SOUL QUEST — 6 salles, boutique de Momo, equ
     if (kLeft) px2 -= 1.3f; if (kRight) px2 += 1.3f;
     if (kUp) py2 -= 1.3f; if (kDown) py2 += 1.3f;
     bool doorOpen = done[room] || UT_RE[room] < 0; // V5.47 : la boutique n'a pas de gardien
-    if (px2 < 12) px2 = 12; if (px2 > (doorOpen ? 306 : 294)) px2 = (doorOpen ? 306 : 294);
+    if (px2 < ((room > 0) ? 4 : 12)) px2 = ((room > 0) ? 4 : 12); if (px2 > (doorOpen ? 306 : 294)) px2 = (doorOpen ? 306 : 294); // V5.49 : on peut franchir le mur gauche si une salle precede
     if (py2 < 52) py2 = 52; if (py2 > 138) py2 = 138;
     if (UT_RE[room] >= 0 && !done[room] && px2 > 216 && px2 < 286 && py2 > 66 && py2 < 136) { px2 = ox; py2 = oy; } // le monstre bloque
     if (keyOK && !pOK3) {
@@ -10564,12 +10564,14 @@ static void utGame() { // V5.47 : SOUL QUEST — 6 salles, boutique de Momo, equ
       if (done[3]) utFace(190, 92, 3); // Vesper, endormie
     }
     if (room == 9 && pyraFriend) utFace(150, 100, 6); // V5.48 : Pyra t'accompagne jusqu'au trone
+    if (room > 0) { fRect(0, 76, 12, 40, C_WHT); fRect(0, 79, 6, 34, C_BLK); } // V5.49 : porte de retour, toujours ouverte
     if (room < 9 && doorOpen) { fRect(304, 76, 12, 40, C_WHT); fRect(307, 79, 6, 34, C_BLK); } // porte ouverte
     utKid((int)px2, (int)py2);
     char sdb[32]; snprintf(sdb, 32, "PV %d/20  OR %dG", st.php, st.gold);
     drawTextSmall(8, 20, sdb, C_WHT);
     blit(); Ion::Timing::msleep(16);
     if (room < 9 && doorOpen && px2 > 300) { room++; px2 = 16; waitRelease(); }
+    if (room > 0 && px2 < 10) { room--; px2 = 296; waitRelease(); } // V5.49 : retour dans la salle precedente
     if (room == 9 && done[9]) break; // la reine passee : la fin
   }
   if (qres == 1) utDialog("La reine pose sa couronne au sol.", "Le Serment d'Os se fissure, puis", "s'effrite, libere comme un voeu.");
