@@ -10140,6 +10140,7 @@ static void utDialog(const char *a, const char *b, const char *c, const char *d 
   }
 }
 struct UtState { int php, atk, def, gold, inv[4], lv, exp, mhp; }; // V5.47 : PV, arme (atk), armure (def), or, sac (id d'objet ou -1) — V5.54 : AMOURE (LV, EXP, PV max)
+static const char *gUtName = 0; static int gUtScale = 0; // V5.53 : nom + puissance du monstre genere en cours (file-scope : utilise par utBattle/utBattleFrame)
 static void utBattleFrame(int eid, int ehp, int ehp0, UtState *st, bool spar) { // fond de combat : monstre, nom, barres
   static const char *UT_EN[11] = { "FANTOME TRISTE", "CRAPAUD RUSSE", "OSTEO", "VESPER", "REINE OSSEA", "DOGES JUMELLES", "PYRA", "LUMIN", "OMBRE MIROIR", "L'HORLOGER", "LE NOYAU D'OS" };
   fRect(0, 0, SW, SH, C_BLK);
@@ -10659,7 +10660,6 @@ static const char *CAMPD[3][3] = { // pres des feux de camp
   { "Tu rechauffes tes mains. Un ancien", "voyageur a grave : \"EPARGNE, ET", "LE CHEMIN S'ECLAIRCIT.\"" },
   { "Les flammes dansent comme si elles", "savaient. Repose-toi. La descente", "est longue, et le Serment veille." },
 };
-static const char *gUtName = 0; static int gUtScale = 0; // V5.53 : nom + puissance du monstre genere en cours
 static void utGame() { // V5.53 : SOUL QUEST — LA GRANDE DESCENTE : 200 salles generees, 10 chapitres
   waitRelease();
   while (true) { // ecran titre
@@ -10921,11 +10921,13 @@ static void utGame() { // V5.53 : SOUL QUEST — LA GRANDE DESCENTE : 200 salles
       } else if (UR[room].content == -11 && !done[room] && px2 > 264 && py2 > 62 && py2 < 140) { // ---------- MUR FISSURE (V5.54) ----------
         waitRelease();
         bool opened = false;
-        for (int yy = 0; yy < UT_GW && !opened; yy++) for (int xx = 0; xx < UT_GW; xx++) if (UTGRID[xx + yy * UT_GW] == room) { // ou est la salle ?
-          if (xx + 1 < UT_GW - 2 && UTGRID[xx + 1 + yy * UT_GW] < 0) { // la cache nait si la place est libre a l'est
-            int sn = utRtNew(xx + 1, yy); utRtLink(room, sn, 1);
-            UR[sn].content = -9; strcpy(UR[sn].nm, "LA CACHE OUBLIEE");
-            opened = true; break;
+        for (int yy = 0; yy < UT_GW && !opened; yy++) { // ou est la salle ?
+          for (int xx = 0; xx < UT_GW; xx++) {
+            if (UTGRID[xx + yy * UT_GW] == room && xx + 1 < UT_GW - 2 && UTGRID[xx + 1 + yy * UT_GW] < 0) { // la cache nait si la place est libre a l'est
+              int sn = utRtNew(xx + 1, yy); utRtLink(room, sn, 1);
+              UR[sn].content = -9; strcpy(UR[sn].nm, "LA CACHE OUBLIEE");
+              opened = true; break;
+            }
           }
         }
         done[room] = true;
