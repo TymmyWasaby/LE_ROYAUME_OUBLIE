@@ -164,7 +164,7 @@ static void shadow(int cx, int cy, int rx, int ry) {
     rowFlush(cy + j, cx - rx, cx + rx);
   }
 }
-static void blit() { Ion::Display::pushRectContinuous(KDRect(0, 0, SW, SH), VRAM); } // V5.49 : une seule poussee, image complete
+static void blit() { Ion::Display::pushRect(KDRect(0, 0, SW, SH), VRAM); } // V5.49 : une seule poussee, image complete
 
 // ------------------------- Palette -----------------------------------
 #define C_BG     KDColor::RGB24(0x1B2A41)
