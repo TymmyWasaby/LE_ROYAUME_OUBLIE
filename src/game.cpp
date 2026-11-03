@@ -10139,16 +10139,16 @@ static void utDialog(const char *a, const char *b, const char *c, const char *d 
     blit(); Ion::Timing::msleep(16);
   }
 }
-struct UtState { int php, atk, def, gold, inv[4]; }; // V5.47 : PV, arme (atk), armure (def), or, sac (id d'objet ou -1)
+struct UtState { int php, atk, def, gold, inv[4], lv, exp, mhp; }; // V5.47 : PV, arme (atk), armure (def), or, sac (id d'objet ou -1) — V5.54 : AMOURE (LV, EXP, PV max)
 static void utBattleFrame(int eid, int ehp, int ehp0, UtState *st, bool spar) { // fond de combat : monstre, nom, barres
   static const char *UT_EN[11] = { "FANTOME TRISTE", "CRAPAUD RUSSE", "OSTEO", "VESPER", "REINE OSSEA", "DOGES JUMELLES", "PYRA", "LUMIN", "OMBRE MIROIR", "L'HORLOGER", "LE NOYAU D'OS" };
   fRect(0, 0, SW, SH, C_BLK);
   utFace(160, 58, eid);
-  drawTextC(88, UT_EN[eid], spar ? KDColor::RGB24(0xF5C518) : C_WHT); // nom JAUNE = epargnable
+  drawTextC(88, gUtName ? gUtName : UT_EN[eid], spar ? KDColor::RGB24(0xF5C518) : C_WHT); // nom JAUNE = epargnable (V5.53 : nom genere possible)
   fRect(110, 104, 100, 6, KDColor::RGB24(0x3A3A3A));
   int ew = 100 * ehp / ehp0; if (ew < 0) ew = 0;
   fRect(110, 104, ew, 6, C_GOLD);
-  char hb[28]; snprintf(hb, 28, "KID  PV %d/20  G %d", st->php, st->gold);
+  char hb[28]; snprintf(hb, 28, "KID  PV %d/%d  G %d", st->php, st->mhp, st->gold); // V5.54 : PV max selon l'AMOURE
   drawTextSmall(48, 126, hb, C_WHT);
   utHeart(236, 130, KDColor::RGB24(0xFF4040));
 }
@@ -10161,6 +10161,73 @@ static const int UT_WP[3] = { 0, 25, 60 };
 static const char *UT_AN[3] = { "PULL RAYE", "ECHARPE MOUEE", "CUIR SEC" }; // armures
 static const int UT_DA[3] = { 0, 1, 3 };
 static const int UT_AP[3] = { 0, 18, 45 };
+static void utExpUp(UtState *st, int xp) { // V5.54 : l'AMOURE ("Level Of ViolencE") monte avec l'EXP
+  st->exp += xp;
+  while (st->exp >= st->lv * 10) { // seuil du niveau suivant : LV x 10
+    st->exp -= st->lv * 10; st->lv++;
+    st->mhp += 4; st->php = st->mhp; st->atk += 1; // +4 PV max, +1 ATQ, soin complet
+    char lt[44]; snprintf(lt, 44, "AMOURE %d ! PV MAX %d, ATQ +1 !", st->lv, st->mhp);
+    utDialog("Ton AMOURE s'accroit...", lt, "PV restaures au passage.", "");
+  }
+}
+static void utShell(UtState *st) { // V5.54 : LE MINIGAME DES NOIX du goblin joueur
+  waitRelease();
+  utDialog("\"Trois noix, une bille.\"", "\"Cinq pieces pour jouer, QUINZE", "si tu trouves la bille !\"", "");
+  while (true) {
+    int gsel = 0; bool pU5 = false, pD5 = false, pOK5 = false;
+    bool play = true;
+    while (true) { // la table du goblin : jouer ou partir
+      pollKeys();
+      if (kUp && !pU5 && gsel > 0) gsel--;
+      if (kDown && !pD5 && gsel < 1) gsel++;
+      if (keyOK && !pOK5) { waitRelease(); play = (gsel == 0); break; }
+      pU5 = kUp; pD5 = kDown; pOK5 = keyOK;
+      fRect(0, 0, SW, SH, C_BLK);
+      drawTextC(30, "LES NOIX DU GOBLIN", C_YEL);
+      drawTextC(66, "MISE 5G. GAIN 15G.", C_GRE);
+      if (st->gold < 5) drawTextC(84, "(Il te manque des pieces...)", C_RED);
+      drawTextC(112, gsel == 0 ? "> UNE PARTIE" : "UNE PARTIE", C_WHT);
+      drawTextC(130, gsel == 1 ? "> PARTIR" : "PARTIR", C_WHT);
+      blit(); Ion::Timing::msleep(30);
+    }
+    if (!play) return;
+    if (st->gold < 5) { utDialog("\"Pas de pieces, pas de bille !\"", "Le goblin garde sa table.", "Reviens plus riche, humain.", ""); return; }
+    st->gold -= 5;
+    int ball = 1; // la bille commence sous la noix du milieu
+    const int xs[3] = { 90, 160, 230 };
+    fRect(0, 0, SW, SH, C_BLK);
+    drawTextC(30, "SUIS LA BILLE !", C_WHT);
+    fRect(xs[ball] + 12, 84, 8, 8, C_RED); // la bille, sous la noix du milieu
+    fRect(xs[0], 100, 32, 24, KDColor::RGB24(0x6A4A2A)); fRect(xs[1], 100, 32, 24, KDColor::RGB24(0x6A4A2A)); fRect(xs[2], 100, 32, 24, KDColor::RGB24(0x6A4A2A));
+    blit(); Ion::Timing::msleep(900);
+    for (int sw = 0; sw < 10; sw++) { // dix echanges honnetes, de plus en plus rapides
+      int a = rnd(3), b = (a + 1 + rnd(2)) % 3;
+      if (ball == a) ball = b; else if (ball == b) ball = a;
+      fRect(0, 0, SW, SH, C_BLK);
+      drawTextC(30, "SUIS LA BILLE !", C_WHT);
+      fRect(xs[ball] + 12, 84, 8, 8, C_RED); // bille visible le temps de l'echange : honnete
+      fRect(xs[a], 90, 32, 24, KDColor::RGB24(0x6A4A2A)); // noix levee
+      fRect(xs[b], 90, 32, 24, KDColor::RGB24(0x6A4A2A)); // noix levee
+      fRect(xs[3 - a - b], 100, 32, 24, KDColor::RGB24(0x6A4A2A)); // la troisieme, posee
+      blit(); Ion::Timing::msleep(230 - sw * 14);
+    }
+    int sel = 1; bool pL6 = false, pR6 = false, pOK6 = false;
+    while (true) { // la bille est cachee : laquelle ?
+      pollKeys();
+      if (kLeft && !pL6 && sel > 0) sel--;
+      if (kRight && !pR6 && sel < 2) sel++;
+      if (keyOK && !pOK6) { waitRelease(); break; }
+      pL6 = kLeft; pR6 = kRight; pOK6 = keyOK;
+      fRect(0, 0, SW, SH, C_BLK);
+      drawTextC(30, "LA BILLE EST OU ?", C_WHT);
+      fRect(xs[sel] + 12, 74, 8, 4, C_YEL); // pointeur au-dessus de la noix choisie
+      fRect(xs[0], 100, 32, 24, KDColor::RGB24(0x6A4A2A)); fRect(xs[1], 100, 32, 24, KDColor::RGB24(0x6A4A2A)); fRect(xs[2], 100, 32, 24, KDColor::RGB24(0x6A4A2A));
+      blit(); Ion::Timing::msleep(30);
+    }
+    if (sel == ball) { st->gold += 15; utDialog("\"Bien joue, petit humain !\"", "Le goblin te tend QUINZE pieces,", "les doigts croises dans le dos.", ""); }
+    else utDialog("\"He he he ! Elle etait ailleurs !\"", "Le goblin ramasse ses cinq pieces", "et range la bille en ricanant.", "");
+  }
+}
 static void utShop(UtState *st) { // V5.47 : LA BOUTIQUE DE MOMO — objets, armes, armures
   waitRelease();
   utDialog("Momo tisse en fredonnant. Des fils,", "des tartines, des habits : tout pour", "survivre chez nous, petit humain !");
@@ -10269,7 +10336,7 @@ static int utBattle(int eid, UtState *st, int phase) { // 0 defaite, 1 epargne/y
   static const int NEED[11] = { 2, 3, 4, 3, 5, 4, 2, 3, 4, 4, 6 }; // actes reussis pour epargner
   static const int GOLDK[11] = { 15, 20, 60, 25, 120, 70, 35, 55, 90, 110, 200 }; // or si vaincu
   static const int GOLDS[11] = { 10, 15, 40, 20, 100, 55, 30, 40, 70, 85, 150 }; // or si epargne
-  int ehp = EHP0[eid] + ((eid == 6) ? phase * 40 : 0), mercy = 0, turn = 0; // V5.48 : Pyra monte en puissance a chaque duel
+  int ehp = EHP0[eid] + ((eid == 6) ? phase * 40 : 0) + gUtScale * 12, mercy = 0, turn = 0; // V5.53 : les monstres generes montent avec la profondeur
   int ehpMax = ehp;
   bool q2 = false; // V5.48 : la reine se releve une fois
   while (true) {
@@ -10350,7 +10417,10 @@ static int utBattle(int eid, UtState *st, int phase) { // 0 defaite, 1 epargne/y
         blit(); Ion::Timing::msleep(16);
       }
       if (picked == 9) skipAtk = true; // annule : pas de tour gaspille
-      else if (picked == 2) utDialog(CHECK[eid][0], CHECK[eid][1], ""); // V5.48 : les stats du monstre
+      else if (picked == 2) { // V5.48 : les stats du monstre (V5.53 : generees pour les monstres crees)
+        if (gUtName) { char ck[48]; snprintf(ck, 48, "%s - ATQ %d DEF %d.", gUtName, EATK[eid] + gUtScale, EDG[eid]); utDialog(ck, "Un habitant ordinaire des", "profondeurs. Reste digne.", ""); }
+        else utDialog(CHECK[eid][0], CHECK[eid][1], "");
+      }
       else {
         mercy++;
         if (picked == 0) utDialog(ACTT[eid][0], ACTT[eid][1], "");
@@ -10385,7 +10455,7 @@ static int utBattle(int eid, UtState *st, int phase) { // 0 defaite, 1 epargne/y
         else if (st->inv[picked] >= 0) {
           int id = st->inv[picked];
           st->inv[picked] = -1;
-          int before = st->php; st->php += UT_HEAL[id]; if (st->php > 20) st->php = 20;
+          int before = st->php; st->php += UT_HEAL[id]; if (st->php > st->mhp) st->php = st->mhp;
           char it[40]; snprintf(it, 40, "Tu manges %s. +%d PV !", UT_IN[id], st->php - before);
           utDialog(it, "", "");
         } else skipAtk = true; // case vide : pas de tour gaspille
@@ -10503,9 +10573,9 @@ static int utBattle(int eid, UtState *st, int phase) { // 0 defaite, 1 epargne/y
           float dx2 = bxA[i] - hx, dy2 = byA[i] - hy;
           float rad = ((bvx[i] != 0 && (eid == 2 || eid == 4 || eid == 9 || eid == 10)) || eid == 3) ? 10.0f : 6.0f; // les longues projectiles
           if (dx2 * dx2 + dy2 * dy2 < rad * rad) {
-            if (bk[i] == 2) { st->php += 1; if (st->php > 20) st->php = 20; bxA[i] = -999.0f; } // etincelle verte : +1 PV
+            if (bk[i] == 2) { st->php += 1; if (st->php > st->mhp) st->php = st->mhp; bxA[i] = -999.0f; } // etincelle verte : +1 PV
             else if (bk[i] == 1 && !moving2) { } // bleu traverse l'ame immobile : aucun mal
-            else { st->php -= (EATK[eid] > st->def) ? (EATK[eid] - st->def) : 1; ivl = 0.8f; }
+            else { st->php -= (EATK[eid] + gUtScale > st->def) ? (EATK[eid] + gUtScale - st->def) : 1; ivl = 0.8f; } // V5.53 : monstres generes plus durs en profondeur
             break;
           }
         }
@@ -10528,7 +10598,69 @@ static int utBattle(int eid, UtState *st, int phase) { // 0 defaite, 1 epargne/y
     }
   }
 }
-static void utGame() { // V5.47 : SOUL QUEST — 6 salles, boutique de Momo, equipement, la reine d'os
+// ============ V5.53 : SOUL QUEST — LA GRANDE DESCENTE (200 salles generees) ============
+// La carte est generee a CHAQUE partie : chemin principal en serpentant + branches
+// laterales vers des tresors. Les salles ont des portes au nord/est/sud/ouest.
+// Codes de contenu : -2 vide, -1 boutique, -3 etoile, -4 coffre, -5 feu de camp,
+// -6 jumelles, -7 seuil de Pyra, 0..10 monstre scenarise, 100..115 monstre genere.
+// V5.54 : -8 buissons (rencontres), -9 cache secrete, -11 mur fissure,
+// -12 casse-tete des dalles, -14 noix du goblin.
+static const int UT_NR = 200, UT_GW = 25;
+struct UtRoom { int16_t n, e, s, w; int8_t content, story, ph; char nm[22]; };
+static UtRoom UR[UT_NR];
+static int16_t UTGRID[UT_GW * UT_GW];
+static uint8_t UTPZ[UT_NR]; // V5.54 : memoire des casse-tetes par salle (bits 0-3 : dalles allumees, 4 : resolu, 5 : regle lue)
+static int utNRoom = 0;
+static const char *UTN1[25] = { "GROTTE","GALERIE","PUITS","MARAIS","SALLE","CRYPTES","PONT","ESCALIER","SANCTUAIRE","CATACOMBES","MOULIN","ANTRE","CHAPELLE","FORGE","JARDIN","LAC","LABYRINTHE","TUNNEL","ABIME","CITERNE","SOUTERRAIN","PASSAGE","NECROPOLE","CLAPIERE","ORATOIRE" };
+static const char *UTN2[21] = { "DES ECHOES","DES SANGSUES","DES OUBLIS","DES LUCIOLES","D'OS","DES OMBRES","DES MOUCHES","DES LAMENTATIONS","DES CLOCHES","DES VAGUES","DES SECRETS","DU VENT","DES TREFLES","SANS FIN","DES MURMURES","DES ETOILES","DU SABLIER","AUX CHAINES","DES NOEUDS","BLEUES","ENCHAINEES" };
+static int utRtNew(int gx, int gy) { // cree la salle (gx, gy), renvoie son index
+  int idx = utNRoom++;
+  UTGRID[gx + gy * UT_GW] = idx;
+  UR[idx].n = UR[idx].e = UR[idx].s = UR[idx].w = -1;
+  UR[idx].content = -2; UR[idx].story = -1; UR[idx].ph = 0;
+  snprintf(UR[idx].nm, 22, "%s %s", UTN1[rnd(25)], UTN2[rnd(21)]);
+  return idx;
+}
+static void utRtLink(int a, int b, int d) { // relie a -> b dans la direction d (0=N 1=E 2=S 3=W)
+  if (d == 0) { UR[a].n = b; UR[b].s = a; }
+  else if (d == 1) { UR[a].e = b; UR[b].w = a; }
+  else if (d == 2) { UR[a].s = b; UR[b].n = a; }
+  else { UR[a].w = b; UR[b].e = a; }
+}
+// monstres generes : nom affiche + monstre de base (pattern, visage, tables)
+static const char *GEN_MN[16] = { "FANTOME PERDU", "SPECTRE EGARE", "CRAPAUD BOUDEUR", "BATRACIEN RUSE", "CRANE RICANANT", "SQUELETTE PERDU", "CHAUVE-SOURIS", "MURMURE AILE", "GARDE JUMELLE", "LUCIOLE TIMIDE", "VER LUISANT", "OMBRE LARVAIRE", "REFLET PALE", "PENDULE VIVANT", "ROUAGE LIBRE", "MOUETTE SOUTERRAINE" };
+static const int8_t GEN_ME[16] = { 0, 0, 1, 1, 2, 2, 3, 3, 5, 7, 7, 8, 8, 9, 9, 3 };
+static const char *GEN_R[4][3] = { // ce qui se dit avant un combat genere
+  { "Un habitant des profondeurs se", "dresse sur ton chemin. Il garde", "son territoire, apparemment." },
+  { "Quelque chose bouge dans l'ombre.", "Un regard jaune te vise. La", "creature a faim. Tres faim." },
+  { "Une silhouette salue ton ame", "avec beaucoup de convoitise.", "C'est toi ou la porte, humain." },
+  { "Les os craquent dans le noir.", "Un gardien de passage exige", "un peage. Ton peage : l'ame !" },
+};
+static const char *GEN_S[4][3] = { // si tu epargnes un monstre genere
+  { "Il s'incline et te laisse passer.", "Un dernier regard echange, et le", "chemin est libre. Le Serment faiblit." },
+  { "La creature hoche la tete. Tu peux", "continuer. Quelque part, une", "promesse ancienne se fissure." },
+  { "Epargne, il te montre une passerelle", "secrete. La memoire des anges,", "murmure-t-il en s'eloignant." },
+  { "Il recule, respectueux. Ton ame", "reste entiere, et le Serment", "d'Os s'effrite un peu plus." },
+};
+static const char *STOR[10][3] = { // V5.53 : l'histoire du Serment, en 10 chapitres
+  { "Le SERMENT D'OS fut grave ici pour", "sceller une seule porte : celle", "du NOYAU, tout en bas du monde." },
+  { "Les murs murmurent des noms.", "Ceux qui signerent le Serment", "croyaient proteger le ciel." },
+  { "Plus tu descends, plus les os", "sont anciens. Certains ont la", "forme de mains humaines." },
+  { "Une cloche sonne quelque part.", "Les monstres se taisent, ecoutent", "le NOYAU battre sous la pierre." },
+  { "Le Serment n'etait pas une prison", "pour eux. C'etait une promesse :", "revenir un jour, ensemble." },
+  { "Pyra s'entraine quelque part.", "Si tu l'entends crier, c'est", "qu'elle pense encore a toi." },
+  { "La reine d'os fut une enfant, il y", "a tres longtemps. Le Serment lui", "a pris son coeur, puis le reste." },
+  { "Les etoiles de repos sont posees", "par ceux que tu as epargnes.", "C'est leur facon de dire merci." },
+  { "Tu sens la chaleur du Noyau a", "travers la pierre. Le Serment", "tremble : il SAIT que tu viens." },
+  { "Une derniere porte. Derriere, le", "battement. Le NOYAU attend une", "ame qui ecoute. Sois digne." },
+};
+static const char *CAMPD[3][3] = { // pres des feux de camp
+  { "Le feu craque. Quelqu'un a laisse", "des tartines ici : d'autres ames", "sont passees avant toi." },
+  { "Tu rechauffes tes mains. Un ancien", "voyageur a grave : \"EPARGNE, ET", "LE CHEMIN S'ECLAIRCIT.\"" },
+  { "Les flammes dansent comme si elles", "savaient. Repose-toi. La descente", "est longue, et le Serment veille." },
+};
+static const char *gUtName = 0; static int gUtScale = 0; // V5.53 : nom + puissance du monstre genere en cours
+static void utGame() { // V5.53 : SOUL QUEST — LA GRANDE DESCENTE : 200 salles generees, 10 chapitres
   waitRelease();
   while (true) { // ecran titre
     pollKeys();
@@ -10543,15 +10675,80 @@ static void utGame() { // V5.47 : SOUL QUEST — 6 salles, boutique de Momo, equ
   utDialog("Tu glisses dans le monde souterrain,", "scelle depuis mille ans par le", "Serment d'Os.");
   utDialog("Ici, chaque monstre reve du ciel.", "Certains t'attaqueront. D'autres", "t'offriront du fil et des tartines.");
   utDialog("Ta determination : 20 PV, une", "branche, un pull raye, 12 pieces.", "");
+  utDialog("La descente compte pres de 200", "salles, differentes a chaque fois.", "L'etoile veille sur toi.", ""); // V5.53
+  utDialog("Tu sens ton AMOURE : elle grandit", "a chaque ame reduite en poussiere.", "Prends-en garde, petite branche.", ""); // V5.54
   UtState st; st.php = 20; st.atk = 0; st.def = 0; st.gold = 12;
+  st.lv = 1; st.exp = 0; st.mhp = 20; // V5.54 : l'AMOURE commence a 1
   st.inv[0] = 0; st.inv[1] = 0; st.inv[2] = -1; st.inv[3] = -1;
   int spared = 0, kills = 0, room = 0, qres = 0;
-  static const int UT_RE[20] = { 0, 1, -1, 3, 6, 2, 5, 6, 6, 4, -2, 7, -1, 8, -2, 9, 6, -2, 6, 10 }; // monstre de la salle (-1 : boutique, -2 : salle vide) — V5.50 : la descente vers le Noyau
-  static const int UT_RPH[20] = { 0, 0, 0, 0, 0, 0, 0, 1, 2, 0, 0, 0, 0, 0, 0, 0, 3, 0, 4, 0 }; // V5.50 : Pyra s'entraine avec toi (duels 4 et 5)
-  static const int UT_RNPC[20] = { -1, 1, 0, -1, 1, -1, -1, -1, 1, -1, -1, -1, 0, -1, 1, -1, -1, -1, -1, -1 }; // PNJ lore : 1 = jumelles
-  static const int UT_RSTAR[20] = { 1, 0, 1, 1, 0, 0, 0, 1, 0, 0, 1, 1, 0, 0, 0, 0, 0, 1, 0, 0 }; // etoile de repos ?
-  static const char *UT_RN[20] = { "LES RUINES MOUSSES", "LA MARE PALE", "LA RUELLE AUX FILS", "LE COL DES OMBRES", "LE PONT DES ECHOS", "LA SALLE DES GARDIENS", "LES CHAMBRES JUMELLES", "LA FORGE ETEINTE", "LA DERNIERE ETAPE", "LE TRONE D'OS", "L'ESCALIER VERT", "LA GALERIE DES LUCIOLES", "LE MARAIS AMBRE", "LE SANCTUAIRE RENVERSE", "LE CAMP DES JONCS", "LA SALLE DES MOULINS", "LE VANTAIL FENDU", "LES CHANTIERS D'OS", "L'ANTECHAMBRE", "LE NOYAU D'OS" };
-  bool done[20]; for (int di = 0; di < 20; di++) done[di] = false; // V5.50 : 20 salles
+  // ---------- V5.53 : generation de la descente (differente a chaque partie) ----------
+  for (int i = 0; i < UT_GW * UT_GW; i++) UTGRID[i] = -1;
+  utNRoom = 0;
+  for (int i = (int)(Ion::Timing::millis() % 64); i >= 0; i--) rnd(7); // grain variable
+  const int RDX[4] = { 0, 1, 0, -1 }, RDY[4] = { -1, 0, 1, 0 }; // N E S W
+  int gxx = UT_GW / 2, gyy = UT_GW / 2, cur = utRtNew(gxx, gyy); // salle 0
+  while (utNRoom < 158) { // chemin principal : la colonne vertebrale de l'histoire
+    int d = (rnd(10) < 4) ? 1 : rnd(4); // biais vers l'est, l'aventure avance
+    int tries = 0, nx = gxx + RDX[d], ny = gyy + RDY[d];
+    while ((nx < 2 || nx >= UT_GW - 2 || ny < 2 || ny >= UT_GW - 2 || UTGRID[nx + ny * UT_GW] >= 0) && tries < 24) { d = rnd(4); nx = gxx + RDX[d]; ny = gyy + RDY[d]; tries++; }
+    if (tries >= 24) { // encercle (rare) : on repart d'une salle existante
+      cur = rnd(utNRoom);
+      for (int yy = 0; yy < UT_GW; yy++) for (int xx = 0; xx < UT_GW; xx++) if (UTGRID[xx + yy * UT_GW] == cur) { gxx = xx; gyy = yy; }
+      continue;
+    }
+    int nn = utRtNew(nx, ny);
+    utRtLink(cur, nn, d);
+    cur = nn; gxx = nx; gyy = ny;
+  }
+  int safety = 4000; // branches laterales : tresors, etoiles, raccourcis
+  while (utNRoom < UT_NR - 6 && safety-- > 0) { // V5.54 : 6 salles reservees pour les caches secretes
+    int base = rnd(utNRoom - 20), bx = 0, by = 0;
+    for (int yy = 0; yy < UT_GW; yy++) for (int xx = 0; xx < UT_GW; xx++) if (UTGRID[xx + yy * UT_GW] == base) { bx = xx; by = yy; }
+    int d = rnd(4), tries = 0;
+    while ((bx + RDX[d] < 2 || bx + RDX[d] >= UT_GW - 2 || by + RDY[d] < 2 || by + RDY[d] >= UT_GW - 2 || UTGRID[bx + RDX[d] + (by + RDY[d]) * UT_GW] >= 0) && tries < 10) { d = rnd(4); tries++; }
+    if (tries >= 10) continue;
+    int len = 2 + rnd(3), bcur = base;
+    for (int k = 0; k < len && utNRoom < UT_NR; k++) {
+      int nn = utRtNew(bx + RDX[d], by + RDY[d]);
+      utRtLink(bcur, nn, d);
+      UR[nn].content = (k == len - 1) ? (rnd(2) ? -3 : -4) : (rnd(10) < 6 ? 100 + rnd(16) : -2); // au bout : etoile ou coffre
+      bcur = nn; bx += RDX[d]; by += RDY[d];
+      if (k + 1 < len) { // la branche peut tourner
+        int d2 = rnd(4), t2 = 0;
+        while ((bx + RDX[d2] < 2 || bx + RDX[d2] >= UT_GW - 2 || by + RDY[d2] < 2 || by + RDY[d2] >= UT_GW - 2 || UTGRID[bx + RDX[d2] + (by + RDY[d2]) * UT_GW] >= 0) && t2 < 10) { d2 = rnd(4); t2++; }
+        if (t2 < 10) d = d2;
+      }
+    }
+  }
+  { // ---------- le scénario : 10 boss et 5 duels de Pyra ancres sur le chemin ----------
+    const int BOSS_AT[10] = { 6, 14, 26, 38, 50, 62, 74, 86, 98, 157 };
+    const int BOSS_ID[10] = { 0, 1, 2, 3, 5, 7, 8, 9, 4, 10 };
+    const char *BOSS_NM[10] = { "LES RUINES MOUSSES", "LA MARE PALE", "LA SALLE DES GARDIENS", "LE COL DES OMBRES", "LES CHAMBRES JUMELLES", "LA GALERIE DES LUCIOLES", "LE SANCTUAIRE RENVERSE", "LA SALLE DES MOULINS", "LE TRONE D'OS", "LE NOYAU D'OS" };
+    for (int i = 0; i < 10; i++) { int r = BOSS_AT[i]; UR[r].content = BOSS_ID[i]; strcpy(UR[r].nm, BOSS_NM[i]); }
+    const int PYR_AT[5] = { 34, 58, 82, 118, 142 };
+    const char *PYR_NM[5] = { "LE PONT DES ECHOS", "LA FORGE ETEINTE", "LA DERNIERE ETAPE", "LE VANTAIL FENDU", "L'ANTECHAMBRE" };
+    for (int i = 0; i < 5; i++) { UR[PYR_AT[i]].content = 6; UR[PYR_AT[i]].ph = i; strcpy(UR[PYR_AT[i]].nm, PYR_NM[i]); }
+    for (int r = 5; r < 150; r += 12) if (UR[r].content == -2) UR[r].content = -1; // la boutique de Momo
+    for (int r = 10; r < 155; r += 13) if (UR[r].content == -2) UR[r].content = -3; // etoiles de repos
+    for (int r = 40; r < 150; r += 48) if (UR[r].content == -2) UR[r].content = -5; // feux de camp
+    for (int r = 33; r < 100; r += 33) { UR[r].content = -6; UR[r].ph = (r - 33) / 33; } // les jumelles, trois fois
+    const int STOR_AT[10] = { 2, 20, 34, 48, 62, 76, 90, 104, 140, 154 };
+    for (int i = 0; i < 10; i++) UR[STOR_AT[i]].story = i; // les 10 chapitres du Serment
+    UR[156].content = -7; strcpy(UR[156].nm, "LE SEUIL DU NOYAU"); // Pyra t'attend, tartines dorees
+    for (int r = 1; r < 157; r++) { // remplissage : la vie ordinaire des profondeurs
+      if (UR[r].content != -2) continue;
+      if (r % 9 == 4) UR[r].content = -8; // V5.54 : buissons ou ronent les rencontres
+      else if (r % 15 == 7) UR[r].content = -11; // V5.54 : mur fissure vers une cache
+      else if (r % 23 == 11) UR[r].content = -12; // V5.54 : casse-tete des dalles
+      else if (r % 27 == 13) UR[r].content = -14; // V5.54 : le goblin et ses noix
+      else if (r % 3 == 0) UR[r].content = 100 + rnd(16);
+      else if (r % 11 == 5) UR[r].content = -4;
+    }
+  }
+  bool done[UT_NR]; for (int di = 0; di < UT_NR; di++) done[di] = false; // V5.53 : 200 salles
+  for (int di = 0; di < UT_NR; di++) UTPZ[di] = 0; // V5.54 : casse-tetes vierges
+  int encSteps = 0; // V5.54 : pas passes dans les buissons de la salle courante
+  unsigned storyMask = 0; // chapitres deja lus
   bool pyraFriend = false, pyraGift = false; // V5.48 : Pyra devient une alliee apres le 3e duel
   float px2 = 40.0f, py2 = 100.0f;
   static const char *RDLG[11][3] = {
@@ -10600,21 +10797,30 @@ static void utGame() { // V5.47 : SOUL QUEST — 6 salles, boutique de Momo, equ
     if (kRight) px2 += 1.3f;
     if (kUp) py2 -= 1.3f;
     if (kDown) py2 += 1.3f;
-    bool doorOpen = done[room] || UT_RE[room] < 0; // V5.47 : la boutique n'a pas de gardien    if (px2 < ((room > 0) ? 4 : 12)) px2 = ((room > 0) ? 4 : 12); // V5.49 : on peut franchir le mur gauche si une salle precede
+    bool guard = UR[room].content >= 0 && !done[room]; // V5.53 : un gardien veille la salle
+    bool doorOpen = UR[room].e >= 0 && !guard; // les sorties ferment tant que le gardien tient
+    if (px2 < ((UR[room].w >= 0) ? 4 : 12)) px2 = ((UR[room].w >= 0) ? 4 : 12); // porte ouest ?
     if (px2 > (doorOpen ? 306 : 294)) px2 = (doorOpen ? 306 : 294);
-    if (py2 < 52) py2 = 52;
-    if (py2 > 138) py2 = 138;
-    if (UT_RE[room] >= 0 && !done[room] && px2 > 216 && px2 < 286 && py2 > 66 && py2 < 136) { px2 = ox; py2 = oy; } // le monstre bloque
-    if (keyOK && !pOK3) {
-      if (UT_RE[room] >= 0 && !done[room] && px2 > 214 && px2 < 288 && py2 > 62 && py2 < 140) { // ---------- COMBAT ----------
+    if (py2 < ((UR[room].n >= 0) ? 40 : 52)) py2 = ((UR[room].n >= 0) ? 40 : 52); // porte nord ?
+    if (py2 > ((UR[room].s >= 0) ? 150 : 138)) py2 = ((UR[room].s >= 0) ? 150 : 138); // porte sud ?
+    if (guard && px2 > 216 && px2 < 286 && py2 > 66 && py2 < 136) { px2 = ox; py2 = oy; } // le monstre bloque
+    if (UR[room].content == -12 && !(UTPZ[room] & 16)) { // V5.54 : CASSE-TETE DES DALLES
+      if (!(UTPZ[room] & 32)) { UTPZ[room] |= 32; utDialog("Des dalles gravent criblent le sol.", "Marche sur CHACUNE pour les allumer.", "Une araignee griffonne un plan.", ""); }
+      const int DPX[4] = { 64, 144, 224, 144 }, DPY[4] = { 70, 70, 70, 120 };
+      for (int ti = 0; ti < 4; ti++) if (px2 > DPX[ti] - 8 && px2 < DPX[ti] + 20 && py2 > DPY[ti] - 8 && py2 < DPY[ti] + 20) UTPZ[room] |= (1 << ti);
+      if ((UTPZ[room] & 15) == 15) { UTPZ[room] |= 16; int g = 10 + rnd(15); st.gold += g; char pt[44]; snprintf(pt, 44, "CLIC ! Les dalles s'alignent : %d pieces !", g); utDialog(pt, "L'araignee applaudit avec ses huit", "mains. Elle adore les casse-tetes.", ""); }
+    }
+    if (UR[room].content == -8 && px2 > 60 && px2 < 250 && py2 > 72 && py2 < 130) { // V5.54 : les buissons ronent
+      encSteps++;
+      if (encSteps > 100 && rnd(140) == 0) { // une rencontre saute hors des feuilles
         waitRelease();
-        if (UT_RE[room] == 6) utDialog(PYP[UT_RPH[room]][0], PYP[UT_RPH[room]][1], PYP[UT_RPH[room]][2]); // V5.48 : Pyra a un mot avant chaque duel
-        else utDialog(RDLG[UT_RE[room]][0], RDLG[UT_RE[room]][1], RDLG[UT_RE[room]][2]);
+        int gm = rnd(16); gUtName = GEN_MN[gm]; gUtScale = 1 + room / 30;
+        utDialog("Les feuilles frissonnent...", "Quelque chose bondit hors du buisson !", "");
         int res = 0;
         while (true) {
-          res = utBattle(UT_RE[room], &st, UT_RPH[room]);
+          res = utBattle(GEN_ME[gm], &st, 0);
           if (res != 0) break;
-          st.php = 20; // defaite : le jeu offre une deuxieme chance
+          st.php = st.mhp; // defaite : le jeu offre une deuxieme chance
           int gsel = 0; bool pU4 = false, pD4 = false, pOK4 = false;
           bool retry = true;
           while (true) {
@@ -10634,47 +10840,119 @@ static void utGame() { // V5.47 : SOUL QUEST — 6 salles, boutique de Momo, equ
           }
           if (!retry) return;
         }
-        if (UT_RE[room] == 6 && (res == 1 || res == 2)) { // V5.48 : PYRA — elle ne meurt jamais, elle progresse
+        if (res == 1) { spared++; st.gold += 3 + rnd(6); utDialog("Le monstre s'enfuit dans les feuilles.", "Quelques pieces tombent de sa poche", "tremblante. Les buissons se taisent.", ""); }
+        else if (res == 2) { kills++; utExpUp(&st, 3 + gUtScale * 2); utDialog("Le buisson redevient calme.", "Une pousse pousse deja la ou", "l'ame s'est envolee.", ""); }
+        else utDialog("Tu recules hors du buisson.", "Les feuilles cessent de frissonner.", "");
+        gUtName = 0; gUtScale = 0;
+        encSteps = 0;
+      }
+    } else if (UR[room].content != -8) encSteps = 0; // on quitte les buissons : le compteur retombe
+    if (keyOK && !pOK3) {
+      if (UR[room].content >= 0 && !done[room] && px2 > 214 && px2 < 288 && py2 > 62 && py2 < 140) { // ---------- COMBAT ----------
+        waitRelease();
+        int ce = (UR[room].content <= 10) ? UR[room].content : GEN_ME[UR[room].content - 100]; // V5.53 : le vrai monstre
+        gUtName = 0; gUtScale = 0;
+        if (UR[room].content >= 100) { // monstre genere : nom et puissance selon la profondeur
+          gUtName = GEN_MN[UR[room].content - 100]; gUtScale = 1 + room / 30;
+          utDialog(GEN_R[room & 3][0], GEN_R[room & 3][1], GEN_R[room & 3][2]);
+        } else if (UR[room].content == 6) utDialog(PYP[UR[room].ph][0], PYP[UR[room].ph][1], PYP[UR[room].ph][2]); // V5.48 : Pyra a un mot avant chaque duel
+        else utDialog(RDLG[ce][0], RDLG[ce][1], RDLG[ce][2]);
+        int res = 0;
+        while (true) {
+          res = utBattle(ce, &st, UR[room].ph);
+          if (res != 0) break;
+          st.php = st.mhp; // defaite : le jeu offre une deuxieme chance
+          int gsel = 0; bool pU4 = false, pD4 = false, pOK4 = false;
+          bool retry = true;
+          while (true) {
+            pollKeys();
+            if (kUp && !pU4 && gsel > 0) gsel--;
+            if (kDown && !pD4 && gsel < 1) gsel++;
+            if (keyOK && !pOK4) { waitRelease(); retry = (gsel == 0); break; }
+            pU4 = kUp; pD4 = kDown; pOK4 = keyOK;
+            fRect(0, 0, SW, SH, C_BLK);
+            drawTextC(40, "GAME OVER", C_WHT);
+            utHeart(160, 76, KDColor::RGB24(0xFF4040));
+            fRect(154, 74, 3, 3, C_BLK); fRect(163, 74, 3, 3, C_BLK); // le coeur se fend
+            drawTextC(100, "TU RESTE DECIDE...", C_GRE);
+            drawTextC(128, gsel == 0 ? "> SE RELEVER" : "SE RELEVER", C_WHT);
+            drawTextC(146, gsel == 1 ? "> RENTRER CHEZ TOI" : "RENTRER CHEZ TOI", C_WHT);
+            blit(); Ion::Timing::msleep(30);
+          }
+          if (!retry) return;
+        }
+        if (UR[room].content == 6 && (res == 1 || res == 2)) { // V5.48 : PYRA — elle ne meurt jamais, elle progresse
           done[room] = true; spared++;
           if (res == 2) utDialog("Pyra s'effondre... puis se releve,", "furieuse et encore plus motivee.", "\"REVANCHE !\"", "");
           else utDialog(SPDLG[6][0], SPDLG[6][1], SPDLG[6][2]);
-          if (UT_RPH[room] == 2) {
+          if (UR[room].ph == 2) {
             pyraFriend = true;
             utDialog("Elle marche desormais avec toi.", "Sans rien dire. Une alliee,", "c'est nouveau pour elle.", "");
           }
+        } else if (UR[room].content >= 100) { // monstre genere (V5.53)
+          if (res == 1) { spared++; done[room] = true; utDialog(GEN_S[room & 3][0], GEN_S[room & 3][1], GEN_S[room & 3][2]); }
+          else if (res == 2) { kills++; done[room] = true; utExpUp(&st, 3 + gUtScale * 2); utDialog("Le monstre s'effrite en poussiere.", "Son ame s'envole, etroite et pale.", ""); } // V5.54 : l'AMOURE monte (genere)
+          else utDialog("Tu recules prudemment.", "Il garde son poste, mefiant.", "");
         } else if (res == 1) {
           spared++; done[room] = true;
-          utDialog(SPDLG[UT_RE[room]][0], SPDLG[UT_RE[room]][1], SPDLG[UT_RE[room]][2]);
-          if (room == 9) utDialog("La reine ecarte son tapis d'os :", "un escalier descend ENCORE plus bas.", "Le Noyau appelle, sous la terre.", ""); // V5.50 : l'aventure continue
-          if (room == 19) qres = 1;
+          utDialog(SPDLG[ce][0], SPDLG[ce][1], SPDLG[ce][2]);
+          if (room == 157) qres = 1; // V5.53 : le Noyau apaise
         }
         else if (res == 2) {
-          kills++; done[room] = true;
+          kills++; done[room] = true; utExpUp(&st, 10); // V5.54 : un monstre du Serment vaut 10 EXP
           utDialog("Le monstre s'effrite en poussiere.", "Son ame s'envole, etroite et pale.", "");
-          if (room == 9) utDialog("Derriere le trone vide, le sol", "s'ouvre : un escalier descend vers", "le Noyau, tout au fond du monde.", ""); // V5.50
-          if (room == 19) qres = 2;
+          if (room == 157) qres = 2;
         }
         else utDialog("Tu recules prudemment.", "Le monstre reste la, patient.", "");
-      } else if (UT_RE[room] == -1 && px2 > 214 && px2 < 288 && py2 > 62 && py2 < 140) { // ---------- BOUTIQUE DE MOMO ----------
+        gUtName = 0; gUtScale = 0; // V5.53 : on oublie le monstre genere
+      } else if (UR[room].content == -1 && px2 > 214 && px2 < 288 && py2 > 62 && py2 < 140) { // ---------- BOUTIQUE DE MOMO ----------
         waitRelease();
         utShop(&st);
-      } else if (UT_RNPC[room] == 1 && px2 < 130 && py2 > 62 && py2 < 140) { // ---------- LES JUMELLES ----------
+      } else if (UR[room].content == -6 && px2 < 130 && py2 > 62 && py2 < 140) { // ---------- LES JUMELLES ----------
         waitRelease();
-        int ti = (room == 1) ? 0 : ((room == 4) ? 1 : 2);
+        int ti = UR[room].ph;
         utDialog(TWL1[ti][0], TWL1[ti][1], TWL1[ti][2]);
-      } else if (room == 7 && done[0] && px2 > 96 && px2 < 152 && py2 > 60) { // V5.48 : on RECROISE le fantome pres du feu
+      } else if (UR[room].content == -4 && !done[room] && px2 > 214 && px2 < 288 && py2 > 62 && py2 < 140) { // ---------- COFFRE (V5.53) ----------
         waitRelease();
-        utDialog("Le fantome a quitte ses ruines.", "Il compte les etoiles pres du feu", "et te fait un signe timide.", "");
-      } else if (room == 7 && done[3] && px2 > 158 && px2 < 214 && py2 > 60) { // ... et Vesper, endormie
+        int g = 12 + rnd(30);
+        st.gold += g; done[room] = true;
+        char ct[40]; snprintf(ct, 40, "Le coffre contient %d pieces !", g);
+        utDialog(ct, "Les anciens habitants cachaient", "leur argent ici. Prends tout !", "");
+      } else if (UR[room].content == -11 && !done[room] && px2 > 264 && py2 > 62 && py2 < 140) { // ---------- MUR FISSURE (V5.54) ----------
         waitRelease();
-        utDialog("Vesper dort la tete en bas,", "rassasiee de voyages. Elle", "ronronne en te voyant.", "");
-      } else if (room == 9 && pyraFriend && !pyraGift && px2 > 120 && px2 < 185) { // V5.48 : Pyra t'attend avant le trone
+        bool opened = false;
+        for (int yy = 0; yy < UT_GW && !opened; yy++) for (int xx = 0; xx < UT_GW; xx++) if (UTGRID[xx + yy * UT_GW] == room) { // ou est la salle ?
+          if (xx + 1 < UT_GW - 2 && UTGRID[xx + 1 + yy * UT_GW] < 0) { // la cache nait si la place est libre a l'est
+            int sn = utRtNew(xx + 1, yy); utRtLink(room, sn, 1);
+            UR[sn].content = -9; strcpy(UR[sn].nm, "LA CACHE OUBLIEE");
+            opened = true; break;
+          }
+        }
+        done[room] = true;
+        if (opened) utDialog("Tu pousses le mur fissure : il", "s'ecroule ! Une CACHE OUBLIEE", "s'ouvre a l'est. Personne ne savait.", "");
+        else { int g = 15 + rnd(20); st.gold += g; utDialog("Le mur s'ecroule... sur un vieux rat", "qui detale en laissant echapper", "quelques pieces de sa cachette !", ""); }
+      } else if (UR[room].content == -9 && !done[room] && px2 > 214 && px2 < 288 && py2 > 62 && py2 < 140) { // ---------- LA CACHE OUBLIEE (V5.54) ----------
         waitRelease();
-        utDialog("\"T'as l'air nerveux, humain.\"", "Tiens. Deux tartines dorees.", "Vas-y, champion. Je te regarde !", "");
-        st.inv[2] = 2; st.inv[3] = 2; pyraGift = true;
-      } else if (UT_RSTAR[room] && px2 < 110 && py2 < 78) { // l'etoile : point de repos
+        int g = 25 + rnd(35); st.gold += g; st.php = st.mhp; done[room] = true;
+        char ct2[40]; snprintf(ct2, 40, "Un vieux coffre : %d pieces !", g);
+        utDialog(ct2, "Les fondateurs du Serment cachaient", "ici leur tresor. Il est a toi. PV AU MAX !", "");
+      } else if (UR[room].content == -14 && px2 > 60 && px2 < 150 && py2 > 60) { // ---------- LES NOIX DU GOBLIN (V5.54) ----------
         waitRelease();
-        st.php = 20;
+        utShell(&st);
+      } else if (UR[room].content == -5 && px2 > 96 && px2 < 204 && py2 > 60) { // ---------- FEU DE CAMP (V5.53) ----------
+        waitRelease();
+        st.php = st.mhp;
+        utDialog(CAMPD[room % 3][0], CAMPD[room % 3][1], CAMPD[room % 3][2]);
+      } else if (UR[room].content == -7 && px2 > 120 && px2 < 185 && py2 > 60) { // V5.53 : Pyra au seuil du Noyau
+        waitRelease();
+        if (pyraFriend && !pyraGift) {
+          utDialog("\"T'as l'air nerveux, humain.\"", "Tiens. Deux tartines dorees.", "Vas-y, champion. Je te regarde !", "");
+          st.inv[2] = 2; st.inv[3] = 2; pyraGift = true;
+        } else if (pyraFriend) utDialog("Pyra echauffe ses poings pres du", "seuil. \"Je sens le coeur battre,", "champion. Reste digne !\"", "");
+        else utDialog("Une empreinte de salamandre,", "encore chaude. Pyra est passee", "ici avant toi...", "");
+      } else if (UR[room].content == -3 && px2 < 110 && py2 < 78) { // l'etoile : point de repos
+        waitRelease();
+        st.php = st.mhp;
         utDialog("L'etoile scintille doucement.", "Ton ame se repose. PV AU MAX !", "");
       }
     }
@@ -10685,27 +10963,39 @@ static void utGame() { // V5.47 : SOUL QUEST — 6 salles, boutique de Momo, equ
     fRect(0, 34, SW, 3, C_WHT); fRect(0, 146, SW, 3, KDColor::RGB24(0x606060));
     fRect(0, 37, 3, 109, C_WHT); fRect(317, 37, 3, 109, C_WHT);
     for (int g = 0; g < 6; g++) { int gx = 30 + g * 50; fRect(gx, 130, 2, 6, KDColor::RGB24(0x3A5A2A)); fRect(gx + 5, 132, 2, 4, KDColor::RGB24(0x3A5A2A)); } // herbe
-    drawTextSmall(8, 10, UT_RN[room], C_GRE); // V5.47 : nom de la salle
-    if (UT_RSTAR[room]) { fCirc(80, 56, 4, C_GOLD); px(80, 48, C_WHT); px(72, 56, C_WHT); px(88, 56, C_WHT); px(80, 64, C_WHT); } // etoile de repos
-    if (UT_RNPC[room] == 1) utNpc(90, 100, 1); // les jumelles, a gauche
-    if (UT_RE[room] >= 0 && !done[room]) utFace(250, 100, UT_RE[room]); // le gardien
-    else if (UT_RE[room] == -1) utNpc(250, 100, 0); // Momo derriere son comptoir (-2 : salle vide, V5.50)
-    if (room == 7) { // V5.48 : le feu de camp des allies
+    drawTextSmall(8, 10, UR[room].nm, C_GRE); // V5.53 : nom genere de la salle
+    if (UR[room].content == -3) { fCirc(80, 56, 4, C_GOLD); px(80, 48, C_WHT); px(72, 56, C_WHT); px(88, 56, C_WHT); px(80, 64, C_WHT); } // etoile de repos
+    if (UR[room].content == -6) utNpc(90, 100, 1); // les jumelles, a gauche
+    if (UR[room].content == -4 && !done[room]) { fRect(242, 96, 16, 12, C_GOLD); fRect(244, 98, 12, 8, KDColor::RGB24(0x8A6D00)); px(250, 96, C_YEL); } // coffre (V5.53)
+    if (UR[room].content == -5) { // feu de camp (V5.53)
       fRect(146, 100, 8, 6, KDColor::RGB24(0x6A4A2A)); // buche
       fCirc(150, 94, 5, C_ORG); fCirc(150, 90, 3, C_YEL); // flammes
-      if (done[0]) utFace(120, 92, 0); // le fantome epargne, recroise ici
-      if (done[3]) utFace(190, 92, 3); // Vesper, endormie
     }
-    if (room == 9 && pyraFriend) utFace(150, 100, 6); // V5.48 : Pyra t'accompagne jusqu'au trone
-    if (room > 0) { fRect(0, 76, 12, 40, C_WHT); fRect(0, 79, 6, 34, C_BLK); } // V5.49 : porte de retour, toujours ouverte
-    if (room < 19 && doorOpen) { fRect(304, 76, 12, 40, C_WHT); fRect(307, 79, 6, 34, C_BLK); } // porte ouverte (V5.50 : 19 salles)
+    if (UR[room].content >= 0 && !done[room]) utFace(250, 100, UR[room].content <= 10 ? UR[room].content : GEN_ME[UR[room].content - 100]); // le gardien
+    else if (UR[room].content == -1) utNpc(250, 100, 0); // Momo derriere son comptoir
+    if (UR[room].content == -7 && pyraFriend) utFace(150, 100, 6); // V5.53 : Pyra t'attend au seuil du Noyau
+    if (UR[room].content == -8) { fCirc(100, 112, 12, KDColor::RGB24(0x2E5A1E)); fCirc(122, 118, 10, KDColor::RGB24(0x2E5A1E)); fCirc(86, 120, 9, KDColor::RGB24(0x2E5A1E)); fCirc(146, 114, 8, KDColor::RGB24(0x2E5A1E)); } // V5.54 : les buissons ronent
+    if (UR[room].content == -11 && !done[room]) { px(310, 80, C_BLK); px(312, 84, C_BLK); px(309, 90, C_BLK); px(311, 96, C_BLK); px(310, 102, C_BLK); px(313, 78, C_BLK); } // V5.54 : le mur fissure a l'est
+    if (UR[room].content == -9 && !done[room]) { fRect(240, 92, 20, 16, C_GOLD); fRect(243, 95, 14, 10, KDColor::RGB24(0x8A6D00)); px(249, 92, C_YEL); px(251, 93, C_YEL); } // V5.54 : le tresor de la cache
+    if (UR[room].content == -12) { const int DPX[4] = { 64, 144, 224, 144 }, DPY[4] = { 70, 70, 70, 120 }; for (int ti = 0; ti < 4; ti++) fRect(DPX[ti], DPY[ti], 12, 12, (UTPZ[room] & (1 << ti)) ? C_YEL : KDColor::RGB24(0x4A4A4A)); } // V5.54 : les dalles du casse-tete
+    if (UR[room].content == -14) { utNpc(90, 100, 0); fRect(120, 104, 44, 12, KDColor::RGB24(0x6A4A2A)); fRect(128, 96, 10, 8, KDColor::RGB24(0x8A6D00)); fRect(146, 96, 10, 8, KDColor::RGB24(0x8A6D00)); } // V5.54 : le goblin, sa table et deux noix
+    if (UR[room].w >= 0) { fRect(0, 76, 12, 40, C_WHT); fRect(0, 79, 6, 34, C_BLK); } // porte ouest (V5.53)
+    if (UR[room].e >= 0 && doorOpen) { fRect(304, 76, 12, 40, C_WHT); fRect(307, 79, 6, 34, C_BLK); } // porte est
+    if (UR[room].n >= 0) { fRect(146, 33, 28, 8, C_WHT); fRect(149, 36, 22, 5, C_BLK); } // porte nord (V5.53)
+    if (UR[room].s >= 0) { fRect(146, 144, 28, 8, C_WHT); fRect(149, 147, 22, 5, C_BLK); } // porte sud (V5.53)
     utKid((int)px2, (int)py2);
-    char sdb[32]; snprintf(sdb, 32, "PV %d/20  OR %dG", st.php, st.gold);
+    char sdb[32]; snprintf(sdb, 32, "PV %d/%d LV%d OR%dG", st.php, st.mhp, st.lv, st.gold); // V5.54 : l'AMOURE s'affiche
     drawTextSmall(8, 20, sdb, C_WHT);
     blit(); Ion::Timing::msleep(16);
-    if (room < 19 && doorOpen && px2 > 300) { room++; px2 = 16; waitRelease(); }
-    if (room > 0 && px2 < 10) { room--; px2 = 296; waitRelease(); } // V5.49 : retour dans la salle precedente
-    if (room == 19 && done[19]) break; // V5.50 : le Noyau apaise : la vraie fin
+    if (UR[room].e >= 0 && doorOpen && px2 > 300) { room = UR[room].e; px2 = 16; waitRelease(); }
+    else if (UR[room].w >= 0 && px2 < 10) { room = UR[room].w; px2 = 296; waitRelease(); } // V5.49 : retour
+    else if (UR[room].n >= 0 && py2 < 46) { room = UR[room].n; py2 = 132; waitRelease(); } // V5.53 : vers le nord
+    else if (UR[room].s >= 0 && py2 > 144) { room = UR[room].s; py2 = 58; waitRelease(); } // V5.53 : vers le sud
+    if (UR[room].story >= 0 && !(storyMask & (1 << UR[room].story))) { // V5.53 : un chapitre du Serment
+      storyMask |= 1 << UR[room].story;
+      utDialog(STOR[UR[room].story][0], STOR[UR[room].story][1], STOR[UR[room].story][2]);
+    }
+    if (room == 157 && done[157]) break; // V5.53 : le Noyau apaise : la vraie fin
   }
   if (qres == 1) utDialog("Le Noyau se pose, apaise, immense.", "Le Serment d'Os se fissure, puis", "s'effrite, libere comme un voeu.");
   else utDialog("Le Noyau s'est brise en poussiere.", "Le Serment se dissout dans le grand", "silence, sans personne pour le voir.");
