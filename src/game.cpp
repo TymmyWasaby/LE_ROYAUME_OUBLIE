@@ -51,11 +51,14 @@ static void initTrig() { for (int i = 0; i < 256; i++) { double a = i * 0.024543
 static float fcosf(float a) { return gTrigC[(int)(a * 40.743692f) & 255]; }
 static float fsinf(float a) { return gTrigS[(int)(a * 40.743692f) & 255]; }
 
-// V5.49 : FRAME BUFFER — tout est dessine en RAM (VRAM) puis pousse d'un seul coup
-// par blit(). L'ecran ne montre plus jamais une image a moitie construite : zero scintillement.
-static KDColor VRAM[SW * SH]; // ~142 Ko en .bss (statique, jamais sur la pile)
+// V5.51 : FRAME BUFFER DEMI-RESOLUTION — tout est dessine en RAM dans une grille
+// de HW*HH pixels (35 Ko seulement, 4x moins qu'un ecran complet), puis etire x2
+// par blit(). L'ecran ne montre jamais une image a moitie construite : zero
+// scintillement, et la RAM reste largement dans le budget d'une app externe.
+static const int HW = SW / 2, HH = SH / 2; // grille interne : 160x111
+static KDColor VRAM[HW * HH]; // ~35 Ko en .bss (statique, jamais sur la pile)
 static void px(int x, int y, KDColor c) {
-  if (x >= 0 && x < SW && y >= 0 && y < SH) VRAM[(long)y * SW + x] = c;
+  if (x >= 0 && x < SW && y >= 0 && y < SH) VRAM[(long)(y / 2) * HW + (x / 2)] = c;
 }
 static void fRect(int x, int y, int w, int h, KDColor c) {
   if (w < 0) { x += w; w = -w; } if (h < 0) { y += h; h = -h; }
@@ -63,8 +66,11 @@ static void fRect(int x, int y, int w, int h, KDColor c) {
   if (x + w > SW) w = SW - x;
   if (y + h > SH) h = SH - y;
   if (w <= 0 || h <= 0) return;
-  KDColor *d = VRAM + (long)y * SW + x;
-  for (int j = 0; j < h; j++) { for (int i = 0; i < w; i++) d[i] = c; d += SW; }
+  int x0 = x / 2, x1 = (x + w - 1) / 2, y0 = y / 2, y1 = (y + h - 1) / 2; // V5.51 : coords demi-resolution
+  for (int j = y0; j <= y1; j++) {
+    KDColor *d = VRAM + (long)j * HW + x0;
+    for (int i = x0; i <= x1; i++) d[i - x0] = c;
+  }
 }
 // ligne de travail : les primitives a motif remplissent rowBuf puis poussent les runs
 static KDColor rowBuf[SW];
@@ -82,14 +88,15 @@ static void rowFlush(int y, int x0, int x1) {
     if (!rowSet[x]) { x++; continue; }
     int s = x;
     while (x <= xe && rowSet[x]) x++;
-    for (int i = s; i < x; i++) VRAM[(long)y * SW + i] = rowBuf[i]; // V5.49 : vers le frame buffer
+    for (int i = s; i < x; i++) VRAM[(long)(y / 2) * HW + (i / 2)] = rowBuf[i]; // V5.51 : vers le frame buffer demi-resolution
   }
 }
 static void fillSpan(int y, int x0, int x1, KDColor c) {
   if (y < 0 || y >= SH || x0 > x1) return;
   if (x0 < 0) x0 = 0;
   if (x1 >= SW) x1 = SW - 1;
-  for (int x = x0; x <= x1; x++) VRAM[(long)y * SW + x] = c; // V5.49 : vers le frame buffer
+  int a = x0 / 2, b = x1 / 2; // V5.51 : coords demi-resolution
+  for (int i = a; i <= b; i++) VRAM[(long)(y / 2) * HW + i] = c;
 }
 static void rRect(int x, int y, int w, int h, int r, KDColor c) {
   for (int j = 0; j < h; j++) {
@@ -164,7 +171,15 @@ static void shadow(int cx, int cy, int rx, int ry) {
     rowFlush(cy + j, cx - rx, cx + rx);
   }
 }
-static void blit() { Ion::Display::pushRect(KDRect(0, 0, SW, SH), VRAM); } // V5.49 : une seule poussee, image complete
+static void blit() { // V5.51 : etire la grille 160x111 en 320x222, ligne par ligne (buffer ecran de 2 lignes seulement)
+  static KDColor up[2 * SW]; // 1,3 Ko : deux lignes ecran
+  for (int qy = 0; qy < HH; qy++) {
+    const KDColor *src = VRAM + (long)qy * HW;
+    for (int i = 0; i < HW; i++) { up[2 * i] = src[i]; up[2 * i + 1] = src[i]; } // chaque pixel devient 2x2
+    Ion::Display::pushRect(KDRect(0, 2 * qy, SW, 1), up);
+    if (2 * qy + 1 < SH) Ion::Display::pushRect(KDRect(0, 2 * qy + 1, SW, 1), up);
+  }
+}
 
 // ------------------------- Palette -----------------------------------
 #define C_BG     KDColor::RGB24(0x1B2A41)
@@ -10024,6 +10039,34 @@ static void utFace(int cx, int cy, int eid) { // sprites pixel-art des monstres
     fRect(cx + 12, cy + 2, 10, 6, C_RED); // queue flamme
     fRect(cx - 9, cy + 8, 4, 8, C_WHT); fRect(cx - 2, cy + 8, 4, 8, C_WHT); // pattes
     fRect(cx - 16, cy - 4, 4, 2, C_WHT); // sourcil determine
+  } else if (eid == 7) { // LUMIN : luciole geante aux ailes de verre (V5.50)
+    fRect(cx - 9, cy - 22, 18, 8, KDColor::RGB24(0x9AEDD2)); fRect(cx - 7, cy - 24, 14, 3, KDColor::RGB24(0x9AEDD2)); // ailes
+    fCirc(cx, cy - 4, 10, KDColor::RGB24(0xE8F58A));
+    px(cx - 4, cy - 6, C_BLK); px(cx + 3, cy - 6, C_BLK);
+    fRect(cx - 3, cy - 1, 6, 2, C_BLK);
+    fRect(cx - 2, cy + 6, 4, 8, C_GOLD); // abdomen luisant
+    fCirc(cx, cy + 15, 5, KDColor::RGB24(0xF5E27A));
+  } else if (eid == 8) { // OMBRE MIROIR : ton reflet sorti du cadre (V5.50)
+    fRect(cx - 5, cy - 8, 10, 7, KDColor::RGB24(0x3C3C50));
+    fRect(cx - 4, cy - 1, 8, 8, KDColor::RGB24(0x2A2A3A));
+    fRect(cx - 4, cy + 1, 8, 2, KDColor::RGB24(0x3C3C50)); fRect(cx - 4, cy + 5, 8, 2, KDColor::RGB24(0x3C3C50));
+    fRect(cx - 3, cy + 7, 2, 3, KDColor::RGB24(0x2A2A3A)); fRect(cx + 1, cy + 7, 2, 3, KDColor::RGB24(0x2A2A3A));
+    px(cx - 3, cy - 5, C_WHT); px(cx + 2, cy - 5, C_WHT); // yeux clairs inverses
+    fRect(cx - 8, cy - 13, 16, 2, C_GRE); // liseret du miroir
+  } else if (eid == 9) { // L'HORLOGER : mecanicien du temps (V5.50)
+    fRect(cx - 12, cy - 14, 24, 20, KDColor::RGB24(0xC8A24A));
+    fRect(cx - 9, cy - 10, 6, 6, C_WHT); fRect(cx + 3, cy - 10, 6, 6, C_WHT); // lunettes
+    px(cx - 6, cy - 7, C_BLK); px(cx + 6, cy - 7, C_BLK);
+    fRect(cx - 3, cy - 2, 6, 2, C_BLK);
+    fCirc(cx - 15, cy + 10, 6, KDColor::RGB24(0x8A6E32)); // engrenages
+    fCirc(cx + 15, cy + 10, 6, KDColor::RGB24(0x8A6E32));
+    fRect(cx - 7, cy + 8, 14, 4, KDColor::RGB24(0xC8A24A));
+  } else if (eid == 10) { // LE NOYAU D'OS : coeur gigantesque du Serment (V5.50)
+    fCirc(cx, cy, 18, C_WHT);
+    fCirc(cx, cy, 13, C_BLK);
+    fCirc(cx, cy + 2, 8, KDColor::RGB24(0xF5A0A0)); // coeur qui bat
+    fRect(cx - 22, cy - 20, 44, 4, C_WHT); fRect(cx - 22, cy + 16, 44, 4, C_WHT); // cotes
+    for (int t = -18; t <= 18; t += 9) { fRect(cx + t, cy - 26, 3, 8, C_WHT); fRect(cx + t, cy + 18, 3, 8, C_WHT); }
   } else { // OSTEO, GARDIEN DES OS : crane ricanant aux orbites bleues
     fRect(cx - 13, cy - 14, 26, 18, C_WHT);
     fRect(cx - 17, cy - 6, 34, 9, C_WHT);
@@ -10076,7 +10119,7 @@ static void utDialog(const char *a, const char *b, const char *c, const char *d 
 }
 struct UtState { int php, atk, def, gold, inv[4]; }; // V5.47 : PV, arme (atk), armure (def), or, sac (id d'objet ou -1)
 static void utBattleFrame(int eid, int ehp, int ehp0, UtState *st, bool spar) { // fond de combat : monstre, nom, barres
-  static const char *UT_EN[7] = { "FANTOME TRISTE", "CRAPAUD RUSSE", "OSTEO", "VESPER", "REINE OSSEA", "DOGES JUMELLES", "PYRA" };
+  static const char *UT_EN[11] = { "FANTOME TRISTE", "CRAPAUD RUSSE", "OSTEO", "VESPER", "REINE OSSEA", "DOGES JUMELLES", "PYRA", "LUMIN", "OMBRE MIROIR", "L'HORLOGER", "LE NOYAU D'OS" };
   fRect(0, 0, SW, SH, C_BLK);
   utFace(160, 58, eid);
   drawTextC(88, UT_EN[eid], spar ? KDColor::RGB24(0xF5C518) : C_WHT); // nom JAUNE = epargnable
@@ -10145,7 +10188,7 @@ static void utShop(UtState *st) { // V5.47 : LA BOUTIQUE DE MOMO — objets, arm
   }
 }
 static int utBattle(int eid, UtState *st, int phase) { // 0 defaite, 1 epargne/yield, 2 tue, 3 fuite (V5.48 : phase = duel Pyra)
-  static const char *FLAV[7][3] = {
+  static const char *FLAV[11][3] = {
     { "Le fantome pleure en silence.", "Des larmes flottent dans l'air.", "Il hait les adieux." },
     { "Le crapaud te fixe, sournois.", "Il saute de gauche a droite.", "Croaaa. Il prepare un truc." },
     { "Osteo ricane dans ses os.", "Ses orbites brillent de bleu.", "Un vrai duel de gardien !" },
@@ -10153,9 +10196,13 @@ static int utBattle(int eid, UtState *st, int phase) { // 0 defaite, 1 epargne/y
     { "La reine te juge, severe.", "Elle murmure des noms anciens.", "Sa couronne pese des siecles." },
     { "Les doges aboient a l'unisson.", "Elles tournent autour de toi.", "Deux hallebardes, un seul coeur." },
     { "Pyra craque ses poings de feu.", "Elle sourit, surexcitee.", "Elle veut la couronne, elle !" },
+    { "Lumin clignote, curieuse.", "Ses spores valsent doucement.", "Elle eclaire la galerie entiere." },
+    { "L'Ombre imite tes gestes.", "Elle rit sans le son.", "Ton reflet te defie, exact." },
+    { "L'Horloger compte a rebours.", "Ses engrenages grincent faux.", "Il n'a jamais le temps, lui !" },
+    { "Le Noyau bat, immense et lent.", "Le Serment D'Os tremble ici.", "La terre entiere retient son souffle." },
   };
-  static const char *ACTN[7][2] = { { "PARLER", "SALUER" }, { "FLATTER", "SNIFFER" }, { "BLAGUER", "DEFIER" }, { "SIFFLER", "JOUER" }, { "ECOUTER", "S'INCLINER" }, { "CARESSER", "SALUER" }, { "ENCOURAGER", "RAILLER" } };
-  static const char *ACTT[7][2] = {
+  static const char *ACTN[11][2] = { { "PARLER", "SALUER" }, { "FLATTER", "SNIFFER" }, { "BLAGUER", "DEFIER" }, { "SIFFLER", "JOUER" }, { "ECOUTER", "S'INCLINER" }, { "CARESSER", "SALUER" }, { "ENCOURAGER", "RAILLER" }, { "CHANTER", "BRILLER" }, { "IMITER", "RIGOLER" }, { "REMONTER", "ATTENDRE" }, { "ECOUTER", "CALMER" } };
+  static const char *ACTT[11][2] = {
     { "Tu parles de la pluie. Il renifle,", "etale, un peu moins triste." },
     { "Tu flattes son air malin. Il rougit", "de ses deux grosses joues." },
     { "Tu blagues sur ses os. Il ricane", "de plus belle. Il t'apprecie !" },
@@ -10163,8 +10210,12 @@ static int utBattle(int eid, UtState *st, int phase) { // 0 defaite, 1 epargne/y
     { "Tu ecoutes les noms anciens.", "La reine parle, et ca fait du bien." },
     { "Tu caresses les deux doges.", "Elles battent de la queue, ravies !" },
     { "Tu l'encourages, sincere.", "Pyra ecarquille les yeux : merci ?!" },
+    { "Tu chantes son nom. Lumin", "clignote de mille couleurs ! Heureuse." },
+    { "Tu imites sa pose exacte.", "L'Ombre hoche la tete : respect." },
+    { "Tu remontes sa grande roue.", "L'Horloger pleure de joie : MERCI." },
+    { "Tu ecoutes son coeur de pierre.", "Il ralentit. Il se souvient du ciel." },
   };
-  static const char *ACTT2[7][2] = { // reactions du 2e acte
+  static const char *ACTT2[11][2] = { // reactions du 2e acte
     { "Tu salue. Il incline son voile", "avec beaucoup de dignite." },
     { "Tu renifles. Il sent la mare du", "soir. Il a l'air flatte." },
     { "Tu le defies en duel honnete. Il", "te salue, guerrier a guerrier." },
@@ -10172,8 +10223,12 @@ static int utBattle(int eid, UtState *st, int phase) { // 0 defaite, 1 epargne/y
     { "Tu t'inclines bien bas. La", "reine acquiesce, touchee." },
     { "Tu salue la garde royale.", "Les doges se pavanent, flattees." },
     { "Tu la railles gentiment. Elle", "hue... elle apprecie l'audace !" },
+    { "Tu brilles de toutes tes forces.", "Lumin applaudit avec ses ailes !" },
+    { "Tu rigoles de sa bouche tordue.", "L'Ombre esquisse un vrai sourire." },
+    { "Tu attends avec lui, patiemment.", "L'Horloger adore ca, evidemment !" },
+    { "Tu le calmes de ta voix douce.", "Le Noyau ralentit, et te remercie." },
   };
-  static const char *CHECK[7][2] = { // V5.48 : VERIFIER les stats du monstre
+  static const char *CHECK[11][2] = { // V5.48 : VERIFIER les stats du monstre
     { "FANTOME TRISTE - ATQ 3 DEF 0.", "Fragile, et deja presque parti." },
     { "CRAPAUD RUSSE - ATQ 4 DEF 0.", "Vaniteux, mais bonne pate." },
     { "OSTEO - ATQ 5 DEF 1.", "Duel ritualiste. Honorable." },
@@ -10181,13 +10236,17 @@ static int utBattle(int eid, UtState *st, int phase) { // 0 defaite, 1 epargne/y
     { "REINE OSSEA - ATQ 6 DEF 2.", "Le Serment la tient debout." },
     { "DOGES JUMELLES - ATQ 5 DEF 1.", "Deux soeurs, un serment commun." },
     { "PYRA - ATQ 6 DEF 1.", "Elle veut prouver sa valeur." },
+    { "LUMIN - ATQ 4 DEF 1.", "Gentille. Ses spores soignent." },
+    { "OMBRE MIROIR - ATQ 5 DEF 1.", "Elle connait chacun de tes gestes." },
+    { "L'HORLOGER - ATQ 6 DEF 2.", "Pressant, mais coeur d'or." },
+    { "LE NOYAU D'OS - ATQ 7 DEF 3.", "Le Serment bat en lui. Trop fort." },
   };
-  static const int EHP0[7] = { 30, 45, 130, 55, 220, 140, 90 };
-  static const int EDG[7] = { 9, 11, 15, 12, 16, 14, 13 };
-  static const int EATK[7] = { 3, 4, 5, 4, 6, 5, 6 };
-  static const int NEED[7] = { 2, 3, 4, 3, 5, 4, 2 }; // actes reussis pour epargner
-  static const int GOLDK[7] = { 15, 20, 60, 25, 120, 70, 35 }; // or si vaincu
-  static const int GOLDS[7] = { 10, 15, 40, 20, 100, 55, 30 }; // or si epargne
+  static const int EHP0[11] = { 30, 45, 130, 55, 220, 140, 90, 75, 150, 180, 260 };
+  static const int EDG[11] = { 9, 11, 15, 12, 16, 14, 13, 12, 15, 16, 18 };
+  static const int EATK[11] = { 3, 4, 5, 4, 6, 5, 6, 4, 5, 6, 7 };
+  static const int NEED[11] = { 2, 3, 4, 3, 5, 4, 2, 3, 4, 4, 6 }; // actes reussis pour epargner
+  static const int GOLDK[11] = { 15, 20, 60, 25, 120, 70, 35, 55, 90, 110, 200 }; // or si vaincu
+  static const int GOLDS[11] = { 10, 15, 40, 20, 100, 55, 30, 40, 70, 85, 150 }; // or si epargne
   int ehp = EHP0[eid] + ((eid == 6) ? phase * 40 : 0), mercy = 0, turn = 0; // V5.48 : Pyra monte en puissance a chaque duel
   int ehpMax = ehp;
   bool q2 = false; // V5.48 : la reine se releve une fois
@@ -10238,9 +10297,10 @@ static int utBattle(int eid, UtState *st, int phase) { // 0 defaite, 1 epargne/y
       drawTextSmall(64, 178, dl, C_WHT);
       blit(); Ion::Timing::msleep(900);
       if (ehp <= 0) {
-        if (eid == 4 && !q2) { // V5.48 : LA REINE SE RELEVE — deuxieme phase, plus rapide
-          q2 = true; ehp = 110;
-          utDialog("Le Serment la releve de force.", "Sa couronne s'embrase. La vraie", "reine commence maintenant.", "");
+        if ((eid == 4 || eid == 10) && !q2) { // V5.48/5.50 : LA REINE et LE NOYAU SE RELEVENT — deuxieme phase
+          q2 = true; ehp = (eid == 4) ? 110 : 140;
+          if (eid == 4) utDialog("Le Serment la releve de force.", "Sa couronne s'embrase. La vraie", "reine commence maintenant.", "");
+          else utDialog("Le Noyau craquelle, envoie des", "eclats... et bat DEUX fois plus fort.", "Le Serment tout entier te regarde !", "");
         } else { st->gold += GOLDK[eid]; return 2; } // butin de poussiere
       }
       if (eid == 6 && ehp <= ehpMax * 3 / 10) { // V5.48 : dominee, Pyra jette l'eponge
@@ -10325,10 +10385,14 @@ static int utBattle(int eid, UtState *st, int phase) { // 0 defaite, 1 epargne/y
     while (!atkDone) {
       pollKeys();
       t += 0.016f; if (t >= 5.5f) atkDone = true;
-      if (kLeft) hx -= 1.1f; if (kRight) hx += 1.1f;
-      if (kUp) hy -= 1.1f; if (kDown) hy += 1.1f;
-      if (hx < 62) hx = 62; if (hx > 258) hx = 258;
-      if (hy < 154) hy = 154; if (hy > 206) hy = 206;
+      if (kLeft) hx -= 1.1f;
+      if (kRight) hx += 1.1f;
+      if (kUp) hy -= 1.1f;
+      if (kDown) hy += 1.1f;
+      if (hx < 62) hx = 62;
+      if (hx > 258) hx = 258;
+      if (hy < 154) hy = 154;
+      if (hy > 206) hy = 206;
       if (ivl > 0) ivl -= 0.016f;
       if (eid == 0) { // FANTOME : larmes qui tombent
         sp1 -= 0.016f;
@@ -10357,6 +10421,38 @@ static int utBattle(int eid, UtState *st, int phase) { // 0 defaite, 1 epargne/y
         if (sp2 <= 0 && bn < 24) { sp2 = 1.4f / ps; bxA[bn] = 66 + rnd(150); byA[bn] = 210; bvx[bn] = 0; bvy[bn] = -60 * ps; bk[bn] = 1; bn++; } // flamme bleue : ne bouge pas !
         sp3 -= 0.016f;
         if (sp3 <= 0 && bn < 24) { sp3 = 3.2f; bxA[bn] = 80 + rnd(120); byA[bn] = 152; bvx[bn] = 0; bvy[bn] = 50; bk[bn] = 2; bn++; } // etincelle VERTE : elle soigne
+      } else if (eid == 7) { // LUMIN : spores lentes + pollen vert qui soigne — elle ne veut pas de mal (V5.50)
+        sp1 -= 0.016f;
+        if (sp1 <= 0 && bn < 24) { sp1 = 0.55f; bxA[bn] = 66 + rnd(150); byA[bn] = 152; bvx[bn] = (rnd(2) ? 10 : -10); bvy[bn] = 36 + rnd(14); bk[bn] = 0; bn++; }
+        sp2 -= 0.016f;
+        if (sp2 <= 0 && bn < 24) { sp2 = 2.6f; bxA[bn] = 80 + rnd(120); byA[bn] = 152; bvx[bn] = 0; bvy[bn] = 44; bk[bn] = 2; bn++; } // pollen vert : +1 PV
+      } else if (eid == 8) { // OMBRE : gouttes qui imitent ton coeur + echo bleu de ta rangee (V5.50)
+        sp1 -= 0.016f;
+        if (sp1 <= 0 && bn < 24) { sp1 = 0.4f; float sx = 70 + rnd(140); bxA[bn] = sx; byA[bn] = 152; bvx[bn] = (hx - sx) * 0.45f; bvy[bn] = 58 + rnd(22); bk[bn] = 0; bn++; }
+        sp2 -= 0.016f;
+        if (sp2 <= 0 && bn < 24) { sp2 = 2.6f; bool lr = rnd(2); bxA[bn] = lr ? 40 : 280; bvx[bn] = (lr ? 1 : -1) * 52; byA[bn] = hy; bvy[bn] = 0; bk[bn] = 1; bn++; } // echo bleu : SURPLACE !
+      } else if (eid == 9) { // HORLOGER : engrenages lateraux rapides + gouttes reglees (V5.50)
+        sp1 -= 0.016f;
+        if (sp1 <= 0 && bn < 24) { sp1 = 0.6f; bool lr = rnd(2); bxA[bn] = lr ? 40 : 280; bvx[bn] = (lr ? 1 : -1) * 105; byA[bn] = 156 + rnd(46); bvy[bn] = 0; bk[bn] = 0; bn++; }
+        sp2 -= 0.016f;
+        if (sp2 <= 0 && bn < 24) { sp2 = 0.5f; bxA[bn] = 70 + rnd(140); byA[bn] = 152; bvx[bn] = 0; bvy[bn] = 60; bk[bn] = 0; bn++; }
+        sp3 -= 0.016f;
+        if (sp3 <= 0 && bn < 24) { sp3 = 3.0f; bxA[bn] = 66 + rnd(150); byA[bn] = 210; bvx[bn] = 0; bvy[bn] = -55; bk[bn] = 1; bn++; } // vapeur bleue montante : SURPLACE !
+      } else if (eid == 10) { // NOYAU D'OS : le Serment tout entier — 2 styles, phase 2 fulgurante (V5.50)
+        float qs = q2 ? 1.4f : 1.0f;
+        if ((turn & 1) == 0) { // style COTES : os rapides des deux cotes + gouttes visees
+          sp1 -= 0.016f;
+          if (sp1 <= 0 && bn < 24) { sp1 = 0.55f / qs; bool lr = rnd(2); bxA[bn] = lr ? 40 : 280; bvx[bn] = (lr ? 1 : -1) * 100 * qs; byA[bn] = 156 + rnd(46); bvy[bn] = 0; bk[bn] = 0; bn++; }
+          sp2 -= 0.016f;
+          if (sp2 <= 0 && bn < 24) { sp2 = 0.6f / qs; float sx = 70 + rnd(140); bxA[bn] = sx; byA[bn] = 152; bvx[bn] = (hx - sx) * 0.4f; bvy[bn] = 62 * qs; bk[bn] = 0; bn++; }
+        } else { // style BATTLEMENT : bleu de rangee + rafales qui visent le coeur
+          sp1 -= 0.016f;
+          if (sp1 <= 0 && bn < 24) { sp1 = 1.9f; bool lr = rnd(2); bxA[bn] = lr ? 40 : 280; bvx[bn] = (lr ? 1 : -1) * 46; byA[bn] = hy; bvy[bn] = 0; bk[bn] = 1; bn++; } // SURPLACE !
+          sp2 -= 0.016f;
+          if (sp2 <= 0 && bn < 24) { sp2 = 0.42f / qs; float sx = 70 + rnd(140); bxA[bn] = sx; byA[bn] = 152; bvx[bn] = (hx - sx) * 0.5f; bvy[bn] = 74 * qs; bk[bn] = 0; bn++; }
+          sp3 -= 0.016f;
+          if (sp3 <= 0 && bn < 24) { sp3 = 4.0f; bxA[bn] = 80 + rnd(120); byA[bn] = 152; bvx[bn] = 0; bvy[bn] = 50; bk[bn] = 2; bn++; } // une lueur d'espoir verte
+        }
       } else { // REINE OSSEA : deux styles alternes selon le tour (V5.47) — phase 2 plus vivec (V5.48)
         float qs = q2 ? 1.35f : 1.0f;
         if ((turn & 1) == 0) { // style COURONNE : os des deux cotes + gouttes d'or
@@ -10383,7 +10479,7 @@ static int utBattle(int eid, UtState *st, int phase) { // 0 defaite, 1 epargne/y
         bool moving2 = kLeft || kRight || kUp || kDown;
         for (int i = 0; i < bn; i++) {
           float dx2 = bxA[i] - hx, dy2 = byA[i] - hy;
-          float rad = ((bvx[i] != 0 && (eid == 2 || eid == 4)) || eid == 3) ? 10.0f : 6.0f; // les longues projectiles
+          float rad = ((bvx[i] != 0 && (eid == 2 || eid == 4 || eid == 9 || eid == 10)) || eid == 3) ? 10.0f : 6.0f; // les longues projectiles
           if (dx2 * dx2 + dy2 * dy2 < rad * rad) {
             if (bk[i] == 2) { st->php += 1; if (st->php > 20) st->php = 20; bxA[i] = -999.0f; } // etincelle verte : +1 PV
             else if (bk[i] == 1 && !moving2) { } // bleu traverse l'ame immobile : aucun mal
@@ -10396,13 +10492,13 @@ static int utBattle(int eid, UtState *st, int phase) { // 0 defaite, 1 epargne/y
       utBox(56, 148, 208, 64);
       for (int i = 0; i < bn; i++) { // projectiles : blancs, BLEUS (surplace !), VERTS (soignent)
         KDColor bc = (bk[i] == 1) ? KDColor::RGB24(0x35D4E8) : ((bk[i] == 2) ? C_GREEN : C_WHT);
-        if (bvx[i] != 0 && (eid == 2 || eid == 4)) fRect((int)bxA[i] - 13, (int)byA[i] - 2, 26, 5, bc); // os
+        if (bvx[i] != 0 && (eid == 2 || eid == 4 || eid == 9 || eid == 10)) fRect((int)bxA[i] - 13, (int)byA[i] - 2, 26, 5, bc); // os
         else if (bk[i] == 1 && bvy[i] < 0) fRect((int)bxA[i] - 2, (int)byA[i] - 8, 5, 16, bc); // flamme bleue montante
         else if (bk[i] == 1 && bvx[i] != 0) fRect((int)bxA[i] - 15, (int)byA[i] - 3, 30, 7, bc); // os bleu des doges
         else if (bvy[i] == 0) fCirc((int)bxA[i], (int)byA[i], 3, bc); // mouche
         else fRect((int)bxA[i] - 2, (int)byA[i] - 3, 4, 6, bc); // goutte/larme
       }
-      if (bn > 0 && (eid == 5 || eid == 6 || (eid == 4 && q2))) drawTextC(216, "BLEU = SURPLACE !", C_CYN); // astuce vitale
+      if (bn > 0 && (eid == 5 || eid == 6 || eid == 8 || eid == 9 || eid == 10 || (eid == 4 && q2))) drawTextC(216, "BLEU = SURPLACE !", C_CYN); // astuce vitale
       if (ivl <= 0 || (((int)(t * 12)) & 1)) utHeart((int)hx, (int)hy, KDColor::RGB24(0xFF4040)); // clignote quand touche
       drawTextC(220, "ESQUIVE !", C_GRE);
       blit(); Ion::Timing::msleep(16);
@@ -10428,15 +10524,15 @@ static void utGame() { // V5.47 : SOUL QUEST — 6 salles, boutique de Momo, equ
   UtState st; st.php = 20; st.atk = 0; st.def = 0; st.gold = 12;
   st.inv[0] = 0; st.inv[1] = 0; st.inv[2] = -1; st.inv[3] = -1;
   int spared = 0, kills = 0, room = 0, qres = 0;
-  static const int UT_RE[10] = { 0, 1, -1, 3, 6, 2, 5, 6, 6, 4 }; // monstre de la salle (-1 : boutique) — V5.48 : Pyra aux duels 1-3, doges, reine
-  static const int UT_RPH[10] = { 0, 0, 0, 0, 0, 0, 0, 1, 2, 0 }; // V5.48 : numero du duel Pyra (0,1,2)
-  static const int UT_RNPC[10] = { -1, 1, 0, -1, 1, -1, -1, -1, 1, -1 }; // PNJ lore : 1 = jumelles
-  static const int UT_RSTAR[10] = { 1, 0, 1, 1, 0, 0, 0, 1, 0, 0 }; // etoile de repos ?
-  static const char *UT_RN[10] = { "LES RUINES MOUSSES", "LA MARE PALE", "LA RUELLE AUX FILS", "LE COL DES OMBRES", "LE PONT DES ECHOS", "LA SALLE DES GARDIENS", "LES CHAMBRES JUMELLES", "LA FORGE ETEINTE", "LA DERNIERE ETAPE", "LE TRONE D'OS" };
-  bool done[10] = { false, false, false, false, false, false, false, false, false, false };
+  static const int UT_RE[20] = { 0, 1, -1, 3, 6, 2, 5, 6, 6, 4, -2, 7, -1, 8, -2, 9, 6, -2, 6, 10 }; // monstre de la salle (-1 : boutique, -2 : salle vide) — V5.50 : la descente vers le Noyau
+  static const int UT_RPH[20] = { 0, 0, 0, 0, 0, 0, 0, 1, 2, 0, 0, 0, 0, 0, 0, 0, 3, 0, 4, 0 }; // V5.50 : Pyra s'entraine avec toi (duels 4 et 5)
+  static const int UT_RNPC[20] = { -1, 1, 0, -1, 1, -1, -1, -1, 1, -1, -1, -1, 0, -1, 1, -1, -1, -1, -1, -1 }; // PNJ lore : 1 = jumelles
+  static const int UT_RSTAR[20] = { 1, 0, 1, 1, 0, 0, 0, 1, 0, 0, 1, 1, 0, 0, 0, 0, 0, 1, 0, 0 }; // etoile de repos ?
+  static const char *UT_RN[20] = { "LES RUINES MOUSSES", "LA MARE PALE", "LA RUELLE AUX FILS", "LE COL DES OMBRES", "LE PONT DES ECHOS", "LA SALLE DES GARDIENS", "LES CHAMBRES JUMELLES", "LA FORGE ETEINTE", "LA DERNIERE ETAPE", "LE TRONE D'OS", "L'ESCALIER VERT", "LA GALERIE DES LUCIOLES", "LE MARAIS AMBRE", "LE SANCTUAIRE RENVERSE", "LE CAMP DES JONCS", "LA SALLE DES MOULINS", "LE VANTAIL FENDU", "LES CHANTIERS D'OS", "L'ANTECHAMBRE", "LE NOYAU D'OS" };
+  bool done[20]; for (int di = 0; di < 20; di++) done[di] = false; // V5.50 : 20 salles
   bool pyraFriend = false, pyraGift = false; // V5.48 : Pyra devient une alliee apres le 3e duel
   float px2 = 40.0f, py2 = 100.0f;
-  static const char *RDLG[7][3] = {
+  static const char *RDLG[11][3] = {
     { "Snif... un humain ?", "Personne ne me salue, jamais.", "Veux-tu m'ecouter, toi ?" },
     { "Croaaa ! Un humain dans la mare !", "On va bien s'amuser...", "Essaie donc de m'attraper !" },
     { "HALTE, voyageur.", "Je garde la porte de la reine.", "Montre-moi ton ame !" },
@@ -10444,8 +10540,12 @@ static void utGame() { // V5.47 : SOUL QUEST — 6 salles, boutique de Momo, equ
     { "Une ame humaine, enfin.", "Pour mes gardenes d'os et mes", "reves de ciel. Ton ame. Donne." },
     { "HALTE ! Gardes royales !", "Deux soeurs, deux hallebardes,", "et une seule envie : jouer !" },
     { "Bien joue, humain...", "mais la couronne est a MOI.", "Prepare-toi !" },
+    { "Psst... un humain !", "Je suis LUMIN ! On joue aux", "spores ? Attention, ca pique un peu !" },
+    { "Tu me regardes ? Je te regarde.", "Montre-moi ton meilleur mouvement.", "Je le ferai MIEUX, evidemment." },
+    { "HALTE ! Le temps, c'est du temps !", "Je suis l'HORLOGER. Ma salle", "n'attend QUE toi. Tic. Tac. Tic." },
+    { "TU. ES. LA.", "Je suis le NOYAU. Le battement", "de tout ce qui fut jure ici." },
   };
-  static const char *SPDLG[7][3] = {
+  static const char *SPDLG[11][3] = {
     { "Le fantome sourit a travers ses", "larmes. Il flotte vers la sortie,", "libere d'un poids tres ancien." },
     { "Le crapaud cligne de ses gros yeux", "et te laisse passer. Un contrat", "d'honneur lie desormais vos ames." },
     { "Osteo retire son chapeau d'os.", "Passe, ami. La reine t'attendra", "longtemps, mais pas aujourd'hui." },
@@ -10453,11 +10553,17 @@ static void utGame() { // V5.47 : SOUL QUEST — 6 salles, boutique de Momo, equ
     { "La reine pose sa couronne.", "\"Tu m'as ecoutee, comme lui", "jadis... Va, petit. Le ciel est a toi.\"" },
     { "Les doges battent de la queue.", "Elles t'adoptent comme troisieme", "soeur d'armes. Grosse ceremonie !" },
     { "Pyra renonce a la couronne.", "Elle veut etre... ton amie ?", "Personne ne lui avait jamais propose." },
+    { "Lumin eclate de lumiere douce.", "Elle eclaire desormais la galerie", "pour tous les voyageurs. Merci !" },
+    { "L'Ombre s'incline, exactement", "comme toi. Elle retourne dans son", "miroir, apaisee et flattee." },
+    { "L'Horloger souffle un grand coup.", "\"Enfin quelqu'un qui ne presse", "personne !\" Passe, ami. Tic. Tac." },
+    { "Le Noyau ralentit, pacifie.", "Le Serment d'Os se dissout en", "poussiere doree. Le ciel t'appartient." },
   };
-  static const char *PYP[3][3] = { // V5.48 : ce que dit Pyra avant chaque duel
+  static const char *PYP[5][3] = { // V5.48 : ce que dit Pyra avant chaque duel (V5.50 : duels d'entrainement 4 et 5)
     { "HALTE ! Je suis PYRA !", "La future reine du sous-sol !", "Duel numero UN. En garde !" },
     { "Deuxieme duel, humain !", "J'ai vingt idees de flammes", "et aucune pitie ! ... un peu." },
     { "Dernier duel. Le vrai.", "Celui qui compte. Si je perds,", "je te suivrai jusqu'au trone." },
+    { "Un entrainement, humain !", "Le Noyau est costaud. Montre-", "moi que tu es PRET pour lui !" },
+    { "Dernier entrainement. Apres,", "c'est le vrai combat. Fais-moi", "peur, champion. Je te regarde !" },
   };
   static const char *TWL1[3][3] = { // les jumelles mouees, selon la salle (V5.47)
     { "Nous sommes les jumelles mouees.", "On garde la memoire du Serment", "d'Os. Chut. Ne le dis a personne." },
@@ -10468,11 +10574,14 @@ static void utGame() { // V5.47 : SOUL QUEST — 6 salles, boutique de Momo, equ
   while (true) { // ================= boucle du monde =================
     pollKeys();
     float ox = px2, oy = py2;
-    if (kLeft) px2 -= 1.3f; if (kRight) px2 += 1.3f;
-    if (kUp) py2 -= 1.3f; if (kDown) py2 += 1.3f;
-    bool doorOpen = done[room] || UT_RE[room] < 0; // V5.47 : la boutique n'a pas de gardien
-    if (px2 < ((room > 0) ? 4 : 12)) px2 = ((room > 0) ? 4 : 12); if (px2 > (doorOpen ? 306 : 294)) px2 = (doorOpen ? 306 : 294); // V5.49 : on peut franchir le mur gauche si une salle precede
-    if (py2 < 52) py2 = 52; if (py2 > 138) py2 = 138;
+    if (kLeft) px2 -= 1.3f;
+    if (kRight) px2 += 1.3f;
+    if (kUp) py2 -= 1.3f;
+    if (kDown) py2 += 1.3f;
+    bool doorOpen = done[room] || UT_RE[room] < 0; // V5.47 : la boutique n'a pas de gardien    if (px2 < ((room > 0) ? 4 : 12)) px2 = ((room > 0) ? 4 : 12); // V5.49 : on peut franchir le mur gauche si une salle precede
+    if (px2 > (doorOpen ? 306 : 294)) px2 = (doorOpen ? 306 : 294);
+    if (py2 < 52) py2 = 52;
+    if (py2 > 138) py2 = 138;
     if (UT_RE[room] >= 0 && !done[room] && px2 > 216 && px2 < 286 && py2 > 66 && py2 < 136) { px2 = ox; py2 = oy; } // le monstre bloque
     if (keyOK && !pOK3) {
       if (UT_RE[room] >= 0 && !done[room] && px2 > 214 && px2 < 288 && py2 > 62 && py2 < 140) { // ---------- COMBAT ----------
@@ -10514,15 +10623,17 @@ static void utGame() { // V5.47 : SOUL QUEST — 6 salles, boutique de Momo, equ
         } else if (res == 1) {
           spared++; done[room] = true;
           utDialog(SPDLG[UT_RE[room]][0], SPDLG[UT_RE[room]][1], SPDLG[UT_RE[room]][2]);
-          if (room == 9) qres = 1;
+          if (room == 9) utDialog("La reine ecarte son tapis d'os :", "un escalier descend ENCORE plus bas.", "Le Noyau appelle, sous la terre.", ""); // V5.50 : l'aventure continue
+          if (room == 19) qres = 1;
         }
         else if (res == 2) {
           kills++; done[room] = true;
           utDialog("Le monstre s'effrite en poussiere.", "Son ame s'envole, etroite et pale.", "");
-          if (room == 9) qres = 2;
+          if (room == 9) utDialog("Derriere le trone vide, le sol", "s'ouvre : un escalier descend vers", "le Noyau, tout au fond du monde.", ""); // V5.50
+          if (room == 19) qres = 2;
         }
         else utDialog("Tu recules prudemment.", "Le monstre reste la, patient.", "");
-      } else if (UT_RE[room] < 0 && px2 > 214 && px2 < 288 && py2 > 62 && py2 < 140) { // ---------- BOUTIQUE DE MOMO ----------
+      } else if (UT_RE[room] == -1 && px2 > 214 && px2 < 288 && py2 > 62 && py2 < 140) { // ---------- BOUTIQUE DE MOMO ----------
         waitRelease();
         utShop(&st);
       } else if (UT_RNPC[room] == 1 && px2 < 130 && py2 > 62 && py2 < 140) { // ---------- LES JUMELLES ----------
@@ -10556,7 +10667,7 @@ static void utGame() { // V5.47 : SOUL QUEST — 6 salles, boutique de Momo, equ
     if (UT_RSTAR[room]) { fCirc(80, 56, 4, C_GOLD); px(80, 48, C_WHT); px(72, 56, C_WHT); px(88, 56, C_WHT); px(80, 64, C_WHT); } // etoile de repos
     if (UT_RNPC[room] == 1) utNpc(90, 100, 1); // les jumelles, a gauche
     if (UT_RE[room] >= 0 && !done[room]) utFace(250, 100, UT_RE[room]); // le gardien
-    else if (UT_RE[room] < 0) utNpc(250, 100, 0); // Momo derriere son comptoir
+    else if (UT_RE[room] == -1) utNpc(250, 100, 0); // Momo derriere son comptoir (-2 : salle vide, V5.50)
     if (room == 7) { // V5.48 : le feu de camp des allies
       fRect(146, 100, 8, 6, KDColor::RGB24(0x6A4A2A)); // buche
       fCirc(150, 94, 5, C_ORG); fCirc(150, 90, 3, C_YEL); // flammes
@@ -10570,13 +10681,13 @@ static void utGame() { // V5.47 : SOUL QUEST — 6 salles, boutique de Momo, equ
     char sdb[32]; snprintf(sdb, 32, "PV %d/20  OR %dG", st.php, st.gold);
     drawTextSmall(8, 20, sdb, C_WHT);
     blit(); Ion::Timing::msleep(16);
-    if (room < 9 && doorOpen && px2 > 300) { room++; px2 = 16; waitRelease(); }
+    if (room < 19 && doorOpen && px2 > 300) { room++; px2 = 16; waitRelease(); }
     if (room > 0 && px2 < 10) { room--; px2 = 296; waitRelease(); } // V5.49 : retour dans la salle precedente
-    if (room == 9 && done[9]) break; // la reine passee : la fin
+    if (room == 19 && done[19]) break; // V5.50 : le Noyau apaise : la vraie fin
   }
-  if (qres == 1) utDialog("La reine pose sa couronne au sol.", "Le Serment d'Os se fissure, puis", "s'effrite, libere comme un voeu.");
-  else utDialog("Le trone est vide. Le Serment d'Os", "se dissout dans la poussiere du", "jardin, sans personne pour le voir.");
-  utDialog("Derriere le trone, un escalier de", "lumiere monte vers le ciel. Les", "monstres se pressent autour de toi.");
+  if (qres == 1) utDialog("Le Noyau se pose, apaise, immense.", "Le Serment d'Os se fissure, puis", "s'effrite, libere comme un voeu.");
+  else utDialog("Le Noyau s'est brise en poussiere.", "Le Serment se dissout dans le grand", "silence, sans personne pour le voir.");
+  utDialog("Une colonne de lumiere jaillit du", "coeur de la terre. Les monstres de", "toute la descente montent avec toi.");
   { // ---------- ecran de fin ----------
     const char *fin = (kills == 0) ? "FIN : L'AMITIE SOUS LA TERRE" : ((qres == 2) ? "FIN : LA POUSSIERE" : "FIN : LE CHEMIN MIXTE");
     const char *fl = (kills == 0) ? "Personne n'est tombe en poussiere." : ((qres == 2) ? "La couronne roule sur le sol." : "Certains t'attendent encore, la haut.");
