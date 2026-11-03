@@ -47,7 +47,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: latest
-          allow_updates: true
+          overwrite_files: true
           name: Dernier build
           body: |
             Build automatique de main, mis a jour a chaque push.
