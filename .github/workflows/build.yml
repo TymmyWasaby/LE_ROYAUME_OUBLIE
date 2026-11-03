@@ -44,18 +44,8 @@ jobs:
           path: target/mini-bs.nwa
 
       - name: Publier le NWA en Release (telechargement direct, sans zip)
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: latest
-          overwrite_files: true
-          name: Dernier build
-          body: |
-            Build automatique de main, mis a jour a chaque push.
-
-            Sur telephone : tapez sur mini-bs.nwa ci-dessous, le fichier se telecharge
-            directement (pas de zip a extraire). Puis installez-le sur my.numworks.com.
-
-            taille.txt contient la taille exacte du .nwa (diagnostic).
-          files: |
-            target/mini-bs.nwa
-            taille.txt
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          echo "Taille exacte du mini-bs.nwa : $(du -k target/mini-bs.nwa | cut -f1) Ko" > relnotes.txt
+          gh release create latest target/mini-bs.nwa taille.txt --title "Dernier build" --notes-file relnotes.txt --clobber || gh release upload latest target/mini-bs.nwa taille.txt --clobber
