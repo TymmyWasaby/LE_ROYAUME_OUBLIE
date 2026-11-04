@@ -10608,21 +10608,20 @@ static int utBattle(int eid, UtState *st, int phase) { // 0 defaite, 1 epargne/y
 // -12 casse-tete des dalles, -14 noix du goblin.
 static const int UT_NR = 200, UT_GW = 25;
 struct UtRoom { int16_t n, e, s, w; int8_t content, story, ph; char nm[22]; };
-static UtRoom UR[UT_NR];
-static int16_t UTGRID[UT_GW * UT_GW];
-static uint8_t UTPZ[UT_NR]; // V5.54 : memoire des casse-tetes par salle (bits 0-3 : dalles allumees, 4 : resolu, 5 : regle lue)
-static int utNRoom = 0;
+// V5.55 : UR/UTGRID/UTPZ ne sont PLUS statiques — elles vivaient dans le budget RAM de
+// l'app (~148 Ko maxi d'apres NumPlay) et les 8 Ko des 200 salles faisaient echouer
+// l'installation en silence. Elles vivent maintenant sur la PILE (32 Ko separes).
 static const char *UTN1[25] = { "GROTTE","GALERIE","PUITS","MARAIS","SALLE","CRYPTES","PONT","ESCALIER","SANCTUAIRE","CATACOMBES","MOULIN","ANTRE","CHAPELLE","FORGE","JARDIN","LAC","LABYRINTHE","TUNNEL","ABIME","CITERNE","SOUTERRAIN","PASSAGE","NECROPOLE","CLAPIERE","ORATOIRE" };
 static const char *UTN2[21] = { "DES ECHOES","DES SANGSUES","DES OUBLIS","DES LUCIOLES","D'OS","DES OMBRES","DES MOUCHES","DES LAMENTATIONS","DES CLOCHES","DES VAGUES","DES SECRETS","DU VENT","DES TREFLES","SANS FIN","DES MURMURES","DES ETOILES","DU SABLIER","AUX CHAINES","DES NOEUDS","BLEUES","ENCHAINEES" };
-static int utRtNew(int gx, int gy) { // cree la salle (gx, gy), renvoie son index
-  int idx = utNRoom++;
+static int utRtNew(UtRoom *UR, int16_t *UTGRID, int *utNRoom, int gx, int gy) { // cree la salle (gx, gy), renvoie son index — V5.55 : tables sur la pile
+  int idx = (*utNRoom)++;
   UTGRID[gx + gy * UT_GW] = idx;
   UR[idx].n = UR[idx].e = UR[idx].s = UR[idx].w = -1;
   UR[idx].content = -2; UR[idx].story = -1; UR[idx].ph = 0;
   snprintf(UR[idx].nm, 22, "%s %s", UTN1[rnd(25)], UTN2[rnd(21)]);
   return idx;
 }
-static void utRtLink(int a, int b, int d) { // relie a -> b dans la direction d (0=N 1=E 2=S 3=W)
+static void utRtLink(UtRoom *UR, int a, int b, int d) { // relie a -> b dans la direction d (0=N 1=E 2=S 3=W) — V5.55 : table en parametre
   if (d == 0) { UR[a].n = b; UR[b].s = a; }
   else if (d == 1) { UR[a].e = b; UR[b].w = a; }
   else if (d == 2) { UR[a].s = b; UR[b].n = a; }
@@ -10681,12 +10680,17 @@ static void utGame() { // V5.53 : SOUL QUEST — LA GRANDE DESCENTE : 200 salles
   st.lv = 1; st.exp = 0; st.mhp = 20; // V5.54 : l'AMOURE commence a 1
   st.inv[0] = 0; st.inv[1] = 0; st.inv[2] = -1; st.inv[3] = -1;
   int spared = 0, kills = 0, room = 0, qres = 0;
-  // ---------- V5.53 : generation de la descente (differente a chaque partie) ----------
+  // ---------- V5.55 : generation de la descente (differente a chaque partie) ----------
+  // Les tables vivent sur la PILE (32 Ko separes du budget RAM de l'app, comme les gros
+  // tampons de NumPlay) : l'app reste sous la limite RAM d'installation (~148 Ko).
+  UtRoom UR[UT_NR];
+  int16_t UTGRID[UT_GW * UT_GW];
+  uint8_t UTPZ[UT_NR]; // memoire des casse-tetes par salle (bits 0-3 : dalles allumees, 4 : resolu, 5 : regle lue)
+  int utNRoom = 0;
   for (int i = 0; i < UT_GW * UT_GW; i++) UTGRID[i] = -1;
-  utNRoom = 0;
   for (int i = (int)(Ion::Timing::millis() % 64); i >= 0; i--) rnd(7); // grain variable
   const int RDX[4] = { 0, 1, 0, -1 }, RDY[4] = { -1, 0, 1, 0 }; // N E S W
-  int gxx = UT_GW / 2, gyy = UT_GW / 2, cur = utRtNew(gxx, gyy); // salle 0
+  int gxx = UT_GW / 2, gyy = UT_GW / 2, cur = utRtNew(UR, UTGRID, &utNRoom, gxx, gyy); // salle 0
   while (utNRoom < 158) { // chemin principal : la colonne vertebrale de l'histoire
     int d = (rnd(10) < 4) ? 1 : rnd(4); // biais vers l'est, l'aventure avance
     int tries = 0, nx = gxx + RDX[d], ny = gyy + RDY[d];
@@ -10696,8 +10700,8 @@ static void utGame() { // V5.53 : SOUL QUEST — LA GRANDE DESCENTE : 200 salles
       for (int yy = 0; yy < UT_GW; yy++) for (int xx = 0; xx < UT_GW; xx++) if (UTGRID[xx + yy * UT_GW] == cur) { gxx = xx; gyy = yy; }
       continue;
     }
-    int nn = utRtNew(nx, ny);
-    utRtLink(cur, nn, d);
+    int nn = utRtNew(UR, UTGRID, &utNRoom, nx, ny);
+    utRtLink(UR, cur, nn, d);
     cur = nn; gxx = nx; gyy = ny;
   }
   int safety = 4000; // branches laterales : tresors, etoiles, raccourcis
@@ -10709,8 +10713,8 @@ static void utGame() { // V5.53 : SOUL QUEST — LA GRANDE DESCENTE : 200 salles
     if (tries >= 10) continue;
     int len = 2 + rnd(3), bcur = base;
     for (int k = 0; k < len && utNRoom < UT_NR; k++) {
-      int nn = utRtNew(bx + RDX[d], by + RDY[d]);
-      utRtLink(bcur, nn, d);
+      int nn = utRtNew(UR, UTGRID, &utNRoom, bx + RDX[d], by + RDY[d]);
+      utRtLink(UR, bcur, nn, d);
       UR[nn].content = (k == len - 1) ? (rnd(2) ? -3 : -4) : (rnd(10) < 6 ? 100 + rnd(16) : -2); // au bout : etoile ou coffre
       bcur = nn; bx += RDX[d]; by += RDY[d];
       if (k + 1 < len) { // la branche peut tourner
@@ -10924,7 +10928,7 @@ static void utGame() { // V5.53 : SOUL QUEST — LA GRANDE DESCENTE : 200 salles
         for (int yy = 0; yy < UT_GW && !opened; yy++) { // ou est la salle ?
           for (int xx = 0; xx < UT_GW; xx++) {
             if (UTGRID[xx + yy * UT_GW] == room && xx + 1 < UT_GW - 2 && UTGRID[xx + 1 + yy * UT_GW] < 0) { // la cache nait si la place est libre a l'est
-              int sn = utRtNew(xx + 1, yy); utRtLink(room, sn, 1);
+              int sn = utRtNew(UR, UTGRID, &utNRoom, xx + 1, yy); utRtLink(UR, room, sn, 1);
               UR[sn].content = -9; strcpy(UR[sn].nm, "LA CACHE OUBLIEE");
               opened = true; break;
             }
