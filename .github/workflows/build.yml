@@ -31,11 +31,13 @@ jobs:
       - name: Build app
         run: make clean build
 
-      - name: Inspect output (diagnostic)
+      - name: Diagnostics (taille + RAM dans la Release)
         run: |
-          ls -la target/
-          du -k target/mini-bs.nwa | tee taille.txt
-          arm-none-eabi-size -A target/mini-bs.nwa || true
+          { echo "=== Diagnostics du build ==="
+            echo "Taille du mini-bs.nwa : $(du -k target/mini-bs.nwa | cut -f1) Ko"
+            echo "=== Sections (.data + .bss = RAM utilisee, limite ~148 Ko) ==="
+            arm-none-eabi-size -A target/mini-bs.nwa
+          } | tee relnotes.txt
 
       - name: Upload NWA
         uses: actions/upload-artifact@v4
@@ -47,5 +49,4 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          echo "Taille exacte du mini-bs.nwa : $(du -k target/mini-bs.nwa | cut -f1) Ko" > relnotes.txt
-          gh release create latest target/mini-bs.nwa taille.txt --title "Dernier build" --notes-file relnotes.txt --clobber || gh release upload latest target/mini-bs.nwa taille.txt --clobber
+          gh release create latest target/mini-bs.nwa --title "Dernier build" --notes-file relnotes.txt --clobber || gh release upload latest target/mini-bs.nwa --clobber
