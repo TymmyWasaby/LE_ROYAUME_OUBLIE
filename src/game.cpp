@@ -571,19 +571,75 @@ static const char *INTRO[7][3] = {
   { "Elle ne brula rien. Elle", "choisit un jardin, un lac,", "un village. Elle resta." },
   { "Les moissons poussaient la", "nuit, les enfants lisaient sous", "sa lueur. Personne n'avait peur." },
   { "Mais une etoile qui brille", "s'eteint un jour, ou l'autre.", "La sienne commenca de faiblir." },
-  { "Alors, du fond des cavernes,", "monta un GOLEM de pierre,", "faconne jadis pour la servir." },
-  { "Les heros vinrent, lames au", "poing. La pierre ne connait ni", "peur ni blessure. Rien n'y fit." },
-  { "Le royaume s'eteint, doucement.", "L'Ancien invoqua les ESPRITS", "du vent. Le dernier... c'est toi." }
+  { "Alors le GOLEM, pour la sauver,", "la brisa en HUIT ECLATS et en", "confia sept aux GARDIENS du monde." },
+  { "Il garda le COEUR, au plus", "profond. Le royaume ne vit que", "des voleurs. Les heros echouerent." },
+  { "L'Ancien invoqua les ESPRITS", "du vent. Le dernier... c'est toi.", "HUIT regions. HUIT gardiens." }
 };
 static const char *ENDING[8][3] = {
-  { "TU RENDS L'ETOILE A L'ANCIEN.", "Elle hesite une seconde...", "Puis remonte, rappelee chez elle." },
-  { "Sa lumiere coule sur le village,", "les toits, le lac, les champs...", "Le royaume respire enfin." },
-  { "Et tu murmures a l'Ancien la", "verite du donjon : le GOLEM", "n'etait pas un voleur." },
-  { "L'Ancien ferme les yeux :", "\"Nous avons maudit notre gardien.", "Pardonne-nous, seigneur pierre.\"" },
-  { "On grava sur le seuil du donjon :", "\"Il gardait sa lumiere comme", "elle le gardait du noir.\"" },
-  { "Et quelque part, tres bas,", "dans la poussiere du donjon,", "quelque chose repose en paix." },
-  { "L'etoile brille desormais un", "peu plus fort chaque nuit.", "Comme quelqu'un qui remercie." },
+  { "LES HUIT ECLATS SE REUNISSENT", "AUTOUR DU COEUR, et l'ETOILE", "renait, entiere, immense." },
+  { "Elle remonte, doucement,", "plus vive qu'avant. Le royaume", "respire enfin." },
+  { "Et tu murmures la verite :", "huit gardiens aimants, zero", "voleur. Le royaume ecouta." },
+  { "L'Ancien ferme les yeux :", "\"Nous avons maudit huit", "gardiens. Pardonnez-nous.\"" },
+  { "On grava sur huit steles :", "\"Ils garderent sa lumiere comme", "elle les gardait du noir.\"" },
+  { "Et quelque part, tres bas,", "dans la poussiere du donjon,", "huit geants reposent en paix." },
+  { "L'etoile brille desormais un", "peu plus fort chaque nuit.", "Comme huit remerciements." },
   { "FIN - LE ROYAUME OUBLIE", "MERCI D'AVOIR JOUE !", "" }
+};
+// les intros des 8 regions (montrees au passage d'une region a l'autre)
+static const char *CHAPI[8][3][3] = {
+  { { "Le royaume de Tallia.", "Huit regions, huit gardiens.", "Ton aventure commence." },
+    { "", "", "" },
+    { "", "", "" } },
+  { { "REGION DU GIVRE.", "Les steles chantent le lac", "gele et ses aurores." },
+    { "Ici veille le COLOSSE DE", "GIVRE, deuxieme Gardien.", "Ses rochers sont des glacons." },
+    { "Renvoie-les : la glace", "brise la glace. Le vent", "n'a jamais froid." } },
+  { { "REGION DE LA CENDRE.", "Terre brulee sous un ciel", "de braise ancienne." },
+    { "La SENTINELLE DE CENDRE", "patrouille depuis mille ans.", "Ses yeux sont des charbons." },
+    { "Meme la pierre peut", "s'epuiser a veiller. Sois", "rapide, et distant." } },
+  { { "REGION DE LA MOUSSE.", "Tout ce qui tombe ici", "finit par fleurir." },
+    { "Le COLOSSE DE MOUSSE", "arrosait l'eclat comme un", "plant d'etoile." },
+    { "Ses fleurs te suivront", "jusqu'au bout. Elles savent", "que tu viens aider." } },
+  { { "REGION DU SABLE.", "Des dunes qui gardent la", "forme du vent. Comme toi." },
+    { "Le GARDIEN DE SABLE scelle", "l'eclat sous une tempete", "de pierre seche." },
+    { "Pousse la tempete contre", "elle-meme. Le desert", "n'appartient qu'au vent." } },
+  { { "REGION DE L'ARGILE.", "Ici naissaient les statues", "du royaume de Tallia." },
+    { "L'IDOLE D'ARGILE fut la", "premiere a accepter un eclat.", "Par devotion." },
+    { "Fends-la avec respect :", "elle attend ce coup depuis", "le premier jour." } },
+  { { "REGION DE L'OMBRE.", "Le royaume evitait ces", "grottes. Les Gardiens non." },
+    { "Le TITAN D'OMBRE enfile", "l'eclat comme une lampe", "au bout d'un fil." },
+    { "Renvoie sa nuit sur lui :", "meme l'ombre n'echappe", "pas au vent." } },
+  { { "LA DERNIERE REGION.", "Le donjon d'origine, la ou", "tout a commence." },
+    { "Au fond attend GOLEM PRIME,", "le premier Gardien, celui du", "COEUR de l'etoile." },
+    { "Il connait ton nom depuis", "ton premier souffle ici.", "Sois digne. Sois doux." } }
+};
+// ce que chante le vent a chaque eclat recolte
+static const char *DLG_ECLATS[7][2][3] = {
+  { { "LE PREMIER ECLAT !", "Il palpite dans tes mains,", "chaud et vivant." },
+    { "Les steles disaient vrai :", "le Gardien ne gardait pas", "TOUTE l'etoile... un eclat." } },
+  { { "DEUXIEME ECLAT !", "Le Colosse de Givre rend", "son dernier flocon." },
+    { "Six Gardiens encore veillent", "chacun sur un eclat. Le vent", "continue son chemin." } },
+  { { "TROISIEME ECLAT !", "La Sentinelle de Cendre", "s'endort en poussiere grise." },
+    { "Les heros des steles", "n'avaient pas compris. Toi,", "tu commences a comprendre." } },
+  { { "QUATRIEME ECLAT !", "Le Colosse de Mousse devient", "un lit de fleurs." },
+    { "Il jardinait pour l'etoile,", "parle le vent. Tous ces", "geants l'aimaient, aussi." } },
+  { { "CINQUIEME ECLAT !", "Le Gardien de Sable s'effrite", "en une dune douce." },
+    { "Trois regions encore,", "et le coeur de tout cela", "attend au fond." } },
+  { { "SIXIEME ECLAT !", "L'Idole d'Argile se fend,", "sereine, presque soulagee." },
+    { "Elle murmurait depuis des", "siecles : \"Venez. Nous", "vieillissons tous.\"" } },
+  { { "SEPTIEME ECLAT !", "Le Titan d'Ombre se dissout", "dans la lumiere du soir." },
+    { "Une seule region reste.", "L'origine. La ou le premier", "Gardien tient le COEUR." } }
+};
+// les 8 Gardiens : nom court (barre de vie) et palette {sombre, corps, arete, oeil, touche}
+static const char *BN[8] = { "GOLEM", "GIVRE", "CENDRE", "MOUSSE", "SABLE", "ARGILE", "OMBRE", "PRIME" };
+static const uint32_t BSK[8][5] = {
+  { 0x6E6E76, 0x9A9AA2, 0xB0B0B0, 0xE86820, 0x3A5A34 }, // GOLEM de pierre
+  { 0x3A5A80, 0x6A8AB0, 0xA8C4DC, 0x40D8F0, 0xB8E8F8 },  // COLOSSE DE GIVRE
+  { 0x5A4038, 0x8A6858, 0xB09080, 0xFF3818, 0x3A2822 },  // SENTINELLE DE CENDRE
+  { 0x2E5A28, 0x5A8A48, 0x88B868, 0xF0E850, 0x1E3818 },  // COLOSSE DE MOUSSE
+  { 0x8A7448, 0xC4A868, 0xE8D8A0, 0xFFB020, 0x8A6A3A },  // GARDIEN DE SABLE
+  { 0x7A4830, 0xB06840, 0xD89060, 0xF05020, 0x5A3020 },  // IDOLE D'ARGILE
+  { 0x2A2438, 0x4A4058, 0x6A5A78, 0xB03AF0, 0x1A1626 },  // TITAN D'OMBRE
+  { 0x8A6A20, 0xE8C858, 0xFFF0A0, 0xFFF8D0, 0x6A5A18 }   // GOLEM PRIME, PORTE-ETOILE
 };
 
 // ---------------- Etat du jeu ----------------
@@ -596,6 +652,10 @@ static bool hasFlask, hasEcho, hasPlume; // tresors secrets
 static unsigned titleSc; // grain de hasard : le temps passe sur le titre
 static uint8_t chestOpen[18], doorOpen[18]; static bool visited[18]; static bool pmov;
 static int frame, shake; static int fadePos = 15; // fondu de palette (15 = eclair)
+static unsigned playT; static int deaths; static uint32_t steleRead; // stats d'aventure (ticks de 16 ms, morts, steles lues)
+static int kills; // monstres souffles cette partie
+// medailles et records de session (remis a zero a chaque lancement de l'app)
+static unsigned killsS, bestT; static int runsDone, ngPlus, ngRun, medals; static int chap; static bool chapGo; // chapitre 0..7, eclat pret a emmener
 // dialogue en cours
 static const char *(*dgp)[3]; // pointeur vers un tableau de pages
 static int dgN, dgI; static bool dlgOn, dlgEnd; // dlgEnd : apres la derniere page, fin du jeu
@@ -647,26 +707,36 @@ static bool solid(int tx, int ty) {
 static void drawTile(int tx, int ty, int ox, int oy) {
   char c = tileAt(tx, ty);
   int x = tx * TS + ox, y = TOPOFF + ty * TS + oy;
+  bool frz = (chap == 1); // REGION DU GIVRE : neige et glace
+  bool cdr = (chap == 2); // REGION DE LA CENDRE : terre brulee
+  bool mou = (chap == 3); // REGION DE LA MOUSSE : tout y fleurit
+  bool sab = (chap == 4); // REGION DU SABLE : dunes sans fin
+  bool arg = (chap == 5); // REGION DE L'ARGILE : le pays des statues
+  bool omb = (chap == 6); // REGION DE L'OMBRE : les grottes interdites
+  bool prm = (chap == 7); // LA DERNIERE REGION : le donjon d'origine
+  KDColor g1 = frz ? KDColor::RGB24(0xD8E4F0) : (cdr ? KDColor::RGB24(0x4A4038) : (mou ? KDColor::RGB24(0x3E7030) : (sab ? KDColor::RGB24(0xD8B878) : (arg ? KDColor::RGB24(0xC08058) : (omb ? KDColor::RGB24(0x2A2434) : (prm ? KDColor::RGB24(0x3A3648) : C_GRASS)))))),
+          g2 = frz ? KDColor::RGB24(0xC0D0E4) : (cdr ? KDColor::RGB24(0x403A34) : (mou ? KDColor::RGB24(0x2E5A24) : (sab ? KDColor::RGB24(0xC8A868) : (arg ? KDColor::RGB24(0xA87048) : (omb ? KDColor::RGB24(0x221E2C) : (prm ? KDColor::RGB24(0x322E40) : C_GRAS2)))))),
+          g3 = frz ? KDColor::RGB24(0x8AA0BC) : (cdr ? KDColor::RGB24(0x2A2420) : (mou ? KDColor::RGB24(0x1E4016) : (sab ? KDColor::RGB24(0xA88850) : (arg ? KDColor::RGB24(0x805538) : (omb ? KDColor::RGB24(0x16121E) : (prm ? KDColor::RGB24(0x24201C) : C_DGRN))))));
   if (c == '.' || c == 'f' || c == 'p' || c == 'P' || c == 'c') {
     if (c == 'p') { // chemin : bordures qui fondent dans l'herbe
       fRect(x, y, TS, TS, C_PATH);
       px(x + 2, y + 5, KDColor::RGB24(0xB0904E)); px(x + 9, y + 11, KDColor::RGB24(0xB0904E));
       px(x + 13, y + 3, KDColor::RGB24(0xB0904E));
       char n;
-      n = tileAt(tx, ty - 1); if (n != 'p' && n != ' ') fRect(x, y, TS, 2, C_GRAS2);
-      n = tileAt(tx, ty + 1); if (n != 'p' && n != ' ') fRect(x, y + 14, TS, 2, C_GRAS2);
-      n = tileAt(tx - 1, ty); if (n != 'p' && n != ' ') fRect(x, y, 2, TS, C_GRAS2);
-      n = tileAt(tx + 1, ty); if (n != 'p' && n != ' ') fRect(x + 14, y, 2, TS, C_GRAS2);
+      n = tileAt(tx, ty - 1); if (n != 'p' && n != ' ') fRect(x, y, TS, 2, g2);
+      n = tileAt(tx, ty + 1); if (n != 'p' && n != ' ') fRect(x, y + 14, TS, 2, g2);
+      n = tileAt(tx - 1, ty); if (n != 'p' && n != ' ') fRect(x, y, 2, TS, g2);
+      n = tileAt(tx + 1, ty); if (n != 'p' && n != ' ') fRect(x + 14, y, 2, TS, g2);
     } else {
-      fRect(x, y, TS, TS, ((tx * 7 + ty * 13) & 3) ? C_GRASS : C_GRAS2);
+      fRect(x, y, TS, TS, ((tx * 7 + ty * 13) & 3) ? g1 : g2);
       int h2 = (tx * 5 + ty * 3) & 15;
-      px(x + 3 + (tx & 3), y + 9, C_DGRN); px(x + 11, y + 4 + (ty & 2), C_DGRN);
-      if (h2 == 0) { px(x + 8, y + 6, C_DGRN); px(x + 7, y + 7, C_DGRN); px(x + 9, y + 7, C_DGRN); }
+      px(x + 3 + (tx & 3), y + 9, g3); px(x + 11, y + 4 + (ty & 2), g3);
+      if (h2 == 0) { px(x + 8, y + 6, g3); px(x + 7, y + 7, g3); px(x + 9, y + 7, g3); }
       else if (h2 == 5) { px(x + 5, y + 12, KDColor::RGB24(0x7CCE6A)); px(x + 12, y + 6, KDColor::RGB24(0x7CCE6A)); } // brins clairs
     }
     if (c == 'f') { // fleurs qui ondulent
       int sw = ((frame >> 4) + tx) & 1;
-      fRect(x + 4 + sw, y + 10, 1, 3, C_DGRN); fRect(x + 11 - sw, y + 9, 1, 3, C_DGRN);
+      fRect(x + 4 + sw, y + 10, 1, 3, g3); fRect(x + 11 - sw, y + 9, 1, 3, g3);
       px(x + 3 + sw, y + 8, C_YEL); px(x + 4 + sw, y + 8, C_ORG); px(x + 4 + sw, y + 9, C_ORG); px(x + 5 + sw, y + 9, C_YEL);
       px(x + 10 - sw, y + 7, C_WHT); px(x + 11 - sw, y + 7, C_MAG); px(x + 11 - sw, y + 8, C_WHT);
       if ((tx + ty) & 1) { px(x + 8, y + 12, C_CYN); px(x + 9, y + 12, C_CYN); } // fleur bleue
@@ -689,7 +759,7 @@ static void drawTile(int tx, int ty, int ox, int oy) {
       fRect(x + 3, y + 12, 10, 1, KDColor::RGB24(0x8A5030));
     }
   } else if (c == 't') { // arbre : houppier en trois tons
-    fRect(x, y, TS, TS, ((tx * 7 + ty * 13) & 3) ? C_GRASS : C_GRAS2);
+    fRect(x, y, TS, TS, ((tx * 7 + ty * 13) & 3) ? g1 : g2);
     fCirc(x + 9, y + 12, 6, KDColor::RGB24(0x1E4A18));
     fRect(x + 6, y + 9, 4, 6, KDColor::RGB24(0x6A4A2A));
     fRect(x + 6, y + 9, 1, 6, KDColor::RGB24(0x523A20));
@@ -699,11 +769,40 @@ static void drawTile(int tx, int ty, int ox, int oy) {
     fCirc(x + 5 + sw, y + 3, 3, C_TREE2);                  // lumiere
     px(x + 9 + sw, y + 2, KDColor::RGB24(0x4A9E48));
     if (((tx * 3 + ty) & 7) == 2) { px(x + 5 + sw, y + 8, C_RED); px(x + 10 + sw, y + 5, C_RED); } // baies
-    px(x + 7, y + 14, C_DGRN);
+    if (frz) { fCirc(x + 6 + sw, y + 2, 3, KDColor::RGB24(0xE8F0FA)); fCirc(x + 10 + sw, y + 5, 2, KDColor::RGB24(0xE8F0FA)); fCirc(x + 8 + sw, y + 1, 2, KDColor::RGB24(0xF8FAFE)); } // sapin enneige
+    if (cdr) { // arbre calcine : couronne sombre, braises qui veillent
+      fCirc(x + 7 + sw, y + 5, 4, KDColor::RGB24(0x2A2018));
+      fCirc(x + 5 + sw, y + 3, 2, KDColor::RGB24(0x3A2C20));
+      if (((frame >> 3) + tx + ty) & 3) { px(x + 6 + sw, y + 4, C_ORG); px(x + 9 + sw, y + 6, C_RED); }
+    }
+    if (mou) { // arbre gorge de seve : couronne lumineuse, liane, rosee
+      fCirc(x + 7 + sw, y + 4, 3, KDColor::RGB24(0x5A9E48));
+      fRect(x + 4 + sw, y + 7, 1, 4, KDColor::RGB24(0x4A8E38)); // liane qui pend
+      if (((frame >> 4) + tx) & 1) px(x + 9 + sw, y + 3, KDColor::RGB24(0xB0E890)); // rosee qui brille
+    }
+    if (sab) { // palmier : houppier defrise, regime de dattes
+      fCirc(x + 8 + sw, y + 4, 3, KDColor::RGB24(0x5A9E48));
+      px(x + 5 + sw, y + 5, KDColor::RGB24(0x5A9E48)); px(x + 11 + sw, y + 5, KDColor::RGB24(0x5A9E48)); // palmes
+      px(x + 7 + sw, y + 6, KDColor::RGB24(0x8A5A28)); px(x + 8 + sw, y + 7, KDColor::RGB24(0x8A5A28)); // dattes
+    }
+    if (arg) { // arbre d'atelier : couronne d'ocre, coulee d'argile sur l'ecorce
+      fCirc(x + 7 + sw, y + 4, 3, KDColor::RGB24(0xB07850));
+      px(x + 5 + sw, y + 6, KDColor::RGB24(0xB07850)); px(x + 9 + sw, y + 5, KDColor::RGB24(0xB07850));
+      fRect(x + 6, y + 11, 1, 3, KDColor::RGB24(0xC98050)); // coulee
+    }
+    if (omb) { // arbre d'ombre : couronne de brume, un wisp l'habite
+      fCirc(x + 7 + sw, y + 4, 3, KDColor::RGB24(0x3A2E4E));
+      if (((frame >> 3) + tx * 3) & 7) { px(x + 6 + sw, y + 3, C_MAG); px(x + 9 + sw, y + 5, C_PUR); } // le wisp veille
+    }
+    if (prm) { // arbre mineral : couronne de pierre, reflet du coeur
+      fCirc(x + 7 + sw, y + 4, 3, KDColor::RGB24(0x4A4458));
+      if (((frame >> 4) + tx) & 1) px(x + 8 + sw, y + 3, C_GOLD); // le coeur eclaire tout
+    }
+    px(x + 7, y + 14, g3);
   } else if (c == 'w') { // eau profonde : houle croisee, bulles, nenuphars
-    fRect(x, y, TS, TS, C_WTR);
-    fRect(x + 1, y + 1, 14, 14, KDColor::RGB24(0x103050)); // les grandes profondeurs
-    fRect(x + 2, y + 2, 12, 12, KDColor::RGB24(0x0E2438));
+    fRect(x, y, TS, TS, frz ? KDColor::RGB24(0x74A4D4) : (cdr ? KDColor::RGB24(0x4A3020) : (mou ? KDColor::RGB24(0x3E6E52) : (sab ? KDColor::RGB24(0x4AA4C4) : (arg ? KDColor::RGB24(0xB07048) : (omb ? KDColor::RGB24(0x1A1626) : (prm ? KDColor::RGB24(0x282438) : C_WTR))))))); // gele ; huile ; etang ; oasis ; argile ; encre ; eau du fond
+    fRect(x + 1, y + 1, 14, 14, frz ? KDColor::RGB24(0x28507E) : (cdr ? KDColor::RGB24(0x301E14) : (mou ? KDColor::RGB24(0x1E4636) : (sab ? KDColor::RGB24(0x1E6A8A) : (arg ? KDColor::RGB24(0x704028) : (omb ? KDColor::RGB24(0x12101C) : (prm ? KDColor::RGB24(0x1C1826) : KDColor::RGB24(0x103050)))))))); // les grandes profondeurs
+    fRect(x + 2, y + 2, 12, 12, frz ? KDColor::RGB24(0x1C3E66) : (cdr ? KDColor::RGB24(0x241610) : (mou ? KDColor::RGB24(0x16382A) : (sab ? KDColor::RGB24(0x145876) : (arg ? KDColor::RGB24(0x583020) : (omb ? KDColor::RGB24(0x0C0A14) : (prm ? KDColor::RGB24(0x141020) : KDColor::RGB24(0x0E2438))))))));
     int ph = (frame >> 3) & 3;
     for (int i = 0; i < 3; i++) { // deux trains de houle qui se croisent
       px(x + 2 + i * 5 + (ph & 3), y + 3 + i * 4 + ((ph + ty) & 1), C_WTR2);
@@ -714,7 +813,7 @@ static void drawTile(int tx, int ty, int ox, int oy) {
     int bub = (frame + tx * 5 + ty * 3) & 31; // bulle qui remonte du fond
     if (bub < 14) px(x + 4 + ((ty & 1) * 6), y + 13 - bub, KDColor::RGB24(0xB0D8FF));
     if (((tx * 5 + ty * 7) & 31) == 0) { // nenuphar a la derive
-      fCirc(x + 8, y + 8, 4, KDColor::RGB24(0x2E6A2E)); px(x + 9, y + 7, C_DGRN); px(x + 6, y + 9, KDColor::RGB24(0x4A9E48));
+      fCirc(x + 8, y + 8, 4, KDColor::RGB24(0x2E6A2E)); px(x + 9, y + 7, g3); px(x + 6, y + 9, KDColor::RGB24(0x4A9E48));
     }
     char n;
     n = tileAt(tx, ty - 1); if (n != 'w' && n != ' ') { fRect(x, y, TS, 2, KDColor::RGB24(0x8AB8F0)); if (((tx + (frame >> 4)) & 1)) { px(x + 3, y + 1, C_WHT); px(x + 11, y + 1, C_WHT); } }
@@ -722,7 +821,7 @@ static void drawTile(int tx, int ty, int ox, int oy) {
     n = tileAt(tx - 1, ty); if (n != 'w' && n != ' ') { fRect(x, y, 2, TS, KDColor::RGB24(0x8AB8F0)); if (((ty + (frame >> 3)) & 1)) { px(x + 1, y + 4, C_WHT); px(x + 1, y + 11, C_WHT); } }
     n = tileAt(tx + 1, ty); if (n != 'w' && n != ' ') { fRect(x + 14, y, 2, TS, KDColor::RGB24(0x5A82C0)); if (((ty + (frame >> 3)) & 1)) px(x + 14, y + 8, KDColor::RGB24(0x8AB8F0)); }
   } else if (c == 'r') { // rocher : face sombre + lumiere + mousse
-    fRect(x, y, TS, TS, ((tx * 7 + ty * 13) & 3) ? C_GRASS : C_GRAS2);
+    fRect(x, y, TS, TS, ((tx * 7 + ty * 13) & 3) ? g1 : g2);
     fCirc(x + 9, y + 12, 6, KDColor::RGB24(0x1E4A18));
     fCirc(x + 8, y + 10, 6, KDColor::RGB24(0x4E4E56));  // face sombre
     fCirc(x + 8, y + 8, 6, C_ROCK);
@@ -730,9 +829,20 @@ static void drawTile(int tx, int ty, int ox, int oy) {
     px(x + 5, y + 5, KDColor::RGB24(0xD0D0D0));
     px(x + 11, y + 12, C_ROCK2); px(x + 6, y + 12, C_ROCK2);
     if (((tx * 5 + ty) & 7) == 3) { px(x + 10, y + 9, KDColor::RGB24(0x3A5A34)); px(x + 11, y + 8, KDColor::RGB24(0x3A5A34)); }
+    if (frz) fCirc(x + 6, y + 6, 3, KDColor::RGB24(0xE8F0FA)); // chapeau de neige
+    if (cdr && (((tx * 3 + ty) & 7) == 5)) { px(x + 9, y + 6, C_ORG); px(x + 8, y + 7, C_RED); px(x + 10, y + 7, C_YEL); } // rocher encore chaud
+    if (mou) { fCirc(x + 7, y + 7, 3, KDColor::RGB24(0x4E8E3E)); if (((tx * 7 + ty) & 7) == 4) { fRect(x + 4, y + 10, 1, 2, C_WHT); px(x + 4, y + 9, C_RED); px(x + 3, y + 9, C_RED); } } // mousse epaisse + petit champignon
+    if (sab) { fCirc(x + 8, y + 12, 4, KDColor::RGB24(0xC8A868)); px(x + 8, y + 11, KDColor::RGB24(0xD8B878)); } // dune enterree a moitie
+    if (arg && (((tx * 5 + ty) & 7) < 3)) { // fragment de statue : un vieil oeil sculpte
+      fRect(x + 6, y + 4, 4, 1, KDColor::RGB24(0x8A5A38)); // arcade
+      px(x + 7, y + 6, KDColor::RGB24(0x6A4228)); px(x + 9, y + 6, KDColor::RGB24(0x6A4228)); // les yeux
+      px(x + 8, y + 8, KDColor::RGB24(0x6A4228)); // le nez
+    }
+    if (omb && (((tx * 3 + ty) & 7) == 2)) { px(x + 7, y + 7, C_PUR); px(x + 8, y + 8, C_MAG); px(x + 6, y + 9, C_PUR); } // veines lumineuses dans la pierre
+    if (prm && (((tx * 5 + ty) & 7) == 3)) { px(x + 7, y + 5, C_GOLD); px(x + 8, y + 6, C_YEL); } // eclat du coeur dans la roche
   } else if (c == '#' || c == 'F') { // mur de briques (+ torche)
     fRect(x, y, TS, TS, C_WALL);
-    fRect(x, y, TS, 1, KDColor::RGB24(0x565664));      // arete eclairee
+    fRect(x, y, TS, 1, frz ? KDColor::RGB24(0xC8D8E8) : (cdr ? KDColor::RGB24(0x6A5A54) : (mou ? KDColor::RGB24(0x5E7054) : (sab ? KDColor::RGB24(0xC8A878) : (arg ? KDColor::RGB24(0xB89068) : (omb ? KDColor::RGB24(0x4A3E5E) : (prm ? KDColor::RGB24(0xC8A850) : KDColor::RGB24(0x565664)))))))); // arete eclairee (neige ; braise ; lichen ; sable ; cuite ; violet ; or du coeur)
     fRect(x, y + 14, TS, 1, KDColor::RGB24(0x1A1A22)); // base assombrie
     fRect(x, y + 7, TS, 1, KDColor::RGB24(0x2E2E38));
     fRect(x + ((ty & 1) ? 3 : 10), y, 1, 7, KDColor::RGB24(0x2E2E38));
@@ -773,7 +883,7 @@ static void drawTile(int tx, int ty, int ox, int oy) {
       px(x + 3, y + 1, KDColor::RGB24(0xFFE888)); px(x + 12, y + 14, KDColor::RGB24(0x8A6A18));
     }
   } else if (c == 'C') {
-    fRect(x, y, TS, TS, isDun(room) ? C_FLR : C_GRASS);
+    fRect(x, y, TS, TS, isDun(room) ? C_FLR : g1);
     fCirc(x + 8, y + 13, 6, isDun(room) ? KDColor::RGB24(0x2E2E38) : KDColor::RGB24(0x2A5A1E));
     if (chestOpen[room]) { // ouvert : vide
       fRect(x + 1, y + 7, 14, 8, C_CHEST);
@@ -787,7 +897,7 @@ static void drawTile(int tx, int ty, int ox, int oy) {
       if (((frame >> 4) & 3) == 0) px(x + 13, y + 3, C_WHT); // eclat scintillant
     }
   } else if (c == 'L') { // STELE ANCIENNE : la memoire gravee du royaume
-    fRect(x, y, TS, TS, isDun(room) ? C_FLR : C_GRASS);
+    fRect(x, y, TS, TS, isDun(room) ? C_FLR : g1);
     fCirc(x + 8, y + 13, 5, isDun(room) ? KDColor::RGB24(0x2E2E38) : KDColor::RGB24(0x2A5A1E)); // ombre
     fRect(x + 3, y + 3, 10, 10, C_ROCK2);   // socle
     fRect(x + 4, y + 1, 8, 12, C_ROCK);     // dalle gravee
@@ -837,14 +947,14 @@ static void spawnEnemies() {
   for (int i = 0; i < ESWN[room] && enN < 13; i++) {
     EN[enN].x = ESW[room][i][1] * TS + 8; EN[enN].y = TOPOFF + ESW[room][i][2] * TS + 8;
     EN[enN].type = ESW[room][i][0]; EN[enN].vx = EN[enN].vy = 0;
-    EN[enN].hp = (ESW[room][i][0] >= 2) ? 2 : 1;
+    EN[enN].hp = ((ESW[room][i][0] >= 2) ? 2 : 1) + ngPlus; // ROYAUME NOIR : monstres plus durs
     EN[enN].t = rnd(60); EN[enN].st = 0; EN[enN].dir = 0;
     EN[enN].alive = true; EN[enN].flash = false;
     enN++;
   }
   if (room == 11 && !bossDead) { // LE GOLEM
     EN[0].x = 160; EN[0].y = TOPOFF + 64; EN[0].vx = EN[0].vy = 0;
-    EN[0].type = 4; EN[0].hp = 16; EN[0].t = 0; EN[0].st = 0; EN[0].dir = 0;
+    EN[0].type = 4 + chap; EN[0].hp = 16 + chap * 3 + ngPlus * 8; EN[0].t = 0; EN[0].st = 0; EN[0].dir = 0; // le Gardien de la region
     EN[0].alive = true; EN[0].flash = false;
     enN = 1;
   }
@@ -871,7 +981,7 @@ static void hurtPlayer(int dmg, float fx, float fy) {
   float m = 2.6f / sqrtf(d);
   pvx = dx * m; pvy = dy * m;
   poof(plx, ply, C_RED, 8);
-  if (php <= 0) mode = 3;
+  if (php <= 0) { deaths++; mode = 3; }
 }
 static void updEnemies() {
   for (int i = 0; i < 14; i++) {
@@ -886,12 +996,12 @@ static void updEnemies() {
       if (c == 'D' && doorOpen[room]) c = ',';
       bool done = false;
       if (c == 'w') { // PLONGE DANS L'EAU
-        e->alive = false;
+        e->alive = false; kills++;
         poof(e->x, e->y, C_WTR2, 12); poof(e->x, e->y - 4, C_WHT, 5);
         if (rnd(2)) dropPickup(e->x, e->y - 6, -1);
         done = true;
       } else if (c == 'F') { // BRULE DANS UNE TORCHE
-        e->alive = false;
+        e->alive = false; kills++;
         poof(e->x, e->y, C_ORG, 12); poof(e->x, e->y - 4, C_YEL, 6);
         if (rnd(2)) dropPickup(e->x, e->y - 6, -1);
         done = true;
@@ -899,7 +1009,7 @@ static void updEnemies() {
         e->hp -= hasPlume ? 3 : 2;
         poof(e->x, e->y, C_WHT, 7); shake = 3;
         if (e->hp <= 0) {
-          e->alive = false; poof(e->x, e->y, C_PUR, 12);
+          e->alive = false; kills++; poof(e->x, e->y, C_PUR, 12);
           if (rnd(2)) dropPickup(e->x, e->y - 6, -1);
         } else { e->st = 99; e->t = 0; }
         done = true;
@@ -911,9 +1021,9 @@ static void updEnemies() {
           if (ddx * ddx + ddy * ddy < 144) {
             e->hp--; EN[j].hp--;
             poof((e->x + EN[j].x) / 2, (e->y + EN[j].y) / 2, C_WHT, 8);
-            if (e->hp <= 0) { e->alive = false; poof(e->x, e->y, C_PUR, 10); if (rnd(2)) dropPickup(e->x, e->y, -1); }
+            if (e->hp <= 0) { e->alive = false; kills++; poof(e->x, e->y, C_PUR, 10); if (rnd(2)) dropPickup(e->x, e->y, -1); }
             else { e->st = 99; e->t = 0; }
-            if (EN[j].hp <= 0) { EN[j].alive = false; poof(EN[j].x, EN[j].y, C_PUR, 10); if (rnd(2)) dropPickup(EN[j].x, EN[j].y, -1); }
+            if (EN[j].hp <= 0) { EN[j].alive = false; kills++; poof(EN[j].x, EN[j].y, C_PUR, 10); if (rnd(2)) dropPickup(EN[j].x, EN[j].y, -1); }
             else { EN[j].st = 99; EN[j].t = 0; }
             done = true;
           }
@@ -961,11 +1071,12 @@ static void updEnemies() {
           break;
         }
       }
-    } else if (e->type == 4) { // LE GOLEM : saute puis frappe le sol
-      if (e->st == 0 && e->t % 90 == 0) {
+    } else if (e->type >= 4) { // LE GARDIEN : saute puis frappe le sol
+      if (e->st == 0 && e->t % (90 - chap * 6) == 0) { // chaque region : cycles plus presses
         float dx = plx - e->x, dy = ply - e->y;
         float d = sqrtf(dx * dx + dy * dy); if (d < 1) d = 1;
-        e->vx = dx / d * 3.2f; e->vy = dy / d * 3.2f; e->st = 10;
+        float bs = 3.2f + chap * 0.25f; // charge de plus en plus vive
+        e->vx = dx / d * bs; e->vy = dy / d * bs; e->st = 10;
       }
       if (e->st >= 10) {
         e->st++;
@@ -981,7 +1092,7 @@ static void updEnemies() {
               float a2 = ang + (k ? 0.5f : -0.5f);
               int bb;
               for (bb = 0; bb < 6; bb++) if (BU[bb].on == false) break;
-              if (bb < 6) { BU[bb].x = e->x; BU[bb].y = e->y; BU[bb].vx = cosf(a2) * 1.5f; BU[bb].vy = sinf(a2) * 1.5f; BU[bb].fr = 0; BU[bb].on = true; }
+              if (bb < 6) { float rv = 1.5f + chap * 0.15f; BU[bb].x = e->x; BU[bb].y = e->y; BU[bb].vx = cosf(a2) * rv; BU[bb].vy = sinf(a2) * rv; BU[bb].fr = 0; BU[bb].on = true; }
             }
             break;
           }
@@ -996,7 +1107,7 @@ static void updEnemies() {
     }
     if (e->type != 1) { // les autres respectent les murs
       float nx = e->x + e->vx, ny = e->y + e->vy;
-      float r = (e->type == 4) ? 10 : 6;
+      float r = (e->type >= 4) ? 10 : 6;
       if (e->st != 99) { // etourdi : immobile
         if (walkable(nx, e->y, r)) e->x = nx; else e->vx = 0;
         if (walkable(e->x, ny, r)) e->y = ny; else e->vy = 0;
@@ -1005,9 +1116,9 @@ static void updEnemies() {
       if (e->y < TOPOFF + 6) e->y = TOPOFF + 6; if (e->y > TOPOFF + MH * TS - 6) e->y = TOPOFF + MH * TS - 6;
     }
     // contact : le monstre blesse
-    float er = (e->type == 4) ? 13 : 7;
+    float er = (e->type >= 4) ? 13 : 7;
     if (e->st == 0 && plx > e->x - er - 6 && plx < e->x + er + 6 && ply > e->y - er - 6 && ply < e->y + er + 6)
-      hurtPlayer(e->type == 4 ? 2 : 1, e->x, e->y);
+      hurtPlayer(e->type >= 4 ? 2 : 1, e->x, e->y);
   }
   // projectiles (fr = renvoye par le souffle : blesse les monstres)
   for (int b = 0; b < 6; b++) if (BU[b].on) {
@@ -1016,16 +1127,16 @@ static void updEnemies() {
     if (BU[b].x < 2 || BU[b].x > SW - 2 || BU[b].y < TOPOFF + 2 || BU[b].y > TOPOFF + MH * TS - 2 || solid(tx, ty)) { BU[b].on = false; continue; }
     if (BU[b].fr) { // rocher renvoye : cherche un monstre a percuter
       for (int i = 0; i < 14; i++) if (EN[i].alive) {
-        float er2 = (EN[i].type == 4) ? 16 : 8;
+        float er2 = (EN[i].type >= 4) ? 16 : 8;
         if (BU[b].x > EN[i].x - er2 && BU[b].x < EN[i].x + er2 && BU[b].y > EN[i].y - er2 && BU[b].y < EN[i].y + er2) {
           BU[b].on = false;
           EN[i].hp -= 2;
           poof(BU[b].x, BU[b].y, C_YEL, 6);
-          if (EN[i].type == 4) shake = 5;
+          if (EN[i].type >= 4) shake = 5;
           if (EN[i].hp <= 0) {
-            EN[i].alive = false;
+            EN[i].alive = false; kills++;
             poof(EN[i].x, EN[i].y, C_PUR, 12);
-            if (EN[i].type == 4) { bossDead = true; shake = 14; dropPickup(EN[i].x, EN[i].y + 6, 2); }
+            if (EN[i].type >= 4) { bossDead = true; shake = 14; dropPickup(EN[i].x, EN[i].y + 6, 2); }
             else if (rnd(2)) dropPickup(EN[i].x, EN[i].y, -1);
           } else { EN[i].st = 99; EN[i].t = 0; }
           break;
@@ -1046,7 +1157,7 @@ static void blow() { // LE SOUFFLE : l'esprit repousse tout devant lui
   // les monstres du cone partent en vol (le golem est trop lourd)
   for (int i = 0; i < 14; i++) {
     struct En *e = &EN[i];
-    if (!e->alive || e->type == 4) continue;
+    if (!e->alive || e->type >= 4) continue; // le Gardien est trop lourd pour le souffle
     float ex = e->x - plx, ey = e->y - ply;
     float d2 = ex * ex + ey * ey;
     if (d2 < 1 || d2 > rr) continue;
@@ -1066,7 +1177,7 @@ static void blow() { // LE SOUFFLE : l'esprit repousse tout devant lui
     if ((bx * dx + by * dy) / d < 0.2f) continue;
     BU[b].fr = 1;
     int gi = -1;
-    for (int i = 0; i < 14; i++) if (EN[i].alive && EN[i].type == 4) { gi = i; break; }
+    for (int i = 0; i < 14; i++) if (EN[i].alive && EN[i].type >= 4) { gi = i; break; }
     if (gi >= 0) {
       float gx = EN[gi].x - BU[b].x, gy = EN[gi].y - BU[b].y;
       float gd = sqrtf(gx * gx + gy * gy); if (gd < 1) gd = 1;
@@ -1250,43 +1361,46 @@ static void drawEnemies(int ox, int oy) {
       int ix = (int)(dx / d * 2.0f), iy = (int)(dy / d * 2.0f);
       fCirc(x + ix, y + iy, 2, C_PUR);
       px(x + ix, y + iy, ((e->t >> 3) & 1) ? C_WHT : C_YEL); // pupille qui pulse
-    } else if (e->type == 4) { // LE GOLEM : colosse de strates, fissure a mesure qu'il souffre
+    } else if (e->type >= 4) { // LE GARDIEN : palette de sa region, fissure a mesure qu'il souffre
+      int bt = e->type - 4;
+      KDColor bD = KDColor::RGB24(BSK[bt][0]), bB = KDColor::RGB24(BSK[bt][1]), bL = KDColor::RGB24(BSK[bt][2]), bE = KDColor::RGB24(BSK[bt][3]), bM = KDColor::RGB24(BSK[bt][4]);
       int hop = (e->st >= 10 && e->st < 34) ? ((e->st < 20) ? -(e->st - 10) : -8 + (e->st - 20) / 2) : 0;
       fCirc(x + 1, y + 13, 13, KDColor::RGB24(0x2E2E38)); // grosse ombre
-      fRect(x - 9, y + 4 + hop, 6, 9, C_ROCK2); fRect(x + 3, y + 4 + hop, 6, 9, C_ROCK2); // jambes
-      fRect(x - 9, y + 11 + hop, 6, 2, C_ROCK); fRect(x + 3, y + 11 + hop, 6, 2, C_ROCK); // pieds
-      fRect(x - 12, y - 14 + hop, 24, 20, C_ROCK2);      // torse monumental
-      fRect(x - 12, y - 14 + hop, 24, 2, KDColor::RGB24(0xB0B0B0)); // epaules eclairees
-      fRect(x - 10, y - 12 + hop, 20, 1, C_ROCK);        // strates de granit
-      fRect(x - 10, y - 7 + hop, 20, 1, C_ROCK);
-      fRect(x - 10, y - 2 + hop, 20, 1, C_ROCK);
-      px(x - 7, y - 10 + hop, C_ROCK); px(x + 6, y - 9 + hop, C_ROCK);
-      px(x + 8, y + 0 + hop, KDColor::RGB24(0x3A3A44)); px(x - 5, y + 1 + hop, KDColor::RGB24(0x3A3A44));
-      px(x - 11, y - 13 + hop, KDColor::RGB24(0x3A5A34)); px(x + 9, y - 13 + hop, KDColor::RGB24(0x3A5A34)); // mousse sur les epaules
-      fRect(x - 8, y - 12 + hop, 16, 2, C_ROCK);         // arcade sourcilleuse
-      int gl = ((e->t >> 3) & 1) ? C_RED : C_ORG;
+      fRect(x - 9, y + 4 + hop, 6, 9, bD); fRect(x + 3, y + 4 + hop, 6, 9, bD); // jambes
+      fRect(x - 9, y + 11 + hop, 6, 2, bB); fRect(x + 3, y + 11 + hop, 6, 2, bB); // pieds
+      fRect(x - 12, y - 14 + hop, 24, 20, bD);      // torse monumental
+      fRect(x - 12, y - 14 + hop, 24, 2, bL); // epaules eclairees
+      fRect(x - 10, y - 12 + hop, 20, 1, bB);        // strates
+      fRect(x - 10, y - 7 + hop, 20, 1, bB);
+      fRect(x - 10, y - 2 + hop, 20, 1, bB);
+      px(x - 7, y - 10 + hop, bB); px(x + 6, y - 9 + hop, bB);
+      px(x + 8, y + 0 + hop, bD); px(x - 5, y + 1 + hop, bD);
+      px(x - 11, y - 13 + hop, bM); px(x + 9, y - 13 + hop, bM); // mousse ou givre sur les epaules
+      fRect(x - 8, y - 12 + hop, 16, 2, bB);         // arcade sourcilleuse
+      int gl = ((e->t >> 3) & 1) ? bE : bL;
       fRect(x - 6, y - 9 + hop, 4, 3, gl); fRect(x + 2, y - 9 + hop, 4, 3, gl); // yeux ardents
-      px(x - 4, y - 8 + hop, C_YEL); px(x + 3, y - 8 + hop, C_YEL);    // pupilles braises
-      if (e->st >= 10 && e->st < 34) { fRect(x - 6, y - 9 + hop, 4, 2, C_YEL); fRect(x + 2, y - 9 + hop, 4, 2, C_YEL); } // rage du saut
-      fRect(x - 3, y - 3 + hop, 6, 2, C_ROCK); px(x - 2, y - 2 + hop, C_ROCK2); px(x + 2, y - 2 + hop, C_ROCK2); // machoire
+      px(x - 4, y - 8 + hop, C_WHT); px(x + 3, y - 8 + hop, C_WHT);    // pupilles braises
+      if (e->st >= 10 && e->st < 34) { fRect(x - 6, y - 9 + hop, 4, 2, bE); fRect(x + 2, y - 9 + hop, 4, 2, bE); } // rage du saut
+      fRect(x - 3, y - 3 + hop, 6, 2, bB); px(x - 2, y - 2 + hop, bD); px(x + 2, y - 2 + hop, bD); // machoire
       int aw = (e->st == 34) ? 4 : 0; // les bras s'abattent au slam
-      fRect(x - 16, y - 8 + hop + aw, 5, 13, C_ROCK2); fRect(x + 11, y - 8 + hop + aw, 5, 13, C_ROCK2);
-      fRect(x - 16, y - 8 + hop + aw, 5, 1, C_ROCK); fRect(x + 11, y - 8 + hop + aw, 5, 1, C_ROCK);
-      fRect(x - 16, y + 5 + hop + aw, 5, 3, C_ROCK); fRect(x + 11, y + 5 + hop + aw, 5, 3, C_ROCK); // poings
-      px(x - 14, y + 6 + hop + aw, KDColor::RGB24(0x3A3A44)); px(x + 13, y + 6 + hop + aw, KDColor::RGB24(0x3A3A44)); // phalanges
-      if (aw && ((frame >> 2) & 1)) { fRect(x - 16, y + 8 + hop, 5, 1, C_YEL); fRect(x + 11, y + 8 + hop, 5, 1, C_YEL); } // impact du slam
-      if (e->hp <= 13) { px(x - 5, y + 3 + hop, C_BLK); px(x - 4, y + 4 + hop, C_BLK); px(x + 5, y + 1 + hop, C_BLK); }
-      if (e->hp <= 9) { fRect(x - 9, y - 10 + hop, 1, 6, C_BLK); px(x - 8, y - 5 + hop, C_BLK); fRect(x + 7, y - 4 + hop, 1, 7, C_BLK); px(x - 7, y + 8 + hop, C_BLK); px(x + 6, y + 9 + hop, C_BLK); }
-      if (e->hp <= 5) { fRect(x - 12, y - 3 + hop, 8, 1, C_BLK); px(x - 4, y - 2 + hop, C_BLK); px(x - 3, y - 1 + hop, C_BLK); fRect(x + 9, y - 12 + hop, 1, 5, C_BLK); fRect(x + 8, y + 2 + hop, 3, 1, C_BLK); }
-      if (e->hp <= 3) { fRect(x - 2, y - 10 + hop, 5, 1, C_BLK); fRect(x + 7, y + 6 + hop, 1, 5, C_BLK); px(x - 1, y - 7 + hop, C_BLK); px(x + 1, y - 7 + hop, C_BLK); }
-      if (e->hp <= 5 && ((frame >> 3) & 1)) { px(x - 6, y - 4 + hop, C_RED); px(x + 6, y + 0 + hop, C_RED); px(x, y - 7 + hop, C_RED); px(x + 7, y + 8 + hop, C_ORG); } // veines de magma qui percent
+      fRect(x - 16, y - 8 + hop + aw, 5, 13, bD); fRect(x + 11, y - 8 + hop + aw, 5, 13, bD);
+      fRect(x - 16, y - 8 + hop + aw, 5, 1, bB); fRect(x + 11, y - 8 + hop + aw, 5, 1, bB);
+      fRect(x - 16, y + 5 + hop + aw, 5, 3, bB); fRect(x + 11, y + 5 + hop + aw, 5, 3, bB); // poings
+      px(x - 14, y + 6 + hop + aw, bD); px(x + 13, y + 6 + hop + aw, bD); // phalanges
+      if (aw && ((frame >> 2) & 1)) { fRect(x - 16, y + 8 + hop, 5, 1, bE); fRect(x + 11, y + 8 + hop, 5, 1, bE); } // impact du slam
+      int hpm = 16 + chap * 3 + ngPlus * 8;
+      if (e->hp <= hpm * 13 / 16) { px(x - 5, y + 3 + hop, C_BLK); px(x - 4, y + 4 + hop, C_BLK); px(x + 5, y + 1 + hop, C_BLK); }
+      if (e->hp <= hpm * 9 / 16) { fRect(x - 9, y - 10 + hop, 1, 6, C_BLK); px(x - 8, y - 5 + hop, C_BLK); fRect(x + 7, y - 4 + hop, 1, 7, C_BLK); px(x - 7, y + 8 + hop, C_BLK); px(x + 6, y + 9 + hop, C_BLK); }
+      if (e->hp <= hpm * 5 / 16) { fRect(x - 12, y - 3 + hop, 8, 1, C_BLK); px(x - 4, y - 2 + hop, C_BLK); px(x - 3, y - 1 + hop, C_BLK); fRect(x + 9, y - 12 + hop, 1, 5, C_BLK); fRect(x + 8, y + 2 + hop, 3, 1, C_BLK); }
+      if (e->hp <= hpm * 3 / 16) { fRect(x - 2, y - 10 + hop, 5, 1, C_BLK); fRect(x + 7, y + 6 + hop, 1, 5, C_BLK); px(x - 1, y - 7 + hop, C_BLK); px(x + 1, y - 7 + hop, C_BLK); }
+      if (e->hp <= hpm * 5 / 16 && ((frame >> 3) & 1)) { px(x - 6, y - 4 + hop, bE); px(x + 6, y + 0 + hop, bE); px(x, y - 7 + hop, bE); px(x + 7, y + 8 + hop, bE); } // veines ardentes qui percent
     }
   }
   for (int b = 0; b < 6; b++) if (BU[b].on) { // rochers ardents en rotation
     int bx = (int)BU[b].x + ox, by = (int)BU[b].y + oy;
     int rr = (frame >> 2) & 3;
-    fCirc(bx, by, 4, KDColor::RGB24(0x3A3A44));          // rocher brut
-    fCirc(bx - 1, by - 1, 2, C_ROCK);                     // facette eclairee
+    fCirc(bx, by, 4, KDColor::RGB24(BSK[chap][0]));      // rocher brut, teinte de la region
+    fCirc(bx - 1, by - 1, 2, KDColor::RGB24(BSK[chap][1])); // facette eclairee
     px(bx - 2, by + 1, C_ROCK2);
     fCirc(bx, by, 3, ((frame >> 3) & 1) ? C_ORG : C_RED);  // coeur ardent qui perce
     if (BU[b].fr) fCirc(bx, by, 2, C_YEL);                // renvoye par le souffle : coeur blanc
@@ -1342,6 +1456,11 @@ static void drawHud() {
   if (sp == 0) px(149, 11, C_WHT);
   char cb[8]; snprintf(cb, 8, "%d", pcoin);
   drawTextSmall(162, 10, cb, C_WHT);
+  { // chrono discret, pour les chasseurs de record
+    int s2 = (int)(playT / 62);
+    char tb2[10]; snprintf(tb2, 10, "%d:%d", s2 / 60, s2 % 60);
+    drawTextSmall(100, 10, tb2, KDColor::RGB24(0x6A7590));
+  }
   // cle
   if (pkey > 0) {
     fRect(206, 9, 7, 2, C_GOLD); fRect(206, 11, 2, 2, C_GOLD); fRect(208, 12, 2, 5, C_GOLD); px(210, 14, C_GOLD);
@@ -1366,13 +1485,15 @@ static void drawHud() {
       else if (visited[id]) fRect(mx, my, 3, 3, ((id == 4 || id == 5 || id >= 10) ? C_PUR : KDColor::RGB24(0x6A7590)));
       else fRect(mx, my, 3, 3, KDColor::RGB24(0x22283A));
     }
-  // barre de vie du GOLEM
-  if (room == 11 && !bossDead && EN[0].alive && EN[0].type == 4) {
+  // barre de vie du GARDIEN de la region
+  if (room == 11 && !bossDead && EN[0].alive && EN[0].type >= 4) {
+    float bh = 16.0f + chap * 3 + ngPlus * 8;
     fRect(88, 29, 144, 10, KDColor::RGB24(0x0C0E16));
     fRect(90, 30, 140, 8, C_BLK);
+    drawTextSmall(92, 31, BN[chap], C_WHT);
     fRect(90, 30, 140, 1, KDColor::RGB24(0x3A1A1A));
-    fRect(92, 32, (int)(136.0f * EN[0].hp / 16.0f), 4, C_RED);
-    fRect(92, 32, (int)(136.0f * EN[0].hp / 16.0f), 1, KDColor::RGB24(0xF08080));
+    fRect(92, 32, (int)(136.0f * EN[0].hp / bh), 4, C_RED);
+    fRect(92, 32, (int)(136.0f * EN[0].hp / bh), 1, KDColor::RGB24(0xF08080));
   }
 }
 
@@ -1397,6 +1518,7 @@ static bool tryInteract() {
   }
   // stele de lore ?
   if (c == 'L') {
+    steleRead |= (1u << room); // pour le bilan final
     if (room == 3) startDlg(DLG_STELE3, 3);
     else if (room == 7) startDlg(DLG_STELE7, 4);
     else if (room == 10) startDlg(DLG_STELE10, 3);
@@ -1433,9 +1555,15 @@ static bool tryInteract() {
 
 // ---------------- Boucle de jeu ----------------
 static void playTick() {
+  playT++; // le temps d'aventure s'ecoule hors dialogues et menus
   // ----- dialogue en cours : on avance, le jeu est en pause -----
   if (dlgOn) {
     dlgTick();
+    return;
+  }
+  if (chapGo && !dlgOn) { // l'eclat est en poche : la region suivante appelle
+    chapGo = false;
+    mode = (chap >= 7) ? 4 : 5; // 5 : region suivante ; 4 : le coeur, la fin
     return;
   }
   pollKeys();
@@ -1500,7 +1628,12 @@ static void playTick() {
     if (PK[i].x > plx - 8 && PK[i].x < plx + 8 && PK[i].y > ply - 8 && PK[i].y < ply + 8) {
       if (PK[i].t == 0) { if (php < pmax) php += 2; if (php > pmax) php = pmax; }
       else if (PK[i].t == 1) pcoin += 5;
-      else { hasStar = true; startDlg(DLG_ETOILE, 3); }
+      else { // UN ECLAT DU GARDIEN
+        hasStar = true;
+        chapGo = true;
+        if (chap < 7) startDlg(DLG_ECLATS[chap], 2); // le septieme eclat declenche la fin
+        else startDlg(DLG_ETOILE, 3);
+      }
       PK[i].on = false;
     }
   }
@@ -1526,6 +1659,84 @@ static void drawRoom(int ox, int oy) {
       int lx = ((i * 61 + frame) % (SW - 20)) + 10 + ox;
       int ly = TOPOFF + ((i * 43 + (frame >> 1) * ((i & 1) ? 1 : -1)) % (MH * TS - 8)) + 4 + oy;
       px(lx, ly, KDColor::RGB24(0x8A7A5A));
+    }
+  } else if (chap == 1) { // REGION DU GIVRE : la neige tombe en silence
+    for (int i = 0; i < 14; i++) {
+      int sx2 = ((i * 53 + frame * ((i & 1) ? 2 : 3)) % (SW + 10)) - 5 + ox;
+      int sy2 = TOPOFF + ((i * 89 + frame * ((i & 2) ? 2 : 4)) % (MH * TS)) + oy;
+      px(sx2, sy2, (i & 3) ? KDColor::RGB24(0xE8F0FA) : KDColor::RGB24(0xB8C8DC));
+      int sy3 = TOPOFF + ((i * 89 + 60 + frame * ((i & 2) ? 2 : 4)) % (MH * TS)) + oy;
+      px(sx2 - 4, sy3, KDColor::RGB24(0xC8D8E8));
+    }
+  } else if (chap == 2) { // REGION DE LA CENDRE : cendres grises, braises montantes
+    for (int i = 0; i < 10; i++) { // cendres qui tombent lentement
+      int sx2 = ((i * 61 + frame * 2) % (SW + 8)) - 4 + ox;
+      int sy2 = TOPOFF + ((i * 47 + frame * 3) % (MH * TS)) + oy;
+      px(sx2, sy2, KDColor::RGB24(0x6A5A50));
+      px(sx2 + 2, TOPOFF + ((i * 47 + 90 + frame * 3) % (MH * TS)) + oy, KDColor::RGB24(0x5A4A42));
+    }
+    for (int i = 0; i < 6; i++) { // braises qui montent et s'eteignent
+      int bx3 = 20 + ((i * 71 + frame) % (SW - 40)) + ox;
+      int by3 = TOPOFF + (MH * TS) - ((i * 37 + frame * 4) % (MH * TS)) + oy;
+      if (((frame >> 2) + i) & 3) px(bx3, by3, C_ORG); else px(bx3, by3, C_RED);
+      px(bx3, by3 + 3, KDColor::RGB24(0x6A3020));
+    }
+  } else if (chap == 3) { // REGION DE LA MOUSSE : spores lumineuses, petals blancs
+    for (int i = 0; i < 10; i++) { // spores qui derivent en tournant
+      int sx2 = ((i * 67 + frame) % (SW + 20)) - 10 + ox;
+      int sy2 = TOPOFF + ((i * 53 + (frame >> 1) * ((i & 1) ? 1 : -1)) % (MH * TS)) + oy;
+      if (((frame >> 3) + i) & 3) px(sx2, sy2, KDColor::RGB24(0xB0E890)); else px(sx2, sy2, KDColor::RGB24(0x7ACE6A));
+    }
+    for (int i = 0; i < 5; i++) { // petals blancs qui tombent
+      int px3 = ((i * 89 + frame * 2) % (SW + 10)) - 5 + ox;
+      int py3 = TOPOFF + ((i * 71 + frame * 2) % (MH * TS)) + oy;
+      px(px3, py3, C_WHT); px(px3, py3 + 1, KDColor::RGB24(0xE8C8D8));
+    }
+  } else if (chap == 4) { // REGION DU SABLE : rideaux de vent, herbes roulantes
+    for (int i = 0; i < 3; i++) { // rideaux de sable qui traversent l'ecran
+      int ry2 = TOPOFF + 24 + i * 56;
+      for (int k = 0; k < 26; k++) {
+        int sx2 = ((k * 13 + i * 37 + frame * 4) % (SW + 20)) - 10 + ox;
+        px(sx2, ry2 + ((k + frame) & 3), KDColor::RGB24(0xE8CC94));
+      }
+    }
+    for (int i = 0; i < 2; i++) { // herbes roulantes poussees par le vent
+      int bx3 = ((i * 97 + frame * 5) % (SW + 30)) - 15 + ox;
+      int by3 = TOPOFF + MH * TS - 14 + oy;
+      fCirc(bx3, by3, 3, KDColor::RGB24(0xA88850)); px(bx3 + 2, by3 - 2, KDColor::RGB24(0xC8A868));
+    }
+  } else if (chap == 5) { // REGION DE L'ARGILE : poussiere d'atelier, eclats de poterie
+    for (int i = 0; i < 8; i++) { // poussiere ocre en suspension
+      int sx2 = ((i * 73 + (frame >> 1)) % (SW + 16)) - 8 + ox;
+      int sy2 = TOPOFF + ((i * 59 + (frame >> 2) * ((i & 1) ? 1 : -1)) % (MH * TS)) + oy;
+      px(sx2, sy2, KDColor::RGB24(0xD8A878));
+    }
+    for (int i = 0; i < 4; i++) { // eclats de poterie qui glissent au sol
+      int ex2 = ((i * 83 + frame * 3) % (SW + 12)) - 6 + ox;
+      int ey2 = TOPOFF + MH * TS - 6 + oy;
+      px(ex2, ey2, KDColor::RGB24(0xB06840)); px(ex2 + 1, ey2, KDColor::RGB24(0xC98050));
+    }
+  } else if (chap == 6) { // REGION DE L'OMBRE : wisps violets, suie qui tombe
+    for (int i = 0; i < 6; i++) { // wisps qui derivent comme des ames
+      int sx2 = 20 + ((i * 79 + (int)(sinf(frame * 0.02f + i * 1.3f) * 40.0f)) % (SW - 40)) + ox;
+      int sy2 = TOPOFF + 10 + ((i * 61 + (frame >> 1) * ((i & 1) ? 1 : -1)) % (MH * TS - 20)) + oy;
+      if (((frame >> 3) + i) & 3) { px(sx2, sy2, C_PUR); px(sx2, sy2 - 1, C_MAG); } else px(sx2, sy2, KDColor::RGB24(0x4A3E6A));
+    }
+    for (int i = 0; i < 6; i++) { // suie qui tombe des voutes
+      int sx2 = ((i * 67 + frame) % (SW + 10)) - 5 + ox;
+      int sy2 = TOPOFF + ((i * 71 + frame * 2) % (MH * TS)) + oy;
+      px(sx2, sy2, KDColor::RGB24(0x1A1626));
+    }
+  } else if (chap == 7) { // LA DERNIERE REGION : poussiere d'or, braises d'etoile
+    for (int i = 0; i < 8; i++) { // poussiere d'or en suspension
+      int sx2 = ((i * 71 + (frame >> 1)) % (SW + 16)) - 8 + ox;
+      int sy2 = TOPOFF + ((i * 57 + (frame >> 2) * ((i & 1) ? 1 : -1)) % (MH * TS)) + oy;
+      px(sx2, sy2, ((frame >> 3) & 1) ? C_YEL : KDColor::RGB24(0x8A7A3A));
+    }
+    for (int i = 0; i < 5; i++) { // braises d'etoile qui montent du fond du donjon
+      int bx3 = 20 + ((i * 83 + frame) % (SW - 40)) + ox;
+      int by3 = TOPOFF + MH * TS - ((i * 41 + frame * 3) % (MH * TS)) + oy;
+      px(bx3, by3, C_YEL); px(bx3, by3 + 2, KDColor::RGB24(0x8A6A20));
     }
   } else { // surface : feuilles au vent + lucioles
     for (int i = 0; i < 6; i++) {
@@ -1562,6 +1773,60 @@ static void starfield(int sc) { // etoiles sans fond : le ciel est deja peint
   for (int i = 0; i < 40; i++) {
     int sx = (i * 89 + sc * 17) % SW, sy = ((i * 43 + sc * 11) % 200) + 8;
     if ((i + sc) & 3) px(sx, sy, KDColor::RGB24(0x6A7590)); else px(sx, sy, C_WHT);
+  }
+}
+static void statsScreen() { // le bilan de l'aventure : stats puis medailles
+  waitRelease();
+  int pg = 0;
+  while (true) {
+    pollKeys();
+    if (keyOK) { waitRelease(); pg++; if (pg >= 2) return; }
+    fRect(0, 0, SW, SH, KDColor::RGB24(0x0A0E1A));
+    starfield(frame++);
+    fRect(46, 58, SW - 92, 130, KDColor::RGB24(0x101626));
+    fRect(46, 58, SW - 92, 1, C_YEL); fRect(46, 187, SW - 92, 1, C_YEL);
+    if (pg == 0) {
+      drawTextC(68, "LE BILAN DE TON AVENTURE", C_YEL);
+      int sec = (int)((playT * 16u) / 1000u);
+      char tb[24]; snprintf(tb, 24, "TEMPS : %d MIN %d S", sec / 60, sec % 60);
+      drawTextC(90, tb, C_WHT);
+      char mb[24]; snprintf(mb, 24, "MORTS : %d", deaths);
+      drawTextC(104, mb, (deaths == 0) ? C_YEL : C_WHT);
+      int rel = (hasFlask ? 1 : 0) + (hasEcho ? 1 : 0) + (hasPlume ? 1 : 0);
+      char rb[24]; snprintf(rb, 24, "RELIQUES : %d/3", rel);
+      drawTextC(118, rb, (rel == 3) ? C_YEL : C_WHT);
+      int st = ((steleRead >> 3) & 1) + ((steleRead >> 7) & 1) + ((steleRead >> 10) & 1) + ((steleRead >> 11) & 1);
+      char sb[24]; snprintf(sb, 24, "STELES LUES : %d/4", st);
+      drawTextC(132, sb, (st == 4) ? C_YEL : C_WHT);
+      int ch = 0; for (int i = 0; i < 18; i++) if (chestOpen[i]) ch++;
+      char cb2[24]; snprintf(cb2, 24, "COFFRES : %d/8", ch);
+      drawTextC(146, cb2, (ch == 8) ? C_YEL : C_WHT);
+      int vr = 0; for (int i = 0; i < 18; i++) if (visited[i]) vr++;
+      char vb[24]; snprintf(vb, 24, "SALLES EXPLOREES : %d/18", vr);
+      drawTextC(160, vb, (vr == 18) ? C_YEL : C_WHT);
+      char kb[24]; snprintf(kb, 24, "MONSTRES SOUFFLES : %d", kills);
+      drawTextC(174, kb, C_WHT);
+      if ((frame >> 4) & 1) drawTextC(204, "OK : LES MEDAILLES", C_GRE);
+    } else {
+      drawTextC(68, "LES MEDAILLES DU VENT", C_YEL);
+      for (int m = 0; m < 7; m++) {
+        int y = 88 + m * 15;
+        const char *nm;
+        if (m == 0) nm = "SOUFFLE PUR";
+        else if (m == 1) nm = "SAGE DU ROYAUME";
+        else if (m == 2) nm = "EXPLORATEUR";
+        else if (m == 3) nm = "CHASSEUR";
+        else if (m == 4) nm = "ECLAIR";
+        else if (m == 5) nm = "COEUR NOIR";
+        else nm = "LEGENDE DU VENT";
+        bool ok = (medals >> m) & 1;
+        drawTextSmall(52, y, nm, ok ? C_YEL : KDColor::RGB24(0x6A7590));
+        if (m == 3) { char pb[14]; snprintf(pb, 14, "%d/100", (int)killsS); drawTextSmall(252, y, pb, ok ? C_YEL : KDColor::RGB24(0x6A7590)); }
+        else drawTextSmall(252, y, ok ? "GAGNEE" : "A FAIRE", ok ? C_YEL : KDColor::RGB24(0x6A7590));
+      }
+      if ((frame >> 4) & 1) drawTextC(204, "OK : RETOUR AU TITRE", C_GRE);
+    }
+    blit(); Ion::Timing::msleep(40);
   }
 }
 static void titleScreen() {
@@ -1624,6 +1889,8 @@ static void titleScreen() {
     drawTextBig(64, 100, "LE ROYAUME", C_YEL);
     drawTextBig(74, 118, "OUBLIE", C_WHT);
     drawTextC(150, "TU ES LE VENT. TU NE TOUCHES RIEN.", C_GRE);
+    if (bestT) { char rb3[28]; int s3 = (int)(bestT / 62); snprintf(rb3, 28, "RECORD SESSION : %d MIN %d S", s3 / 60, s3 % 60); drawTextC(150, rb3, C_GRE); }
+    if (ngPlus) drawTextC(161, "ROYAUME NOIR : LE MONDE SE LEVE PLUS LOURD", C_RED);
     if ((sc >> 3) & 1) drawTextC(170, "APPUIE SUR OK", C_WHT);
     drawTextC(196, "FLECHES : BOUGER   OK : SOUFFLE", KDColor::RGB24(0x6A7590));
     drawTextC(208, "REPOUSSE TOUT - RENVOIE LES ROCHERS", KDColor::RGB24(0x6A7590));
@@ -1737,29 +2004,15 @@ static void genRoom(int r) {
   }
 }
 
-// ---------------- Nouvelle partie ----------------
-static void newGame() {
-  seed = (uint16_t)(titleSc * 7919u + 1u); // grain du titre : chaque monde est neuf
-  fadePos = 0; // le monde se reveille depuis le noir
-  room = 7; // le village
-  plx = 160; ply = TOPOFF + 96;
-  pdir = 2; swing = 0; pifr = 0; brth = 5; brthT = 0; pvx = pvy = 0;
-  php = 6; pmax = 6; pcoin = 0; pkey = 0;
-  hasStar = false; bossDead = false; gameDone = false;
-  hasFlask = false; hasEcho = false; hasPlume = false;
-  for (int i = 0; i < 18; i++) { chestOpen[i] = 0; doorOpen[i] = 0; visited[i] = (i == 7); }
-  for (int i = 0; i < 36; i++) PT[i].life = 0;
-  dlgOn = false; dlgEnd = false;
-  // MONDE GENERE : salles procedurales, sauf la grotte (3), le village (7) et l'arene (11)
-  for (int r = 0; r < 18; r++) {
+static void fillWorld() { // genere les 18 salles d'une region et pose les monstres
+  for (int r = 0; r < 18; r++) { // salles procedurales, sauf la grotte (3), le village (7) et l'arene (11)
     if (r == 3 || r == 7 || r == 11) {
       for (int ty = 0; ty < 12; ty++) { memcpy(RMO[r][ty], RM[r][ty], 20); RMO[r][ty][20] = 0; }
     } else genRoom(r);
   }
-  // placement des monstres dans le monde genere
-  for (int r = 0; r < 18; r++) {
+  for (int r = 0; r < 18; r++) { // placement des monstres dans le monde genere
     ESWN[r] = 0;
-    for (int k = 0; k < EDEN[r]; k++) {
+    for (int k = 0; k < EDEN[r] + ngPlus; k++) { // ROYAUME NOIR : un monstre de plus par salle
       for (int tries = 0; tries < 60; tries++) {
         int tx = 1 + rnd(MW - 2), ty = 1 + rnd(MH - 2);
         char c = RMO[r][ty][tx];
@@ -1783,6 +2036,32 @@ static void newGame() {
   spawnEnemies();
 }
 
+// ---------------- Nouvelle partie ----------------
+static void newGame() {
+  seed = (uint16_t)(titleSc * 7919u + 1u); // grain du titre : chaque monde est neuf
+  fadePos = 0; // le monde se reveille depuis le noir
+  room = 7; // le village
+  plx = 160; ply = TOPOFF + 96;
+  pdir = 2; swing = 0; pifr = 0; brth = 5; brthT = 0; pvx = pvy = 0;
+  php = 6; pmax = 6; pcoin = 0; pkey = 0;
+  hasStar = false; bossDead = false; gameDone = false;
+  hasFlask = false; hasEcho = false; hasPlume = false;
+  playT = 0; deaths = 0; steleRead = 0; kills = 0; ngRun = ngPlus; chap = 0; chapGo = false; // la premiere des huit regions
+  for (int i = 0; i < 18; i++) { chestOpen[i] = 0; doorOpen[i] = 0; visited[i] = (i == 7); }
+  for (int i = 0; i < 36; i++) PT[i].life = 0;
+  dlgOn = false; dlgEnd = false;
+  fillWorld();
+}
+static void regenChapter() { // la region suivante : meme royaume, autre monde, autre Gardien
+  seed = (uint16_t)(seed * 7919u + chap * 131u + 17u); // chaque region a sa graine
+  fadePos = 0; // le monde se rematerialise
+  room = 7; plx = 160; ply = TOPOFF + 96;
+  hasStar = false; bossDead = false;
+  for (int i = 0; i < 18; i++) { chestOpen[i] = 0; doorOpen[i] = 0; visited[i] = (i == 7); }
+  dlgOn = false; dlgEnd = false;
+  fillWorld();
+}
+
 // ---------------- Boucle principale ----------------
 void ion_main(int argc, char *argv[]) {
   (void)argc; (void)argv;
@@ -1792,21 +2071,7 @@ void ion_main(int argc, char *argv[]) {
     newGame();
     pagesScreen(INTRO, 7, "COMMENCER L'AVENTURE");
     mode = 2;
-    while (mode == 2) {
-      frame++;
-      int ox = 0, oy = 0;
-      if (shake > 0) { shake--; ox = rnd(7) - 3; oy = rnd(7) - 3; }
-      playTick();
-      if (mode != 2) break;
-      drawRoom(ox, oy);
-      blit();
-      Ion::Timing::msleep(16);
-    }
-    if (mode == 3) { // defaite : ranime au village
-      gameOverScreen();
-      php = pmax; plx = 160; ply = TOPOFF + 96; room = 7; pifr = 0; fadePos = 0;
-      spawnEnemies();
-      mode = 2;
+    while (true) {
       while (mode == 2) {
         frame++;
         int ox = 0, oy = 0;
@@ -1817,8 +2082,38 @@ void ion_main(int argc, char *argv[]) {
         blit();
         Ion::Timing::msleep(16);
       }
+      if (mode == 3) { // defaite : ranime au village de la region
+        gameOverScreen();
+        php = pmax; plx = 160; ply = TOPOFF + 96; room = 7; pifr = 0; fadePos = 0;
+        spawnEnemies();
+        mode = 2;
+        continue;
+      }
+      if (mode == 5) { // eclat pris : la region suivante appelle
+        chap++;
+        regenChapter();
+        pagesScreen(CHAPI[chap], 3, "CONTINUER L'AVENTURE");
+        mode = 2;
+        continue;
+      }
+      break; // mode 4 : le coeur, la fin ; ou HOME : retour au titre
     }
-    if (mode == 4) pagesScreen(ENDING, 6, "FIN"); // le joueur a rendu l'etoile
+    if (mode == 4) { // fin d'une vraie partie : medailles, record, et le Royaume Noir se prepare
+      int rel3 = (hasFlask ? 1 : 0) + (hasEcho ? 1 : 0) + (hasPlume ? 1 : 0);
+      int st3 = ((steleRead >> 3) & 1) + ((steleRead >> 7) & 1) + ((steleRead >> 10) & 1) + ((steleRead >> 11) & 1);
+      int vr3 = 0; for (int i = 0; i < 18; i++) if (visited[i]) vr3++;
+      if (deaths == 0) medals |= 1;      // SOUFFLE PUR
+      if (rel3 == 3 && st3 == 4) medals |= 2; // SAGE DU ROYAUME
+      if (vr3 == 18) medals |= 4;        // EXPLORATEUR
+      killsS += kills; if (killsS >= 100) medals |= 8; // CHASSEUR
+      if (playT < 75000) medals |= 16;   // ECLAIR : moins de 20 minutes
+      if (ngRun) medals |= 32;           // COEUR NOIR
+      if ((medals & 63) == 63) medals |= 64; // LEGENDE DU VENT
+      if (!bestT || playT < bestT) bestT = playT;
+      runsDone++; ngPlus = 1; // la prochaine partie sera en ROYAUME NOIR
+      pagesScreen(ENDING, 8, "FIN");
+      statsScreen();
+    }
     // apres l'epilogue ou l'abandon (HOME) : retour au titre
   }
 }
