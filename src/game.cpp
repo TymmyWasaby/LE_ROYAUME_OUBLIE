@@ -1814,7 +1814,7 @@ static void statsScreen() { // le bilan de l'aventure : stats puis medailles
       char kb[24]; snprintf(kb, 24, "MONSTRES SOUFFLES : %d", kills);
       drawTextC(174, kb, C_WHT);
       if ((frame >> 4) & 1) drawTextC(204, "OK : LES MEDAILLES", C_GRE);
-    } else {
+    } else if (pg == 1) { // les medailles de la session
       drawTextC(68, "LES MEDAILLES DU VENT", C_YEL);
       for (int m = 0; m < 7; m++) {
         int y = 88 + m * 15;
