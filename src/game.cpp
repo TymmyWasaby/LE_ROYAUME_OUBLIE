@@ -466,15 +466,15 @@ static const char *RM[18][12] = {
   "####################" },
 };
 // contenu des coffres par salle : 0 rien, 1 pieces, 2 cle, 3 recipient de coeur
-static const uint8_t CH[18] = { 0,0,0,0, 2,0,0, 1,0,0, 0,0, 0,0,0,0, 3, 1 };
+static const uint8_t CH[40] = { 0,0,0,0, 2,0,0, 1,0,0, 0,0, 0,0,0,0, 3,1, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 };
 // ouvertures par salle : N=1 S=2 E=4 O=8 (le monde reste fixe, les salles non)
-static const uint8_t GAT[18] = { 6,14,14,14, 14,10, 7,15,15,11, 3,1, 5,13,13,9, 5,8 };
+static const uint8_t GAT[40] = { 6,14,14,14, 14,10, 7,15,15,11, 3,1, 5,13,13,9, 5,8, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 };
 // densite d'ennemis par salle (le GOLEM est en 11)
-static const uint8_t EDEN[18] = { 2,2,2,1, 2,2, 2,1,2,2, 3,0, 2,2,2,2, 2,2 };
+static const uint8_t EDEN[40] = { 2,2,2,1, 2,2, 2,1,2,2, 3,0, 2,2,2,2, 2,2, 2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2 };
 // coffres des alcoves secretes : 1 pieces, 4 fiole d'air, 5 pierre d'echo, 6 plume
-static const uint8_t SCH[18] = { 0,0,0,0, 0,0, 0,0,4,1, 0,0, 0,5,1,6, 0,0 };
+static const uint8_t SCH[40] = { 0,0,0,0, 0,0, 0,0,4,1, 0,0, 0,5,1,6, 0,0, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 };
 // spawns generes a chaque partie : { type, X, Y } par salle
-static uint8_t ESW[18][5][3]; static uint8_t ESWN[18];
+static uint8_t ESW[40][5][3]; static uint8_t ESWN[40];
 // PNJ : { salle, tuileX, tuileY, id } — 0 Ancien, 1 Marchande, 3 Gamin, 4 Ermite
 static uint8_t NPC[][4] = {
   { 7, 12, 6, 0 }, { 7, 14, 8, 1 }, { 7, 5, 8, 2 }, { 3, 10, 9, 3 }, { 7, 16, 8, 4 },
@@ -690,7 +690,7 @@ static int pLvl = 1, pXp, pKills0; // LE SOUFFLE MURIT : niveau, experience, kil
 static int php, pmax, pcoin, pkey; static bool hasStar, bossDead, gameDone;
 static bool hasFlask, hasEcho, hasPlume; // tresors secrets
 static unsigned titleSc; // grain de hasard : le temps passe sur le titre
-static uint8_t chestOpen[18], doorOpen[18]; static bool visited[18]; static bool pmov;
+static uint8_t chestOpen[40], doorOpen[40]; static bool visited[40]; static bool pmov;
 static int frame, shake; // fadePos est declare plus haut, avant blit()
 static unsigned playT; static int deaths; static uint32_t steleRead; // stats d'aventure (ticks de 16 ms, morts, steles lues)
 static int kills; // monstres souffles cette partie
@@ -777,15 +777,20 @@ static bool savStore(const char *src, uint32_t len) { // ecrit le fichier a l'em
   return true;
 }
 // ---------------- Le plan de la region : la premiere est un rectangle, les autres non ----------------
-static uint8_t NB[18][4]; static int8_t MPX[18], MPY[18]; static uint16_t wSeed; // voisins + positions
+static uint8_t NB[40][4]; static int8_t MPX[40], MPY[40]; static uint16_t wSeed; // voisins + positions
 static void buildLayout() { // dessine le plan du monde ; region 0 : rectangle, sinon le monde se deroule
   wSeed = seed; // note le grain de depart : au chargement, ce plan se redessine pareil
-  for (int r = 0; r < 18; r++) { MPX[r] = -99; MPY[r] = -99; for (int d = 0; d < 4; d++) NB[r][d] = 255; }
-  if (chap == 0) { // LA PREMIERE REGION : le plan du croquis, sept salles, une cle, un boss
-    const int8_t px7[7] = { 0, 1, 0, 1, 0, 1, 0 }; // 2 colonnes...
-    const int8_t py7[7] = { 0, 0, 1, 1, 2, 2, 3 }; // ...3 rangees, le boss un cran plus bas
-    const uint8_t rm7[7] = { 7, 0, 1, 4, 2, 3, 11 }; // depart=village, cle=4, X=arene
-    for (int k = 0; k < 7; k++) { MPX[rm7[k]] = px7[k]; MPY[rm7[k]] = py7[k]; }
+  for (int r = 0; r < 40; r++) { MPX[r] = -99; MPY[r] = -99; for (int d = 0; d < 4; d++) NB[r][d] = 255; }
+  if (chap == 0) { // LA PREMIERE CARTE : le croquis, 40 salles en 5 colonnes x 8 rangees
+    const uint8_t spc[4] = { 7, 4, 3, 11 }; // les quatre salles speciales
+    const int8_t spx[4] = { 0, 4, 0, 0 }, spy[4] = { 0, 0, 1, 7 }; // DEPART haut gauche, CLE haut droite, X bas gauche
+    int nxt = 0;
+    for (int y = 0; y < 8; y++) for (int x = 0; x < 5; x++) {
+      int r = -1;
+      for (int k = 0; k < 4; k++) if (spx[k] == x && spy[k] == y) r = spc[k]; // village, cle, grotte, arene
+      if (r < 0) { while (nxt == 3 || nxt == 4 || nxt == 7 || nxt == 11) nxt++; r = nxt++; } // le reste : libre
+      MPX[r] = (int8_t)x; MPY[r] = (int8_t)y;
+    }
   } else {
     MPX[7] = 0; MPY[7] = 0; // le village au coeur du monde
     int order[17], on = 0;
@@ -816,8 +821,8 @@ static void buildLayout() { // dessine le plan du monde ; region 0 : rectangle, 
       MPX[r] = (int8_t)bx; MPY[r] = (int8_t)by;
     }
   }
-  for (int r = 0; r < 18; r++) // on en deduit qui touche qui
-    for (int s = 0; s < 18; s++) {
+  for (int r = 0; r < 40; r++) // on en deduit qui touche qui
+    for (int s = 0; s < 40; s++) {
       if (r == s || MPX[s] == -99 || MPX[r] == -99) continue;
       if (MPX[s] == MPX[r] - 1 && MPY[s] == MPY[r]) NB[r][0] = (uint8_t)s;
       if (MPX[s] == MPX[r] + 1 && MPY[s] == MPY[r]) NB[r][1] = (uint8_t)s;
@@ -856,10 +861,10 @@ static void updParticles() {
 }
 
 // ---------------- Carte : tuiles ----------------
-static char RMO[18][12][21]; // copie modifiable de la carte (generee, pots brises...)
+static char RMO[40][12][21]; // copie modifiable de la carte (generee, pots brises...)
 
 // ---------------- Sauvegarde complete : le monde tel que tu l'as laisse ----------------
-static uint8_t svB[5192]; // l'image complete de la partie
+static uint8_t svB[11152]; // l'image complete de la partie
 static const uint32_t SAV_MAGIC = 0x5A8E1102u; // nouveau format : tout est dedans
 static bool savOk;
 static void svPut(int o, const void *p, int n) { memcpy(svB + o, p, n); }
@@ -874,23 +879,23 @@ static void saveGame() { // tout y est : region, salle, position exacte, bourse,
   svPut(24, &hp, 4); svPut(28, &pm, 4); svPut(32, &pc, 4); svPut(36, &pk, 4); svPut(40, &de, 4); svPut(76, &rd, 4);
   svPut(44, &pt, 4); svPut(48, &ks, 4); svPut(52, &bt, 4); svPut(56, &kl, 4); svPut(60, &sr, 4);
   svPut(64, &px2, 4); svPut(68, &py2, 4); svPut(72, &fl2, 4);
-  svPut(80, chestOpen, 18); svPut(98, doorOpen, 18); svPut(116, visited, 18);
-  svPut(134, ESWN, 18); svPut(152, ESW, 270);
-  svPut(422, RMO, 4536); // chaque pot brise, chaque rocher cede, chaque fissure ouverte
+  svPut(80, chestOpen, 40); svPut(120, doorOpen, 40); svPut(160, visited, 40);
+  svPut(200, ESWN, 40); svPut(240, ESW, 600);
+  svPut(840, RMO, 10080); // chaque pot brise, chaque rocher cede, chaque fissure ouverte, dans les 40 salles
   int32_t lv = pLvl, xp = pXp;
-  svPut(4958, &lv, 4); svPut(4962, &xp, 4); // le souffle et son experience
-  svPut(4966, NPC, 24); // ou chaque PNJ se tenait : la sauvegarde est totale
-  svPut(4990, CN, 150); svPut(5140, CNON, 50); // les 50 pieces semees, prises ou pas
+  svPut(10920, &lv, 4); svPut(10924, &xp, 4); // le souffle et son experience
+  svPut(10928, NPC, 24); // ou chaque PNJ se tenait : la sauvegarde est totale
+  svPut(10952, CN, 150); svPut(11102, CNON, 50); // les pieces semees, prises ou pas
   savEraseOld(); // s'il y avait deja une sauvegarde, on la remplace
-  savStore((const char *)svB, 5190);
+  savStore((const char *)svB, 11152);
 }
 static void loadGame() { // au demarrage : y a-t-il une sauvegarde complete a remonter ?
   savOk = false;
-  if (!savRead((char *)svB, 5190)) return;
+  if (!savRead((char *)svB, 11152)) return;
   uint32_t mg; svGet(0, &mg, 4);
   if (mg != SAV_MAGIC) return; // ancien format ou fichier inconnu : on repart a neuf
   int32_t c, m, ng, rm; svGet(8, &c, 4); svGet(12, &m, 4); svGet(16, &ng, 4); svGet(20, &rm, 4);
-  if (c < 0 || c > 7 || m < 0 || m > 127 || (ng != 0 && ng != 1) || rm < 0 || rm > 17) return; // sauvegarde folle : on ignore
+  if (c < 0 || c > 7 || m < 0 || m > 127 || (ng != 0 && ng != 1) || rm < 0 || rm > 39) return; // sauvegarde folle : on ignore
   savOk = true;
 }
 static bool isDun(int r) { return (r >= 4 && r <= 5) || r >= 10; } // salle de donjon ?
@@ -1857,7 +1862,7 @@ static void drawHud() {
   fRect(268, 6, 32, 22, KDColor::RGB24(0x0C0E16));
   {
     int mnx = 99, mny = 99, mxx = -99, mxy = -99;
-    for (int r2 = 0; r2 < 18; r2++) if (visited[r2] || r2 == room) {
+    for (int r2 = 0; r2 < 40; r2++) if (visited[r2] || r2 == room) {
       if (MPX[r2] < mnx) mnx = MPX[r2]; if (MPY[r2] < mny) mny = MPY[r2];
       if (MPX[r2] > mxx) mxx = MPX[r2]; if (MPY[r2] > mxy) mxy = MPY[r2];
     }
@@ -1865,7 +1870,7 @@ static void drawHud() {
       int cs2 = 3;
       while ((mxx - mnx + 1) * cs2 > 30 || (mxy - mny + 1) * cs2 > 20) cs2--;
       int ox3 = 270 + (30 - (mxx - mnx + 1) * cs2) / 2, oy3 = 7 + (20 - (mxy - mny + 1) * cs2) / 2;
-      for (int r2 = 0; r2 < 18; r2++) {
+      for (int r2 = 0; r2 < 40; r2++) {
         if (!visited[r2] && r2 != room) continue;
         int mx = ox3 + (MPX[r2] - mnx) * cs2, my = oy3 + (MPY[r2] - mny) * cs2;
         if (r2 == room) fRect(mx, my, cs2, cs2, ((frame >> 4) & 1) ? C_YEL : C_WHT); // ou tu es
@@ -2001,10 +2006,10 @@ static void playTick() {
   // ----- transitions de salle -----
   int prevRoom = room;
   int nb2; // le plan de la region decide des voisins : plus de rectangle obligatoire
-  if (plx < 8 && (nb2 = NB[room][0]) < 18) { room = nb2; plx = SW - 12; spawnEnemies(); }
-  else if (plx > SW - 8 && (nb2 = NB[room][1]) < 18) { room = nb2; plx = 12; spawnEnemies(); }
-  else if (ply < TOPOFF + 8 && (nb2 = NB[room][2]) < 18) { room = nb2; ply = TOPOFF + MH * TS - 12; spawnEnemies(); }
-  else if (ply > TOPOFF + MH * TS - 8 && (nb2 = NB[room][3]) < 18) { room = nb2; ply = TOPOFF + 12; spawnEnemies(); }
+  if (plx < 8 && (nb2 = NB[room][0]) < 40) { room = nb2; plx = SW - 12; spawnEnemies(); }
+  else if (plx > SW - 8 && (nb2 = NB[room][1]) < 40) { room = nb2; plx = 12; spawnEnemies(); }
+  else if (ply < TOPOFF + 8 && (nb2 = NB[room][2]) < 40) { room = nb2; ply = TOPOFF + MH * TS - 12; spawnEnemies(); }
+  else if (ply > TOPOFF + MH * TS - 8 && (nb2 = NB[room][3]) < 40) { room = nb2; ply = TOPOFF + 12; spawnEnemies(); }
   if (room != prevRoom) { visited[room] = 1; fadePos = 0; waitRelease(); return; }
   // ----- action : le SOUFFLE -----
   if (swing > 0) swing--;
@@ -2198,10 +2203,10 @@ static void statsScreen() { // le bilan de l'aventure : stats puis medailles
       int st = ((steleRead >> 3) & 1) + ((steleRead >> 7) & 1) + ((steleRead >> 10) & 1) + ((steleRead >> 11) & 1);
       char sb[24]; snprintf(sb, 24, "STELES LUES : %d/4", st);
       drawTextC(132, sb, (st == 4) ? C_YEL : C_WHT);
-      int ch = 0; for (int i = 0; i < 18; i++) if (chestOpen[i]) ch++;
+      int ch = 0; for (int i = 0; i < 40; i++) if (chestOpen[i]) ch++;
       char cb2[24]; snprintf(cb2, 24, "COFFRES : %d/8", ch);
       drawTextC(146, cb2, (ch == 8) ? C_YEL : C_WHT);
-      int vr = 0; for (int i = 0; i < 18; i++) if (visited[i]) vr++;
+      int vr = 0; for (int i = 0; i < 40; i++) if (visited[i]) vr++;
       char vb[24]; snprintf(vb, 24, "SALLES EXPLOREES : %d/18", vr);
       drawTextC(160, vb, (vr == 18) ? C_YEL : C_WHT);
       char kb[24]; snprintf(kb, 24, "MONSTRES SOUFFLES : %d", kills);
@@ -2392,10 +2397,10 @@ static void genRoom(int r) {
   // croisement garanti : toutes les ouvertures restent reliees
   for (int ty = 1; ty < MH - 1; ty++) { M[ty][9] = base; M[ty][10] = base; }
   for (int tx = 1; tx < MW - 1; tx++) { M[5][tx] = base; M[6][tx] = base; }
-  if (NB[r][2] < 18) { M[0][9] = base; M[0][10] = base; } else { M[0][9] = wall; M[0][10] = wall; }
-  if (NB[r][3] < 18) { M[11][9] = base; M[11][10] = base; } else { M[11][9] = wall; M[11][10] = wall; }
-  if (NB[r][1] < 18) { M[5][19] = base; M[6][19] = base; } else { M[5][19] = wall; M[6][19] = wall; }
-  if (NB[r][0] < 18) { M[5][0] = base; M[6][0] = base; } else { M[5][0] = wall; M[6][0] = wall; }
+  if (NB[r][2] < 40) { M[0][9] = base; M[0][10] = base; } else { M[0][9] = wall; M[0][10] = wall; }
+  if (NB[r][3] < 40) { M[11][9] = base; M[11][10] = base; } else { M[11][9] = wall; M[11][10] = wall; }
+  if (NB[r][1] < 40) { M[5][19] = base; M[6][19] = base; } else { M[5][19] = wall; M[6][19] = wall; }
+  if (NB[r][0] < 40) { M[5][0] = base; M[6][0] = base; } else { M[5][0] = wall; M[6][0] = wall; }
   if (NB[r][3] == 11) { M[11][9] = 'D'; M[11][10] = 'D'; } // la porte scellee du boss, ou qu'elle soit
   if (dun) { // torches sur le mur du haut
     M[0][2 + rnd(7)] = 'F';
@@ -2427,22 +2432,24 @@ static void fixLanes(int r) { // les ouvertures des salles fixes suivent le plan
   bool dn = isDun(r);
   char base = dn ? ',' : '.', wall = dn ? '#' : 't';
   char (*M)[21] = RMO[r];
-  if (NB[r][2] < 18) { M[0][9] = base; M[0][10] = base; } else { M[0][9] = wall; M[0][10] = wall; }
-  if (NB[r][3] < 18) { M[11][9] = base; M[11][10] = base; } else { M[11][9] = wall; M[11][10] = wall; }
-  if (NB[r][1] < 18) { M[5][19] = base; M[6][19] = base; } else { M[5][19] = wall; M[6][19] = wall; }
-  if (NB[r][0] < 18) { M[5][0] = base; M[6][0] = base; } else { M[5][0] = wall; M[6][0] = wall; }
+  if (NB[r][2] < 40) { M[0][9] = base; M[0][10] = base; } else { M[0][9] = wall; M[0][10] = wall; }
+  if (NB[r][3] < 40) { M[11][9] = base; M[11][10] = base; } else { M[11][9] = wall; M[11][10] = wall; }
+  if (NB[r][1] < 40) { M[5][19] = base; M[6][19] = base; } else { M[5][19] = wall; M[6][19] = wall; }
+  if (NB[r][0] < 40) { M[5][0] = base; M[6][0] = base; } else { M[5][0] = wall; M[6][0] = wall; }
   if (NB[r][3] == 11) { M[11][9] = 'D'; M[11][10] = 'D'; } // la porte scellee du boss, ou qu'elle soit
 }
 static void fillWorld() { // genere les 18 salles d'une region et pose les monstres
   buildLayout(); // d'abord le plan : qui touche qui, ou chaque salle se dessine
-  for (int r = 0; r < 18; r++) { // salles procedurales, sauf la grotte (3), le village (7) et l'arene (11)
+  for (int r = 0; r < 40; r++) { // salles procedurales, sauf la grotte (3), le village (7) et l'arene (11)
+    if (MPX[r] == -99) continue; // salle hors plan : rien a generer
     if (r == 3 || r == 7 || r == 11) {
       for (int ty = 0; ty < 12; ty++) { memcpy(RMO[r][ty], RM[r][ty], 20); RMO[r][ty][20] = 0; }
       fixLanes(r); // leurs ouvertures suivent le plan, elles aussi
     } else genRoom(r);
   }
-  for (int r = 0; r < 18; r++) { // placement des monstres dans le monde genere
+  for (int r = 0; r < 40; r++) { // placement des monstres dans le monde genere
     ESWN[r] = 0;
+    if (MPX[r] == -99) continue; // pas de monstres dans une salle qui n'existe pas
     for (int k = 0; k < EDEN[r] + ngPlus; k++) { // ROYAUME NOIR : un monstre de plus par salle
       for (int tries = 0; tries < 60; tries++) {
         int tx = 1 + rnd(MW - 2), ty = 1 + rnd(MH - 2);
@@ -2515,7 +2522,7 @@ static void newGame() {
   hasStar = false; bossDead = false; gameDone = false;
   hasFlask = false; hasEcho = false; hasPlume = false;
   playT = 0; deaths = 0; steleRead = 0; kills = 0; ngRun = ngPlus; chap = 0; chapGo = false; // la premiere des huit regions
-  for (int i = 0; i < 18; i++) { chestOpen[i] = 0; doorOpen[i] = 0; visited[i] = (i == 7); }
+  for (int i = 0; i < 40; i++) { chestOpen[i] = 0; doorOpen[i] = 0; visited[i] = (i == 7); }
   for (int i = 0; i < 36; i++) PT[i].life = 0;
   dlgOn = false; dlgEnd = false;
   fillWorld();
@@ -2525,7 +2532,7 @@ static void regenChapter() { // la region suivante : meme royaume, autre monde, 
   fadePos = 0; // le monde se rematerialise
   room = 7; plx = 160; ply = TOPOFF + 96;
   hasStar = false; bossDead = false;
-  for (int i = 0; i < 18; i++) { chestOpen[i] = 0; doorOpen[i] = 0; visited[i] = (i == 7); }
+  for (int i = 0; i < 40; i++) { chestOpen[i] = 0; doorOpen[i] = 0; visited[i] = (i == 7); }
   dlgOn = false; dlgEnd = false;
   fillWorld();
 }
@@ -2539,18 +2546,18 @@ static void applySave() { // CONTINUER : tout remonte, jusqu'au pot que tu as br
   svGet(20, &v, 4); room = v; svGet(24, &v, 4); php = v; svGet(28, &v, 4); pmax = v;
   svGet(32, &v, 4); pcoin = v; svGet(36, &v, 4); pkey = v; svGet(40, &v, 4); deaths = v;
   svGet(76, &v, 4); runsDone = v;
-  svGet(4958, &v, 4); pLvl = v; if (pLvl < 1) pLvl = 1; svGet(4962, &v, 4); pXp = v; // le souffle a garde son niveau
+  svGet(10920, &v, 4); pLvl = v; if (pLvl < 1) pLvl = 1; svGet(10924, &v, 4); pXp = v; // le souffle a garde son niveau
   uint32_t u; svGet(44, &u, 4); playT = u; svGet(48, &u, 4); killsS = u; svGet(52, &u, 4); bestT = u;
   svGet(56, &u, 4); kills = (int)u; pKills0 = kills; svGet(60, &u, 4); steleRead = u;
   float px2, py2; svGet(64, &px2, 4); svGet(68, &py2, 4); plx = px2; ply = py2; // l'endroit exact ou tu etais
   uint32_t fl2; svGet(72, &fl2, 4);
   hasStar = fl2 & 1; hasFlask = fl2 & 2; hasEcho = fl2 & 4; hasPlume = fl2 & 8;
   bossDead = fl2 & 16; chapGo = fl2 & 32; ngRun = fl2 & 64;
-  svGet(80, chestOpen, 18); svGet(98, doorOpen, 18); svGet(116, visited, 18);
-  svGet(134, ESWN, 18); svGet(152, ESW, 270);
-  svGet(422, RMO, 4536); // la carte telle que tu l'avais laissee
-  svGet(4966, NPC, 24); // les PNJ etaient ici, pas ailleurs
-  svGet(4990, CN, 150); svGet(5140, CNON, 50); // les pieces deja ramassees le restent
+  svGet(80, chestOpen, 40); svGet(120, doorOpen, 40); svGet(160, visited, 40);
+  svGet(200, ESWN, 40); svGet(240, ESW, 600);
+  svGet(840, RMO, 10080); // la carte telle que tu l'avais laissee, les 40 salles
+  svGet(10928, NPC, 24); // les PNJ etaient ici, pas ailleurs
+  svGet(10952, CN, 150); svGet(11102, CNON, 50); // les pieces deja ramassees le restent
   fadePos = 0; pifr = 0; swing = 0; pvx = pvy = 0; dlgOn = false; dlgEnd = false; chapGo = (bool)(fl2 & 32);
   spawnEnemies();
 }
@@ -2629,7 +2636,7 @@ void ion_main(int argc, char *argv[]) {
     if (mode == 4) { // fin d'une vraie partie : medailles, record, et le Royaume Noir se prepare
       int rel3 = (hasFlask ? 1 : 0) + (hasEcho ? 1 : 0) + (hasPlume ? 1 : 0);
       int st3 = ((steleRead >> 3) & 1) + ((steleRead >> 7) & 1) + ((steleRead >> 10) & 1) + ((steleRead >> 11) & 1);
-      int vr3 = 0; for (int i = 0; i < 18; i++) if (visited[i]) vr3++;
+      int vr3 = 0; for (int i = 0; i < 40; i++) if (visited[i]) vr3++;
       if (deaths == 0) medals |= 1;      // SOUFFLE PUR
       if (rel3 == 3 && st3 == 4) medals |= 2; // SAGE DU ROYAUME
       if (vr3 == 18) medals |= 4;        // EXPLORATEUR
