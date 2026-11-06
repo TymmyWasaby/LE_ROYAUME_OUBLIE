@@ -781,8 +781,11 @@ static uint8_t NB[18][4]; static int8_t MPX[18], MPY[18]; static uint16_t wSeed;
 static void buildLayout() { // dessine le plan du monde ; region 0 : rectangle, sinon le monde se deroule
   wSeed = seed; // note le grain de depart : au chargement, ce plan se redessine pareil
   for (int r = 0; r < 18; r++) { MPX[r] = -99; MPY[r] = -99; for (int d = 0; d < 4; d++) NB[r][d] = 255; }
-  if (chap == 0) { // LA PREMIERE REGION : le rectangle classique, pour apprendre
-    for (int r = 0; r < 18; r++) { MPX[r] = (int8_t)(r % 6); MPY[r] = (int8_t)(r / 6); }
+  if (chap == 0) { // LA PREMIERE REGION : le plan du croquis, sept salles, une cle, un boss
+    const int8_t px7[7] = { 0, 1, 0, 1, 0, 1, 0 }; // 2 colonnes...
+    const int8_t py7[7] = { 0, 0, 1, 1, 2, 2, 3 }; // ...3 rangees, le boss un cran plus bas
+    const uint8_t rm7[7] = { 7, 0, 1, 4, 2, 3, 11 }; // depart=village, cle=4, X=arene
+    for (int k = 0; k < 7; k++) { MPX[rm7[k]] = px7[k]; MPY[rm7[k]] = py7[k]; }
   } else {
     MPX[7] = 0; MPY[7] = 0; // le village au coeur du monde
     int order[17], on = 0;
@@ -2477,11 +2480,14 @@ static void fillWorld() { // genere les 18 salles d'une region et pose les monst
       NPC[n][1] = tx; NPC[n][2] = ty; break; // nouvelle adresse
     }
   }
-  // 50 PIECES PAR REGION : semees un peu partout, une par case libre
+  // PIECES PAR REGION : 40 sur la premiere carte, 50 ensuite
   {
-    int placed = 0;
-    for (int tries = 0; tries < 900 && placed < 50; tries++) {
-      int r = rnd(18), tx = 1 + rnd(MW - 2), ty = 1 + rnd(MH - 2);
+    int goal = (chap == 0) ? 40 : 50, placed = 0;
+    for (int tries = 0; tries < 900 && placed < goal; tries++) {
+      int r = -1;
+      for (int q = 0; q < 40 && r < 0; q++) { int cand = rnd(18); if (MPX[cand] != -99) r = cand; }
+      if (r < 0) break; // pas de salle libre (impossible, mais on ne sait jamais)
+      int tx = 1 + rnd(MW - 2), ty = 1 + rnd(MH - 2);
       char c = RMO[r][ty][tx];
       if (c != '.' && c != ',' && c != 'f' && c != 'p') continue;
       if (tx >= 9 && tx <= 11) continue; // pas pile sur la route principale
