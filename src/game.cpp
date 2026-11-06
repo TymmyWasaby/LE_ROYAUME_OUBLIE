@@ -468,11 +468,11 @@ static const char *RM[18][12] = {
 // contenu des coffres par salle : 0 rien, 1 pieces, 2 cle, 3 recipient de coeur
 static const uint8_t CH[40] = { 0,0,0,0, 2,0,0, 1,0,0, 0,0, 0,0,0,0, 3,1, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 };
 // ouvertures par salle : N=1 S=2 E=4 O=8 (le monde reste fixe, les salles non)
-static const uint8_t GAT[40] = { 6,14,14,14, 14,10, 7,15,15,11, 3,1, 5,13,13,9, 5,8, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 };
+static const uint8_t GAT[40] = { 6,14,14,14, 14,10, 7,15,15,11, 3,1, 5,13,13,9, 5,8, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 };
 // densite d'ennemis par salle (le GOLEM est en 11)
-static const uint8_t EDEN[40] = { 2,2,2,1, 2,2, 2,1,2,2, 3,0, 2,2,2,2, 2,2, 2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2 };
+static const uint8_t EDEN[40] = { 2,2,2,1, 2,2, 2,1,2,2, 3,0, 2,2,2,2, 2,2, 2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2 };
 // coffres des alcoves secretes : 1 pieces, 4 fiole d'air, 5 pierre d'echo, 6 plume
-static const uint8_t SCH[40] = { 0,0,0,0, 0,0, 0,0,4,1, 0,0, 0,5,1,6, 0,0, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 };
+static const uint8_t SCH[40] = { 0,0,0,0, 0,0, 0,0,4,1, 0,0, 0,5,1,6, 0,0, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 };
 // spawns generes a chaque partie : { type, X, Y } par salle
 static uint8_t ESW[40][5][3]; static uint8_t ESWN[40];
 // PNJ : { salle, tuileX, tuileY, id } — 0 Ancien, 1 Marchande, 3 Gamin, 4 Ermite
