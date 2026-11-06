@@ -766,13 +766,13 @@ static void saveGame() { // LA SAUVEGARDE AUTOMATIQUE : l'aventure vit dans l'at
 }
 static void loadGame() { // au demarrage : y a-t-il une sauvegarde a remonter ?
   char b[24];
-  saveOk = false;
+  savOk = false;
   if (!savRead(b, 24)) return;
   uint32_t mg; memcpy(&mg, b, 4);
   if (mg != SAV_MAGIC) return;
   memcpy(&svC, b + 4, 4); memcpy(&svM, b + 8, 4); memcpy(&svNg, b + 12, 4); memcpy(&svKs, b + 16, 4); memcpy(&svBt, b + 20, 4);
   if (svC < 0 || svC > 7 || svM < 0 || svM > 127 || svNg < 0 || svNg > 1) return; // sauvegarde folle : on ignore
-  saveOk = true;
+  savOk = true;
 }
 // dialogue en cours
 static const char *(*dgp)[3]; // pointeur vers un tableau de pages
@@ -2205,12 +2205,12 @@ static int menuScreen() { // 0 : CONTINUER (s'il y a une sauvegarde) ; 1 : nouve
   while (true) {
     pollKeys();
     if (kHome) { waitRelease(); return -1; }
-    if (saveOk && (kUp || kDown)) { waitRelease(); sel = 1 - sel; }
+    if (savOk && (kUp || kDown)) { waitRelease(); sel = 1 - sel; }
     if (keyOK) { waitRelease(); return sel; }
     fRect(0, 0, SW, SH, KDColor::RGB24(0x0A0E1A));
     starfield(frame++);
     drawTextC(80, "LE ROYAUME OUBLIE", C_YEL);
-    if (saveOk) {
+    if (savOk) {
       char cb[30]; snprintf(cb, 30, "CONTINUER - REGION %d", (int)svC + 1);
       drawTextC(110, cb, sel == 0 ? C_WHT : KDColor::RGB24(0x6A7590));
       drawTextC(126, "NOUVELLE PARTIE", sel == 1 ? C_WHT : KDColor::RGB24(0x6A7590));
@@ -2232,7 +2232,7 @@ void ion_main(int argc, char *argv[]) {
     loadGame(); // on regarde si l'atelier garde une sauvegarde
     int ms2 = menuScreen();
     if (ms2 < 0) continue; // HOME au menu : retour au titre
-    if (saveOk && ms2 == 0) { // CONTINUER : la sauvegarde remonte toute seule, rien a taper
+    if (savOk && ms2 == 0) { // CONTINUER : la sauvegarde remonte toute seule, rien a taper
       applySave();
       if (chap > 0) pagesScreen(CHAPI[chap], 3, "CONTINUER L'AVENTURE");
       else pagesScreen(INTRO, 7, "COMMENCER L'AVENTURE");
@@ -2243,7 +2243,7 @@ void ion_main(int argc, char *argv[]) {
     mode = 2;
     while (true) {
       while (mode == 2) {
-        uint64_t t0 = eadk_timing_ms(); // debut de la frame : on mesurera pour ne dormir que le reste
+        uint64_t t0 = eadk_timing_us(); // debut de la frame : on mesurera pour ne dormir que le reste
         frame++;
         int ox = 0, oy = 0;
         if (shake > 0) { shake--; ox = rnd(7) - 3; oy = rnd(7) - 3; }
@@ -2251,8 +2251,8 @@ void ion_main(int argc, char *argv[]) {
         if (mode != 2) break;
         drawRoom(ox, oy);
         blit();
-        uint64_t el = eadk_timing_ms() - t0; // le jeu rend aussi vite qu'il peut
-        if (el < 17) Ion::Timing::msleep((uint32_t)(17 - el));
+        uint64_t el = eadk_timing_us() - t0; // le jeu rend aussi vite qu'il peut
+        if (el < 17000) Ion::Timing::msleep((uint32_t)((17000 - el) / 1000));
       }
       if (mode == 3) { // defaite : ranime au village de la region
         gameOverScreen();
