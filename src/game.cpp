@@ -2243,7 +2243,6 @@ void ion_main(int argc, char *argv[]) {
     mode = 2;
     while (true) {
       while (mode == 2) {
-        uint64_t t0 = eadk_timing_us(); // debut de la frame : on mesurera pour ne dormir que le reste
         frame++;
         int ox = 0, oy = 0;
         if (shake > 0) { shake--; ox = rnd(7) - 3; oy = rnd(7) - 3; }
@@ -2251,8 +2250,7 @@ void ion_main(int argc, char *argv[]) {
         if (mode != 2) break;
         drawRoom(ox, oy);
         blit();
-        uint64_t el = eadk_timing_us() - t0; // le jeu rend aussi vite qu'il peut
-        if (el < 17000) Ion::Timing::msleep((uint32_t)((17000 - el) / 1000));
+        Ion::Timing::msleep(16);
       }
       if (mode == 3) { // defaite : ranime au village de la region
         gameOverScreen();
