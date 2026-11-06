@@ -52,7 +52,8 @@ static uint8_t palIdxSlow(KDColor c) {
 }
 static uint16_t palCK[512]; static uint8_t palCV[512]; static bool palCU[512]; // cache direct mappe : 2 Ko
 static uint8_t palIdx(KDColor c) { // LA BOURSE AUX COULEURS : trouve l'index du premier coup
-  uint16_t key = (uint16_t)((c.red() << 11) | (c.green() << 5) | c.blue()); // 5-6-5 exact, injectif
+  // KDColor est RGB565 : red() renvoie 0-248, green() 0-252, blue() 0-248 (composantes 5-6-5 decalees)
+  uint16_t key = (uint16_t)(((c.red() >> 3) << 11) | ((c.green() >> 2) << 5) | (c.blue() >> 3)); // le vrai RGB565, injectif
   int slot = key & 511;
   if (palCU[slot] && palCK[slot] == key) return palCV[slot]; // present : une seule lecture
   uint8_t r = palIdxSlow(c);
@@ -100,7 +101,7 @@ static void blit() {
     }
     Ion::Display::pushRect(KDRect(0, y0, SW, hh), up);
   }
-  if (fadePos < 15) fadePos++;
+  if (fadePos < 15) { fadePos += 3; if (fadePos > 15) fadePos = 15; } // le fondu va trois fois plus vite
 }
 
 // ---------------- Police 5x5 (petite, nette) + grande ----------------
@@ -819,8 +820,7 @@ static bool solid(int tx, int ty) {
   char c = tileAt(tx, ty);
   if (c == 'D' && doorOpen[room]) return false; // porte ouverte
   if (c == 't' || c == 'r' || c == 'w' || c == ' ' || c == '#' || c == 'D' || c == 'C' || c == 'F' || c == 'P' || c == 'B' || c == 'b' || c == 'L') return true;
-  if (npcAt(tx, ty)) return true;
-  return false;
+  return false; // les PNJ ne bloquent plus : l'ermite ne peut plus t'enfermer
 }
 static void drawTile(int tx, int ty, int ox, int oy) {
   char c = tileAt(tx, ty);
@@ -1086,6 +1086,18 @@ static bool walkable(float x, float y, float r) {
   return true;
 }
 static void dropPickup(float x, float y, int forced) {
+  // l'objet ne doit pas tomber dans un arbre ou un rocher : on pose sur la case libre la plus proche
+  int tx = (int)(x / TS), ty = (int)((y - TOPOFF) / TS);
+  if (tx < 0 || tx >= MW || ty < 0 || ty >= MH || solid(tx, ty)) {
+    int bd = 99, bx = tx, by = ty;
+    for (int rr = ty - 2; rr <= ty + 2; rr++)
+      for (int cc = tx - 2; cc <= tx + 2; cc++) {
+        if (cc < 0 || cc >= MW || rr < 0 || rr >= MH || solid(cc, rr)) continue;
+        int d = (cc - tx) * (cc - tx) + (rr - ty) * (rr - ty);
+        if (d < bd) { bd = d; bx = cc; by = rr; }
+      }
+    x = bx * TS + 8; y = TOPOFF + by * TS + 8; // au centre de la case libre trouvee
+  }
   for (int i = 0; i < 8; i++) if (!PK[i].on) {
     PK[i].x = x; PK[i].y = y; PK[i].t = forced >= 0 ? forced : (rnd(3) == 0 ? 0 : 1); PK[i].on = true;
     return;
@@ -1700,7 +1712,7 @@ static void playTick() {
   if (kHome) { saveGame(); mode = 0; return; } // retour au titre : on sauvegarde d'abord
   // ----- mouvement -----
   float ox = plx, oy = ply;
-  float sp = 1.5f;
+  float sp = 2.3f; // le vent va vite : 2.3 pixels par frame au lieu de 1.5
   float dx = (kRight ? sp : 0) - (kLeft ? sp : 0);
   float dy = (kDown ? sp : 0) - (kUp ? sp : 0);
   pmov = (dx != 0 || dy != 0);
