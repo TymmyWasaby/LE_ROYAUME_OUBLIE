@@ -88,13 +88,14 @@ static void blit() {
     for (int y = 0; y < hh; y++) {
       const uint8_t *src = VRAM + (long)(y0 + y) * SW;
       KDColor *dst = up + (long)y * SW;
-      for (int x = 0; x < SW; x++) {
-        KDColor c = (src[x] < palN) ? PAL[src[x]] : KDColor::RGB24(0);
-        if (f < 15) { // assombrissement progressif, reconstruit en un seul RGB24
+      if (f >= 15) { // cas normal : simple copie de palette, aucun calcul de fondu
+        for (int x = 0; x < SW; x++) dst[x] = (src[x] < palN) ? PAL[src[x]] : KDColor::RGB24(0);
+      } else { // assombrissement progressif, reconstruit en un seul RGB24
+        for (int x = 0; x < SW; x++) {
+          KDColor c = (src[x] < palN) ? PAL[src[x]] : KDColor::RGB24(0);
           uint32_t r = (uint32_t)((c.red() * f) / 15), g2 = (uint32_t)((c.green() * f) / 15), b2 = (uint32_t)((c.blue() * f) / 15);
-          c = KDColor::RGB24((r << 16) | (g2 << 8) | b2);
+          dst[x] = KDColor::RGB24((r << 16) | (g2 << 8) | b2);
         }
-        dst[x] = c;
       }
     }
     Ion::Display::pushRect(KDRect(0, y0, SW, hh), up);
@@ -673,6 +674,106 @@ static unsigned playT; static int deaths; static uint32_t steleRead; // stats d'
 static int kills; // monstres souffles cette partie
 // medailles et records de session (remis a zero a chaque lancement de l'app)
 static unsigned killsS, bestT; static int runsDone, ngPlus, ngRun, medals; static int chap; static bool chapGo; // chapitre 0..7, eclat pret a emmener
+
+// ---------------- Sauvegarde reelle (portage de NumWorks Extapp Storage, par Yaya-Cout) ----------------
+// L'EADK officiel n'expose pas le stockage ; cette bibliotheque libre lit et ecrit
+// la memoire de l'atelier directement (comme les emulateurs et KhiCAS).
+// Le fichier bsnumworks.nws contient l'aventure : plus de code a taper.
+static uint32_t savRev32(uint32_t v) {
+  return (((v & 0xFF) << 24) | ((v & 0xFF00) << 8) | ((v & 0xFF0000) >> 8) | ((v & 0xFF000000u) >> 24));
+}
+static bool savValid(const uint32_t *a) { return *a == savRev32(0xBADD0BEEu); }
+static uint8_t savModel() { // modele de machine : 1 = N0110/N0115, 2 = N0120
+  uint32_t so; uint32_t sp = (uint32_t)&so;
+  if (sp >= 0x20000000u && sp <= 0x2003FFFFu) return 1;
+  if (sp >= 0x24000000u && sp <= 0x2404FFFFu) return 2;
+  return 0;
+}
+static uint32_t savUserland() {
+  if (savModel() == 1) { // deux adresses possibles selon la version d'Epsilon
+    if (*(uint32_t *)(*(uint32_t *)0x20000004 + 0x20000 - 0x8) == savRev32(0xFEEDC0DEu)) return *(uint32_t *)0x20000004 + 0x20000 - 0x8;
+    return *(uint32_t *)0x20000004 + 0x10000 - 0x8;
+  }
+  return *(uint32_t *)0x24000004 + 0x20000 - 0x8;
+}
+static uint32_t savAddress() { return *(uint32_t *)(savUserland() + 0xC); }
+static uint32_t savSize() { return *(uint32_t *)(savUserland() + 0x10); }
+static const char *SAVF = "bsnumworks.nws";
+static bool savOk; static int32_t svC, svM, svNg; static uint32_t svKs, svBt; // sauvegarde lue au demarrage
+static const uint32_t SAV_MAGIC = 0x5A8E1101u;
+static bool savRead(char *dst, uint32_t len) { // lit le fichier de sauvegarde dans dst
+  uint32_t a = savAddress(), end2 = a + savSize();
+  if (!savValid((const uint32_t *)a)) return false;
+  char *o = (char *)a + 4;
+  while ((uint32_t)o < end2) {
+    uint16_t sz = *(uint16_t *)o;
+    if (sz == 0) break;
+    if (strcmp(o + 2, SAVF) == 0) {
+      uint16_t ns = (uint16_t)(strlen(o + 2) + 1);
+      if ((uint32_t)sz - 2 - ns != len) return false; // fichier inattendu : on ignore
+      memcpy(dst, o + 2 + ns, len);
+      return true;
+    }
+    o += sz;
+  }
+  return false;
+}
+static char *savNextFree() { // l'adresse ou le prochain fichier de l'atelier doit s'ecrire
+  uint32_t a = savAddress(), end2 = a + savSize();
+  if (!savValid((const uint32_t *)a)) return 0;
+  char *o = (char *)a + 4;
+  while ((uint32_t)o < end2) {
+    if (*(uint16_t *)o == 0) return o;
+    o += *(uint16_t *)o;
+  }
+  return (char *)end2;
+}
+static bool savEraseOld() { // retire l'ancienne sauvegarde de l'atelier
+  uint32_t a = savAddress(), end2 = a + savSize();
+  if (!savValid((const uint32_t *)a)) return false;
+  char *o = (char *)a + 4;
+  while ((uint32_t)o < end2) {
+    uint16_t sz = *(uint16_t *)o;
+    if (sz == 0) return false;
+    if (strcmp(o + 2, SAVF) == 0) {
+      char *nf = savNextFree();
+      memmove(o, o + sz, (uint32_t)(nf - (o + sz)));
+      memset(nf - sz, 0, sz);
+      return true;
+    }
+    o += sz;
+  }
+  return false;
+}
+static bool savStore(const char *src, uint32_t len) { // ecrit le fichier a l'emplacement libre
+  char *nf = savNextFree();
+  if (!nf) return false;
+  uint32_t need = 2 + strlen(SAVF) + 1 + len;
+  if (savAddress() + savSize() < (uint32_t)nf + need) return false; // atelier plein : pas de sauvegarde
+  *(uint16_t *)nf = (uint16_t)need;
+  memcpy(nf + 2, SAVF, strlen(SAVF) + 1);
+  memcpy(nf + 2 + strlen(SAVF) + 1, src, len);
+  memset(nf + need, 0, (uint32_t)((savAddress() + savSize()) - ((uint32_t)nf + need)));
+  return true;
+}
+static void saveGame() { // LA SAUVEGARDE AUTOMATIQUE : l'aventure vit dans l'atelier
+  char b[24];
+  memcpy(b, &SAV_MAGIC, 4);
+  int32_t c = chap, m = medals, ng = ngPlus; uint32_t ks = killsS, bt = bestT;
+  memcpy(b + 4, &c, 4); memcpy(b + 8, &m, 4); memcpy(b + 12, &ng, 4); memcpy(b + 16, &ks, 4); memcpy(b + 20, &bt, 4);
+  savEraseOld(); // s'il y avait deja une sauvegarde, on la remplace
+  savStore(b, 24);
+}
+static void loadGame() { // au demarrage : y a-t-il une sauvegarde a remonter ?
+  char b[24];
+  saveOk = false;
+  if (!savRead(b, 24)) return;
+  uint32_t mg; memcpy(&mg, b, 4);
+  if (mg != SAV_MAGIC) return;
+  memcpy(&svC, b + 4, 4); memcpy(&svM, b + 8, 4); memcpy(&svNg, b + 12, 4); memcpy(&svKs, b + 16, 4); memcpy(&svBt, b + 20, 4);
+  if (svC < 0 || svC > 7 || svM < 0 || svM > 127 || svNg < 0 || svNg > 1) return; // sauvegarde folle : on ignore
+  saveOk = true;
+}
 // dialogue en cours
 static const char *(*dgp)[3]; // pointeur vers un tableau de pages
 static int dgN, dgI; static bool dlgOn, dlgEnd; // dlgEnd : apres la derniere page, fin du jeu
@@ -1596,7 +1697,7 @@ static void playTick() {
     return;
   }
   pollKeys();
-  if (kHome) { mode = 0; return; } // retour au titre
+  if (kHome) { saveGame(); mode = 0; return; } // retour au titre : on sauvegarde d'abord
   // ----- mouvement -----
   float ox = plx, oy = ply;
   float sp = 1.5f;
@@ -1804,13 +1905,12 @@ static void starfield(int sc) { // etoiles sans fond : le ciel est deja peint
     if ((i + sc) & 3) px(sx, sy, KDColor::RGB24(0x6A7590)); else px(sx, sy, C_WHT);
   }
 }
-static uint32_t saveCode(); static void fmtCode(uint32_t N, char *b); // declares tôt : statsScreen et titleScreen les utilisent avant leur definition
 static void statsScreen() { // le bilan de l'aventure : stats puis medailles
   waitRelease();
   int pg = 0;
   while (true) {
     pollKeys();
-    if (keyOK) { waitRelease(); pg++; if (pg >= 3) return; }
+    if (keyOK) { waitRelease(); pg++; if (pg >= 2) return; }
     fRect(0, 0, SW, SH, KDColor::RGB24(0x0A0E1A));
     starfield(frame++);
     fRect(46, 58, SW - 92, 130, KDColor::RGB24(0x101626));
@@ -1854,18 +1954,6 @@ static void statsScreen() { // le bilan de l'aventure : stats puis medailles
         if (m == 3) { char pb[14]; snprintf(pb, 14, "%d/100", (int)killsS); drawTextSmall(252, y, pb, ok ? C_YEL : KDColor::RGB24(0x6A7590)); }
         else drawTextSmall(252, y, ok ? "GAGNEE" : "A FAIRE", ok ? C_YEL : KDColor::RGB24(0x6A7590));
       }
-      if ((frame >> 4) & 1) drawTextC(204, "OK : LE CODE DE REPRISE", C_GRE);
-    } else if (pg == 2) { // le code a noter pour reprendre plus tard
-      drawTextC(68, "TON CODE DE REPRISE", C_YEL);
-      char scb[8]; fmtCode(saveCode(), scb);
-      for (int i = 0; i < 7; i++) { // gros chiffres, faciles a copier
-        char db[2]; db[0] = scb[i]; db[1] = 0;
-        drawTextBig(92 + i * 24, 92, db, C_WHT);
-      }
-      drawTextC(120, "NOTE-LE SUR PAPIER OU DANS", C_GRE);
-      drawTextC(132, "L'ATELIER. AU TITRE, CHOISIS", C_GRE);
-      drawTextC(144, "'CHARGER UN CODE' POUR REVENIR", C_GRE);
-      drawTextC(156, "ICI, MEME APRES UN REDEMARRAGE.", C_GRE);
       if ((frame >> 4) & 1) drawTextC(204, "OK : RETOUR AU TITRE", C_GRE);
     }
     blit(); Ion::Timing::msleep(40);
@@ -1933,7 +2021,6 @@ static void titleScreen() {
     drawTextC(150, "TU ES LE VENT. TU NE TOUCHES RIEN.", C_GRE);
     if (bestT) { char rb3[28]; int s3 = (int)(bestT / 62); snprintf(rb3, 28, "RECORD SESSION : %d MIN %d S", s3 / 60, s3 % 60); drawTextC(150, rb3, C_GRE); }
     if (ngPlus) drawTextC(161, "ROYAUME NOIR : LE MONDE SE LEVE PLUS LOURD", C_RED);
-    { char scb[8]; fmtCode(saveCode(), scb); drawTextC(216, "CODE DE SESSION :", C_GRE); drawTextC(228, scb, C_YEL); } // toujours visible : note-le quand tu veux
     if ((sc >> 3) & 1) drawTextC(170, "APPUIE SUR OK", C_WHT);
     drawTextC(196, "FLECHES : BOUGER   OK : SOUFFLE", KDColor::RGB24(0x6A7590));
     drawTextC(208, "REPOUSSE TOUT - RENVOIE LES ROCHERS", KDColor::RGB24(0x6A7590));
@@ -2105,72 +2192,33 @@ static void regenChapter() { // la region suivante : meme royaume, autre monde, 
   fillWorld();
 }
 
-// ---------------- Code de reprise (sauvegarde "a l'ancienne") ----------------
-// L'EADK n'ecrit rien dans l'atelier : le code porte region, medailles et royaume noir.
-static uint32_t saveCode() { // chap+1 (1-8), medailles (0-127), noir (0-1), controle (mod 97)
-  uint32_t c1 = (uint32_t)chap + 1, m = (uint32_t)(medals & 127), ng = (uint32_t)(ngPlus ? 1 : 0);
-  uint32_t cs = (2 * c1 + m + 5 * ng) % 97;
-  return c1 * 1000000 + m * 1000 + ng * 100 + cs;
+// ---------------- Reprendre la partie sauvegardee ----------------
+static void applySave() { // CONTINUER : la sauvegarde remonte toute seule
+  newGame();
+  chap = (int)svC; medals = (int)svM; ngPlus = (int)svNg; ngRun = (int)svNg;
+  killsS = svKs; bestT = svBt; runsDone = 0;
+  if (chap > 0) regenChapter(); // on rejoue la region en cours, l'eclat reste gagne
 }
-static void fmtCode(uint32_t N, char *b) { // 7 chiffres, zeros de tete inclus
-  for (int i = 6; i >= 0; i--) { b[i] = (char)('0' + (N % 10)); N /= 10; }
-  b[7] = 0;
-}
-static uint32_t codeEntry() { // saisie au clavier d'ecran ; 0 si annule
-  waitRelease();
-  int d[7] = { 1, 0, 0, 0, 0, 0, 0 };
-  int pos = 0;
-  while (true) {
-    pollKeys();
-    if (kHome) { waitRelease(); return 0; }
-    if (kLeft) { waitRelease(); if (pos > 0) pos--; }
-    if (kRight) { waitRelease(); if (pos < 6) pos++; }
-    if (kUp) { waitRelease(); d[pos] = (d[pos] + 1) % 10; }
-    if (kDown) { waitRelease(); d[pos] = (d[pos] + 9) % 10; }
-    if (keyOK) {
-      waitRelease();
-      if (pos < 6) pos++;
-      else {
-        uint32_t N = 0;
-        for (int i = 0; i < 7; i++) N = N * 10 + (uint32_t)d[i];
-        uint32_t c1 = N / 1000000, rest = N % 1000000, m = rest / 1000, r2 = rest % 1000, ng = r2 / 100, cs = r2 % 100;
-        if (c1 >= 1 && c1 <= 8 && m <= 127 && ng <= 1 && cs == (2 * c1 + m + 5 * ng) % 97) return N;
-        for (int k = 0; k < 10; k++) { // code refuse : la dalle clignote en rouge
-          fRect(120, 146, 80, 22, ((k & 1) ? KDColor::RGB24(0x6A1A1A) : KDColor::RGB24(0x101626)));
-          blit(); Ion::Timing::msleep(40);
-        }
-      }
-    }
-    fRect(0, 0, SW, SH, KDColor::RGB24(0x0A0E1A));
-    starfield(frame++);
-    fRect(60, 70, SW - 120, 100, KDColor::RGB24(0x101626));
-    fRect(60, 70, SW - 120, 1, C_YEL); fRect(60, 169, SW - 120, 1, C_YEL);
-    drawTextC(80, "CODE DE REPRISE", C_YEL);
-    for (int i = 0; i < 7; i++) {
-      char db[2]; db[0] = (char)('0' + d[i]); db[1] = 0;
-      drawTextBig(84 + i * 24, 100, db, (i == pos) ? C_YEL : C_WHT);
-      if (i == pos) fRect(86 + i * 24, 116, 16, 1, C_YEL); // curseur
-    }
-    drawTextC(124, "FLECHES : CHANGER   OK : SUIVANT", C_GRE);
-    drawTextC(136, "OK AU DERNIER CHIFFRE : VALIDER", C_GRE);
-    drawTextC(152, "HOME : ANNULER", C_GRE);
-    blit(); Ion::Timing::msleep(40);
-  }
-}
-static int menuScreen() { // 0 : nouvelle partie ; 1 : charger un code ; -1 : retour titre
+static int menuScreen() { // 0 : CONTINUER (s'il y a une sauvegarde) ; 1 : nouvelle partie ; -1 : retour titre
   waitRelease();
   int sel = 0;
   while (true) {
     pollKeys();
     if (kHome) { waitRelease(); return -1; }
-    if (kUp || kDown) { waitRelease(); sel = 1 - sel; }
+    if (saveOk && (kUp || kDown)) { waitRelease(); sel = 1 - sel; }
     if (keyOK) { waitRelease(); return sel; }
     fRect(0, 0, SW, SH, KDColor::RGB24(0x0A0E1A));
     starfield(frame++);
     drawTextC(80, "LE ROYAUME OUBLIE", C_YEL);
-    drawTextC(110, "NOUVELLE PARTIE", sel == 0 ? C_WHT : KDColor::RGB24(0x6A7590));
-    drawTextC(126, "CHARGER UN CODE", sel == 1 ? C_WHT : KDColor::RGB24(0x6A7590));
-    px(96, 112 + sel * 16, C_YEL); px(95, 112 + sel * 16, C_YEL); px(97, 112 + sel * 16, C_YEL); // fleche
+    if (saveOk) {
+      char cb[30]; snprintf(cb, 30, "CONTINUER - REGION %d", (int)svC + 1);
+      drawTextC(110, cb, sel == 0 ? C_WHT : KDColor::RGB24(0x6A7590));
+      drawTextC(126, "NOUVELLE PARTIE", sel == 1 ? C_WHT : KDColor::RGB24(0x6A7590));
+      px(96, 112 + sel * 16, C_YEL); px(95, 112 + sel * 16, C_YEL); px(97, 112 + sel * 16, C_YEL); // fleche
+    } else {
+      drawTextC(110, "NOUVELLE PARTIE", C_WHT);
+      px(96, 112, C_YEL); px(95, 112, C_YEL); px(97, 112, C_YEL); // fleche
+    }
     blit(); Ion::Timing::msleep(40);
   }
 }
@@ -2181,23 +2229,21 @@ void ion_main(int argc, char *argv[]) {
   while (true) {
     mode = 0;
     titleScreen();
+    loadGame(); // on regarde si l'atelier garde une sauvegarde
     int ms2 = menuScreen();
     if (ms2 < 0) continue; // HOME au menu : retour au titre
-    if (ms2 == 1) { // CHARGER UN CODE DE REPRISE
-      uint32_t N = codeEntry();
-      if (N == 0) continue; // annule : retour au titre
-      uint32_t c1 = N / 1000000, rest = N % 1000000, m = rest / 1000, r2 = rest % 1000, ng = r2 / 100;
-      newGame(); // stats de la partie a zero, puis on restaure la session
-      chap = (int)c1 - 1; medals = (int)m; ngPlus = (int)ng; ngRun = (int)ng;
-      bestT = 0; killsS = 0; runsDone = 0; // le code ne porte pas ces souvenirs-la
-      if (chap > 0) { regenChapter(); pagesScreen(CHAPI[chap], 3, "CONTINUER L'AVENTURE"); }
-    } else { // NOUVELLE PARTIE
+    if (saveOk && ms2 == 0) { // CONTINUER : la sauvegarde remonte toute seule, rien a taper
+      applySave();
+      if (chap > 0) pagesScreen(CHAPI[chap], 3, "CONTINUER L'AVENTURE");
+      else pagesScreen(INTRO, 7, "COMMENCER L'AVENTURE");
+    } else { // NOUVELLE PARTIE (l'ancienne sauvegarde reste jusqu'a la prochaine)
       newGame();
       pagesScreen(INTRO, 7, "COMMENCER L'AVENTURE");
     }
     mode = 2;
     while (true) {
       while (mode == 2) {
+        uint64_t t0 = eadk_timing_ms(); // debut de la frame : on mesurera pour ne dormir que le reste
         frame++;
         int ox = 0, oy = 0;
         if (shake > 0) { shake--; ox = rnd(7) - 3; oy = rnd(7) - 3; }
@@ -2205,7 +2251,8 @@ void ion_main(int argc, char *argv[]) {
         if (mode != 2) break;
         drawRoom(ox, oy);
         blit();
-        Ion::Timing::msleep(16);
+        uint64_t el = eadk_timing_ms() - t0; // le jeu rend aussi vite qu'il peut
+        if (el < 17) Ion::Timing::msleep((uint32_t)(17 - el));
       }
       if (mode == 3) { // defaite : ranime au village de la region
         gameOverScreen();
@@ -2218,6 +2265,7 @@ void ion_main(int argc, char *argv[]) {
         chap++;
         regenChapter();
         pagesScreen(CHAPI[chap], 3, "CONTINUER L'AVENTURE");
+        saveGame(); // la sauvegarde suit l'aventure, automatiquement
         mode = 2;
         continue;
       }
@@ -2238,6 +2286,7 @@ void ion_main(int argc, char *argv[]) {
       runsDone++; ngPlus = 1; // la prochaine partie sera en ROYAUME NOIR
       pagesScreen(ENDING, 8, "FIN");
       statsScreen();
+      saveGame(); // le Royaume Noir debloque est aussi sauvegarde
     }
     // apres l'epilogue ou l'abandon (HOME) : retour au titre
   }
