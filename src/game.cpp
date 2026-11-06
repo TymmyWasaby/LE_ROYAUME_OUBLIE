@@ -35,7 +35,7 @@ static int rnd(int n) { seed = (uint16_t)(seed * 25173 + 13849); return (seed >>
 static uint8_t VRAM[SW * SH]; // 71 Ko
 static KDColor PAL[256]; static int palN = 0;
 static KDColor palLastC; static uint8_t palLastI = 0; static bool palHasLast = false;
-static uint8_t palIdx(KDColor c) {
+static uint8_t palIdxSlow(KDColor c) {
   if (palHasLast && c.red() == palLastC.red() && c.green() == palLastC.green() && c.blue() == palLastC.blue()) return palLastI;
   for (int i = 0; i < palN; i++)
     if (PAL[i].red() == c.red() && PAL[i].green() == c.green() && PAL[i].blue() == c.blue()) {
@@ -49,6 +49,15 @@ static uint8_t palIdx(KDColor c) {
     if (d < bd) { bd = d; bi = i; }
   }
   palLastC = c; palLastI = (uint8_t)bi; palHasLast = true; return (uint8_t)bi;
+}
+static uint16_t palCK[512]; static uint8_t palCV[512]; static bool palCU[512]; // cache direct mappe : 2 Ko
+static uint8_t palIdx(KDColor c) { // LA BOURSE AUX COULEURS : trouve l'index du premier coup
+  uint16_t key = (uint16_t)((c.red() << 11) | (c.green() << 5) | c.blue()); // 5-6-5 exact, injectif
+  int slot = key & 511;
+  if (palCU[slot] && palCK[slot] == key) return palCV[slot]; // present : une seule lecture
+  uint8_t r = palIdxSlow(c);
+  palCK[slot] = key; palCV[slot] = r; palCU[slot] = true; // on range la couleur dans sa case
+  return r;
 }
 static void px(int x, int y, KDColor c) {
   if (x >= 0 && x < SW && y >= 0 && y < SH) VRAM[(long)y * SW + x] = palIdx(c);
@@ -72,19 +81,23 @@ static void fCirc(int cx, int cy, int r, KDColor c) {
 }
 static int fadePos = 15; // fondu de palette (15 = eclair), declare tot : blit() le lit
 static void blit() {
-  static KDColor up[SW];
+  static KDColor up[SW * 8]; // 8 lignes par envoi : 30 appels d'affichage au lieu de 240
   int f = fadePos; // < 15 : l'ecran se reveille depuis le noir
-  for (int y = 0; y < SH; y++) {
-    const uint8_t *src = VRAM + (long)y * SW;
-    for (int x = 0; x < SW; x++) {
-      KDColor c = (src[x] < palN) ? PAL[src[x]] : KDColor::RGB24(0);
-      if (f < 15) { // assombrissement progressif, reconstruit en un seul RGB24
-        uint32_t r = (uint32_t)((c.red() * f) / 15), g2 = (uint32_t)((c.green() * f) / 15), b2 = (uint32_t)((c.blue() * f) / 15);
-        c = KDColor::RGB24((r << 16) | (g2 << 8) | b2);
+  for (int y0 = 0; y0 < SH; y0 += 8) {
+    int hh = (SH - y0 < 8) ? SH - y0 : 8;
+    for (int y = 0; y < hh; y++) {
+      const uint8_t *src = VRAM + (long)(y0 + y) * SW;
+      KDColor *dst = up + (long)y * SW;
+      for (int x = 0; x < SW; x++) {
+        KDColor c = (src[x] < palN) ? PAL[src[x]] : KDColor::RGB24(0);
+        if (f < 15) { // assombrissement progressif, reconstruit en un seul RGB24
+          uint32_t r = (uint32_t)((c.red() * f) / 15), g2 = (uint32_t)((c.green() * f) / 15), b2 = (uint32_t)((c.blue() * f) / 15);
+          c = KDColor::RGB24((r << 16) | (g2 << 8) | b2);
+        }
+        dst[x] = c;
       }
-      up[x] = c;
     }
-    Ion::Display::pushRect(KDRect(0, y, SW, 1), up);
+    Ion::Display::pushRect(KDRect(0, y0, SW, hh), up);
   }
   if (fadePos < 15) fadePos++;
 }
@@ -1168,7 +1181,7 @@ static void blow() { // LE SOUFFLE : l'esprit repousse tout devant lui
     float d2 = ex * ex + ey * ey;
     if (d2 < 1 || d2 > rr) continue;
     float d = sqrtf(d2);
-    if ((ex * dx + ey * dy) / d < 0.3f) continue; // hors du cone avant
+    if ((ex * dx + ey * dy) / d < 0.5f) continue; // hors de l'eventail large (120 degres)
     e->st = 98; e->t = 0;
     e->vx = (dx + ex / d * 0.7f) * pf;
     e->vy = (dy + ey / d * 0.7f) * pf;
@@ -1180,7 +1193,7 @@ static void blow() { // LE SOUFFLE : l'esprit repousse tout devant lui
     float d2 = bx * bx + by * by;
     if (d2 < 1 || d2 > rr) continue;
     float d = sqrtf(d2);
-    if ((bx * dx + by * dy) / d < 0.2f) continue;
+    if ((bx * dx + by * dy) / d < 0.45f) continue;
     BU[b].fr = 1;
     int gi = -1;
     for (int i = 0; i < 14; i++) if (EN[i].alive && EN[i].type >= 4) { gi = i; break; }
@@ -1192,21 +1205,23 @@ static void blow() { // LE SOUFFLE : l'esprit repousse tout devant lui
     poof(BU[b].x, BU[b].y, KDColor::RGB24(0x9AD8E8), 5);
   }
   // le souffle brise les pots et fait ceder les rochers fissures
-  float cx = plx + dx * 18, cy = ply + dy * 18;
-  int stx = (int)(cx / TS), sty = (int)((cy - TOPOFF) / TS);
-  if (stx >= 0 && stx < MW && sty >= 0 && sty < MH) {
-    char tc = RMO[room][sty][stx];
-    if (tc == 'P') {
-      RMO[room][sty][stx] = isDun(room) ? ',' : '.';
-      poof(cx, cy, KDColor::RGB24(0xC98050), 10);
-      if (rnd(4) == 0) dropPickup(cx, cy, 0); else if (rnd(3) == 0) dropPickup(cx, cy, 1);
-    } else if (tc == 'B') { // premiere fissure : le rocher craque
-      RMO[room][sty][stx] = 'b';
-      poof(cx, cy, C_ROCK2, 8); shake = 3;
-    } else if (tc == 'b') { // il cede : le secret s'ouvre
-      RMO[room][sty][stx] = isDun(room) ? ',' : '.';
-      poof(cx, cy, C_ROCK, 14); shake = 6;
-      if (rnd(3) == 0) dropPickup(cx, cy, 1);
+  for (int pr = -1; pr <= 1; pr++) { // l'eventail balaie trois cases devant l'esprit
+    float cx = plx + dx * 18 - dy * pr * 12, cy = ply + dy * 18 + dx * pr * 12;
+    int stx = (int)(cx / TS), sty = (int)((cy - TOPOFF) / TS);
+    if (stx >= 0 && stx < MW && sty >= 0 && sty < MH) {
+      char tc = RMO[room][sty][stx];
+      if (tc == 'P') {
+        RMO[room][sty][stx] = isDun(room) ? ',' : '.';
+        poof(cx, cy, KDColor::RGB24(0xC98050), 10);
+        if (rnd(4) == 0) dropPickup(cx, cy, 0); else if (rnd(3) == 0) dropPickup(cx, cy, 1);
+      } else if (tc == 'B') { // premiere fissure : le rocher craque
+        RMO[room][sty][stx] = 'b';
+        poof(cx, cy, C_ROCK2, 8); shake = 3;
+      } else if (tc == 'b') { // il cede : le secret s'ouvre
+        RMO[room][sty][stx] = isDun(room) ? ',' : '.';
+        poof(cx, cy, C_ROCK, 14); shake = 6;
+        if (rnd(3) == 0) dropPickup(cx, cy, 1);
+      }
     }
   }
   // trainee de vent visible devant l'esprit
@@ -1240,36 +1255,44 @@ static void drawPlayer(int ox, int oy) {
     int ay = y + (int)(sinf((frame + k * 90) * 0.09f) * 7.0f) - 2;
     px(ax, ay, C_WHT); px(ax, ay + 1, C_CYN);
   }
-  fCirc(x, y - 2 + bob, 5, KDColor::RGB24(0x9AD8E8));               // corps : bulle de vent
-  fRect(x - 5, y - 4 + bob, 10, 7, KDColor::RGB24(0x9AD8E8));
-  px(x - 4, y + 3 + bob, KDColor::RGB24(0x5A98B0));                 // bas effiloche en volutes
-  px(x - 2, y + 5 + bob, KDColor::RGB24(0x5A98B0));
-  px(x + 2, y + 5 + bob, KDColor::RGB24(0x5A98B0));
-  px(x + 4, y + 3 + bob, KDColor::RGB24(0x5A98B0));
-  fRect(x - 3, y - 6 + bob, 6, 4, KDColor::RGB24(0xD4F0FC));       // visage lumineux
-  int ex = (pdir == 1) ? 2 : ((pdir == 3) ? -2 : 0);
-  if (pdir != 0) { px(x - 2 + ex, y - 5 + bob, KDColor::RGB24(0x2A6A8A)); px(x + 2 + ex, y - 5 + bob, KDColor::RGB24(0x2A6A8A)); } // yeux
-  else { px(x - 2, y - 5 + bob, KDColor::RGB24(0x2A6A8A)); px(x + 2, y - 5 + bob, KDColor::RGB24(0x2A6A8A)); }
-  px(x - 1, y + 3 + bob, KDColor::RGB24(0xD4F0FC)); px(x + 1, y + 4 + bob, KDColor::RGB24(0xD4F0FC)); // paillettes
-  if (swing > 0) { // SOUFFLE : cone d'air en trois fronts + spirale
+  int fy = y - 1 + bob; // ancre du corps : la tete monte avec le bob
+  fCirc(x, fy, 5, KDColor::RGB24(0x1E3A4A)); // silhouette : contour sombre qui lit la forme
+  fCirc(x, fy - 1, 4, KDColor::RGB24(0x7AC8DC)); // corps de brume claire
+  fRect(x - 4, fy, 8, 4, KDColor::RGB24(0x5AA8C0)); // nuage dense du bas
+  px(x - 3, fy + 4, KDColor::RGB24(0x3A788C)); px(x - 1, fy + 4, KDColor::RGB24(0x5AA8C0)); px(x + 1, fy + 4, KDColor::RGB24(0x3A788C)); px(x + 3, fy + 4, KDColor::RGB24(0x5AA8C0)); // ourlet en volutes
+  fRect(x - 3, fy - 3, 6, 4, KDColor::RGB24(0xD4F0FC)); // visage lumineux sous la capuche
+  fRect(x - 1, fy - 6, 3, 3, KDColor::RGB24(0x7AC8DC)); // pointe de la capuche
+  px(x, fy - 7, KDColor::RGB24(0xD4F0FC)); px(x, fy - 8, KDColor::RGB24(0x9AD8E8)); // plumeteau du sommet
+  int ex = (pdir == 1) ? 1 : ((pdir == 3) ? -1 : 0);
+  int ey = (pdir == 0) ? -1 : ((pdir == 2) ? 1 : 0);
+  px(x - 2 + ex, fy - 1 + ey, C_WHT); px(x + 2 + ex, fy - 1 + ey, C_WHT); // yeux blancs
+  px(x - 2 + ex, fy + ey, KDColor::RGB24(0x1E3A4A)); px(x + 2 + ex, fy + ey, KDColor::RGB24(0x1E3A4A)); // pupilles
+  px(x - 1, fy - 2 + ey, KDColor::RGB24(0x9AD8E8)); px(x + 1, fy - 2 + ey, KDColor::RGB24(0x9AD8E8)); // reflets sous les yeux
+  for (int k = 1; k <= 3; k++) { // queue en tourbillon derriere l'esprit
+    int tx2 = x - (int)(dx * k * 4) + (int)(((frame >> 2) + k) % 3) - 1;
+    int ty2 = fy + 3 - k * 2 + (int)(sinf((frame + k * 40) * 0.13f) * 2.0f);
+    fCirc(tx2, ty2, 3 - k, KDColor::RGB24(k == 1 ? 0x7AC8DC : ((k == 2) ? 0x5AA8C0 : 0x3A788C)));
+  }
+  if (swing > 0) { // SOUFFLE EN EVENTAIL : trois arcs qui s'ouvrent devant l'esprit
     int wp = (12 - swing) * 2;
-    for (int k = 0; k < 5; k++) { // front principal
-      int ax = x + (int)(dx * (wp + 6)) + (int)(-dy * (k - 2) * 3);
-      int ay = y + (int)(dy * (wp + 6)) + (int)(dx * (k - 2) * 3);
-      px(ax, ay, k == 2 ? C_WHT : C_CYN);
-      px(ax + (int)dx, ay + (int)dy, C_WHT);
-    }
-    for (int f2 = 1; f2 <= 2; f2++) // fronts externes plus laches
-      for (int k = 1; k < 5; k += 2) {
-        int ax = x + (int)(dx * (wp + 6 + f2 * 3)) + (int)(-dy * (k - 2) * 4);
-        int ay = y + (int)(dy * (wp + 6 + f2 * 3)) + (int)(dx * (k - 2) * 4);
-        px(ax, ay, (f2 == 2) ? KDColor::RGB24(0x5A88A8) : C_CYN);
+    for (int a = 1; a <= 3; a++) { // arcs concentriques de l'eventail, du coeur au bord
+      int rr2 = wp + 2 + a * 4;
+      KDColor ac = (a == 1) ? C_WHT : ((a == 2) ? C_CYN : KDColor::RGB24(0x7AC8DC));
+      for (int k = -3; k <= 3; k++) { // chaque arc couvre +/- 45 degres
+        float ang = k * 0.26f;
+        float ca = cosf(ang), sa = sinf(ang);
+        int ax = x + (int)(rr2 * (dx * ca - dy * sa));
+        int ay = y + (int)(rr2 * (dy * ca + dx * sa));
+        px(ax, ay, ac);
+        if (a < 3) px(ax - (int)dx, ay - (int)dy, ac); // arc du coeur un peu epais
       }
-    for (int k = 0; k < 3; k++) { // particules emportees en spirale
-      int sp2 = (frame + k * 3) & 7;
-      int ax = x + (int)(dx * (wp + 2 + sp2)) + (int)(-dy * (sp2 - 4));
-      int ay = y + (int)(dy * (wp + 2 + sp2)) + (int)(dx * (sp2 - 4));
-      px(ax, ay, k == 0 ? C_WHT : C_CYN);
+    }
+    for (int k = -1; k <= 1; k += 2) { // wisps qui filent sur les bords du vent
+      int sp2 = (frame * 2) & 7;
+      float ca = cosf(k * 0.5f), sa = sinf(k * 0.5f);
+      int ax = x + (int)((wp + 4 + sp2) * (dx * ca - dy * sa));
+      int ay = y + (int)((wp + 4 + sp2) * (dy * ca + dx * sa));
+      px(ax, ay, C_WHT);
     }
   }
 }
