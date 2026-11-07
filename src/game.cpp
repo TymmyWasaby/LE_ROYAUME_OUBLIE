@@ -778,18 +778,43 @@ static bool savStore(const char *src, uint32_t len) { // ecrit le fichier a l'em
 }
 // ---------------- Le plan de la region : la premiere est un rectangle, les autres non ----------------
 static uint8_t NB[40][4]; static int8_t MPX[40], MPY[40]; static uint16_t wSeed; // voisins + positions
+static uint8_t GRL[8][7]; static uint8_t GCO[8][7]; // la grille du croquis : id de salle par case, piece ou non
 static void buildLayout() { // dessine le plan du monde ; region 0 : rectangle, sinon le monde se deroule
   wSeed = seed; // note le grain de depart : au chargement, ce plan se redessine pareil
   for (int r = 0; r < 40; r++) { MPX[r] = -99; MPY[r] = -99; for (int d = 0; d < 4; d++) NB[r][d] = 255; }
-  if (chap == 0) { // LA PREMIERE CARTE : le croquis, 40 salles en 5 colonnes x 8 rangees
-    const uint8_t spc[4] = { 7, 4, 3, 11 }; // les quatre salles speciales
-    const int8_t spx[4] = { 0, 4, 0, 0 }, spy[4] = { 0, 0, 1, 7 }; // DEPART haut gauche, CLE haut droite, X bas gauche
+  if (chap == 0) { // LA PREMIERE CARTE : le croquis de Guenole, 40 salles (chiffres = colonnes, lettres = lignes)
+    static const char *GC[8] = { ".D#....", "##O.##P", "#O##O#O", "##OO##.", "OO##OO.", ".O#O#O#", ".#O#O#O", "...X..." };
+    for (int y = 0; y < 8; y++) for (int x = 0; x < 7; x++) { GRL[y][x] = 255; GCO[y][x] = 0; }
     int nxt = 0;
-    for (int y = 0; y < 8; y++) for (int x = 0; x < 5; x++) {
+    for (int y = 0; y < 8; y++) for (int x = 0; x < 7; x++) { // une salle par case non vide
+      char c = GC[y][x];
+      if (c == '.') continue;
       int r = -1;
-      for (int k = 0; k < 4; k++) if (spx[k] == x && spy[k] == y) r = spc[k]; // village, cle, grotte, arene
-      if (r < 0) { while (nxt == 3 || nxt == 4 || nxt == 7 || nxt == 11) nxt++; r = nxt++; } // le reste : libre
+      if (c == 'D') r = 7; // le village : DEPART
+      else if (c == 'P') r = 4; // la salle de la CLE
+      else if (c == 'X') r = 11; // l'arene du GARDIEN
+      else if (y == 0 && x == 2) r = 3; // la grotte de l'Ermite, juste au-dessus
+      else { while (nxt == 3 || nxt == 4 || nxt == 7 || nxt == 11) nxt++; r = nxt++; }
+      if (c == 'O') GCO[y][x] = 1; // une piece est semees dans cette salle
       MPX[r] = (int8_t)x; MPY[r] = (int8_t)y;
+      GRL[y][x] = (uint8_t)r;
+    }
+    // les PASSAGES dessines : eux et eux seuls ouvrent un mur (le reste reste plein)
+    static const uint8_t PV[22][2] = { // verticaux : { colonne, ligne } vers la ligne du dessous
+      {1,3},{1,4},{2,1},{2,2},{2,3},{2,5},{2,6},{3,2},{3,4},{3,5},{3,6},
+      {4,3},{4,7},{5,2},{5,3},{5,4},{5,5},{6,3},{6,4},{6,5},{7,2},{7,6} };
+    static const uint8_t PH[19][2] = { // horizontaux : { ligne, colonne } vers la colonne de droite
+      {1,2},{2,1},{2,2},{2,5},{3,2},{3,3},{3,4},{3,6},{4,2},{4,4},
+      {5,1},{5,3},{6,2},{6,4},{6,5},{7,3},{7,4},{7,5},{7,6} };
+    for (int k = 0; k < 22; k++) { // vers le bas
+      int x = PV[k][0] - 1, y = PV[k][1] - 1;
+      uint8_t a = GRL[y][x], b = GRL[y + 1][x];
+      NB[a][3] = b; NB[b][2] = a;
+    }
+    for (int k = 0; k < 19; k++) { // vers la droite
+      int y = PH[k][0] - 1, x = PH[k][1] - 1;
+      uint8_t a = GRL[y][x], b = GRL[y][x + 1];
+      NB[a][1] = b; NB[b][0] = a;
     }
   } else {
     MPX[7] = 0; MPY[7] = 0; // le village au coeur du monde
@@ -821,6 +846,7 @@ static void buildLayout() { // dessine le plan du monde ; region 0 : rectangle, 
       MPX[r] = (int8_t)bx; MPY[r] = (int8_t)by;
     }
   }
+  if (chap != 0) // hors croquis : qui touche qui se deduit des positions
   for (int r = 0; r < 40; r++) // on en deduit qui touche qui
     for (int s = 0; s < 40; s++) {
       if (r == s || MPX[s] == -99 || MPX[r] == -99) continue;
@@ -2487,8 +2513,20 @@ static void fillWorld() { // genere les 18 salles d'une region et pose les monst
       NPC[n][1] = tx; NPC[n][2] = ty; break; // nouvelle adresse
     }
   }
-  // PIECES PAR REGION : 40 sur la premiere carte, 50 ensuite
-  {
+  if (chap == 0) { // LES PIECES DU CROQUIS : une dans chaque case marquee O
+    int placed = 0;
+    for (int y = 0; y < 8; y++) for (int x = 0; x < 7; x++) {
+      if (!GCO[y][x]) continue;
+      int r = GRL[y][x];
+      int tx = -1, ty = -1; // une case praticable au centre de la salle
+      for (int q2 = 3; q2 <= 8 && tx < 0; q2++) for (int q3 = 3; q3 <= 16 && tx < 0; q3++) {
+        char c2 = RMO[r][q2][q3];
+        if (c2 == '.' || c2 == ',' || c2 == 'f' || c2 == 'p') { tx = q3; ty = q2; }
+      }
+      if (tx >= 0) { CN[placed][0] = (uint8_t)r; CN[placed][1] = (uint8_t)tx; CN[placed][2] = (uint8_t)ty; CNON[placed] = 1; placed++; }
+    }
+    while (placed < 50) { CN[placed][0] = 255; CNON[placed] = 0; placed++; } // reliquat inutilise
+  } else { // PIECES PAR REGION : 40 sur la premiere carte, 50 ensuite
     int goal = (chap == 0) ? 40 : 50, placed = 0;
     for (int tries = 0; tries < 900 && placed < goal; tries++) {
       int r = -1;
