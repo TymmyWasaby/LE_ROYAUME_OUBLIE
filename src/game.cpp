@@ -937,7 +937,7 @@ static bool npcAt(int tx, int ty) {
 static bool solid(int tx, int ty) {
   char c = tileAt(tx, ty);
   if (c == 'D' && doorOpen[room]) return false; // porte ouverte
-  if (c == 't' || c == 'r' || c == 'w' || c == ' ' || c == '#' || c == 'D' || c == 'C' || c == 'F' || c == 'P' || c == 'B' || c == 'b') return true;
+  if (c == 't' || c == 'T' || c == 'r' || c == 'w' || c == ' ' || c == '#' || c == 'D' || c == 'C' || c == 'F' || c == 'P' || c == 'B' || c == 'b') return true;
   return false; // les PNJ ne bloquent plus : l'ermite ne peut plus t'enfermer
 }
 static void drawTile(int tx, int ty, int ox, int oy) {
@@ -1035,6 +1035,20 @@ static void drawTile(int tx, int ty, int ox, int oy) {
       if (((frame >> 4) + tx) & 1) px(x + 8 + sw, y + 3, C_GOLD); // le coeur eclaire tout
     }
     px(x + 7, y + 14, g3);
+  } else if (c == 'T') { // HAIE DENSE : le bord ferme d'une salle, rien ne passe
+    fRect(x, y, TS, TS, frz ? KDColor::RGB24(0xB8C8DC) : (cdr ? KDColor::RGB24(0x30261E) : (sab ? KDColor::RGB24(0xA88858) : KDColor::RGB24(0x0E3816))));
+    int sw = ((frame >> 5) + ty) & 1;
+    if (!frz) {
+      fCirc(x + 4 + sw, y + 5, 4, KDColor::RGB24(0x16421E));
+      fCirc(x + 11 - sw, y + 9, 4, KDColor::RGB24(0x16421E));
+      fCirc(x + 7, y + 13, 4, KDColor::RGB24(0x123A18));
+      fCirc(x + 12 - sw, y + 3, 3, KDColor::RGB24(0x123A18));
+      px(x + 3 + sw, y + 3, KDColor::RGB24(0x2E7A2E)); px(x + 12, y + 12 - sw, KDColor::RGB24(0x2E7A2E));
+      if (((tx * 3 + ty) & 3) == 0) { px(x + 8, y + 7, C_RED); px(x + 5, y + 11, C_RED); } // baies cachees
+    } else { // region du givre : la haie est un banc de neige compact
+      fRect(x + 2, y + 6, 12, 5, KDColor::RGB24(0xE8F0FA)); px(x + 4, y + 4, KDColor::RGB24(0xF8FAFE)); px(x + 11, y + 10, KDColor::RGB24(0xF8FAFE));
+    }
+    if (cdr && (((frame >> 3) + tx + ty) & 3) == 0) { px(x + 7, y + 5, C_ORG); px(x + 10, y + 11, C_RED); } // braises qui veillent
   } else if (c == 'w') { // eau profonde : houle croisee, bulles, nenuphars
     fRect(x, y, TS, TS, frz ? KDColor::RGB24(0x74A4D4) : (cdr ? KDColor::RGB24(0x4A3020) : (mou ? KDColor::RGB24(0x3E6E52) : (sab ? KDColor::RGB24(0x4AA4C4) : (arg ? KDColor::RGB24(0xB07048) : (omb ? KDColor::RGB24(0x1A1626) : (prm ? KDColor::RGB24(0x282438) : C_WTR))))))); // gele ; huile ; etang ; oasis ; argile ; encre ; eau du fond
     fRect(x + 1, y + 1, 14, 14, frz ? KDColor::RGB24(0x28507E) : (cdr ? KDColor::RGB24(0x301E14) : (mou ? KDColor::RGB24(0x1E4636) : (sab ? KDColor::RGB24(0x1E6A8A) : (arg ? KDColor::RGB24(0x704028) : (omb ? KDColor::RGB24(0x12101C) : (prm ? KDColor::RGB24(0x1C1826) : KDColor::RGB24(0x103050)))))))); // les grandes profondeurs
@@ -2369,10 +2383,11 @@ static void genRoom(int r) {
   int zone = r / 6;
   char base = dun ? ',' : '.';
   char wall = dun ? '#' : 't';
+  char bwall = dun ? '#' : 'T'; // LE BORD D'UNE SALLE : haie dense, aucune ouverture fantome
   int g = GAT[r]; (void)g; // le plan de la region (NB) remplace la grille fixe
   for (int ty = 0; ty < MH; ty++)
     for (int tx = 0; tx < MW; tx++)
-      M[ty][tx] = (tx == 0 || tx == MW - 1 || ty == 0 || ty == MH - 1) ? wall : base;
+      M[ty][tx] = (tx == 0 || tx == MW - 1 || ty == 0 || ty == MH - 1) ? bwall : base;
   // decoration eparsse propre a la zone
   for (int i = 0; i < 30; i++) {
     int tx = 1 + rnd(MW - 2), ty = 1 + rnd(MH - 2);
@@ -2423,10 +2438,10 @@ static void genRoom(int r) {
   // croisement garanti : toutes les ouvertures restent reliees
   for (int ty = 1; ty < MH - 1; ty++) { M[ty][9] = base; M[ty][10] = base; }
   for (int tx = 1; tx < MW - 1; tx++) { M[5][tx] = base; M[6][tx] = base; }
-  if (NB[r][2] < 40) { M[0][9] = base; M[0][10] = base; } else { M[0][9] = wall; M[0][10] = wall; }
-  if (NB[r][3] < 40) { M[11][9] = base; M[11][10] = base; } else { M[11][9] = wall; M[11][10] = wall; }
-  if (NB[r][1] < 40) { M[5][19] = base; M[6][19] = base; } else { M[5][19] = wall; M[6][19] = wall; }
-  if (NB[r][0] < 40) { M[5][0] = base; M[6][0] = base; } else { M[5][0] = wall; M[6][0] = wall; }
+  if (NB[r][2] < 40) { M[0][9] = base; M[0][10] = base; } else { M[0][9] = bwall; M[0][10] = bwall; }
+  if (NB[r][3] < 40) { M[11][9] = base; M[11][10] = base; } else { M[11][9] = bwall; M[11][10] = bwall; }
+  if (NB[r][1] < 40) { M[5][19] = base; M[6][19] = base; } else { M[5][19] = bwall; M[6][19] = bwall; }
+  if (NB[r][0] < 40) { M[5][0] = base; M[6][0] = base; } else { M[5][0] = bwall; M[6][0] = bwall; }
   if (NB[r][3] == 11) { M[11][9] = 'D'; M[11][10] = 'D'; } // la porte scellee du boss, ou qu'elle soit
   if (dun) { // torches sur le mur du haut
     M[0][2 + rnd(7)] = 'F';
@@ -2457,12 +2472,16 @@ static void genRoom(int r) {
 static void fixLanes(int r) { // les ouvertures des salles fixes suivent le plan de la region
   bool dn = isDun(r);
   char base = dn ? ',' : '.', wall = dn ? '#' : 't';
+  char bwall = dn ? '#' : 'T'; // le bord ferme : dense, aucune ouverture fantome
   char (*M)[21] = RMO[r];
-  if (NB[r][2] < 40) { M[0][9] = base; M[0][10] = base; } else { M[0][9] = wall; M[0][10] = wall; }
-  if (NB[r][3] < 40) { M[11][9] = base; M[11][10] = base; } else { M[11][9] = wall; M[11][10] = wall; }
-  if (NB[r][1] < 40) { M[5][19] = base; M[6][19] = base; } else { M[5][19] = wall; M[6][19] = wall; }
-  if (NB[r][0] < 40) { M[5][0] = base; M[6][0] = base; } else { M[5][0] = wall; M[6][0] = wall; }
+  if (NB[r][2] < 40) { M[0][9] = base; M[0][10] = base; } else { M[0][9] = bwall; M[0][10] = bwall; }
+  if (NB[r][3] < 40) { M[11][9] = base; M[11][10] = base; } else { M[11][9] = bwall; M[11][10] = bwall; }
+  if (NB[r][1] < 40) { M[5][19] = base; M[6][19] = base; } else { M[5][19] = bwall; M[6][19] = bwall; }
+  if (NB[r][0] < 40) { M[5][0] = base; M[6][0] = base; } else { M[5][0] = bwall; M[6][0] = bwall; }
   if (NB[r][3] == 11) { M[11][9] = 'D'; M[11][10] = 'D'; } // la porte scellee du boss, ou qu'elle soit
+  for (int ty = 0; ty < MH; ty++) for (int tx = 0; tx < MW; tx++) // les bords dessines en arbres deviennent haie dense
+    if ((tx == 0 || tx == MW - 1 || ty == 0 || ty == MH - 1) && M[ty][tx] == 't') M[ty][tx] = 'T';
+  (void)wall;
 }
 static void fillWorld() { // genere les 18 salles d'une region et pose les monstres
   buildLayout(); // d'abord le plan : qui touche qui, ou chaque salle se dessine
