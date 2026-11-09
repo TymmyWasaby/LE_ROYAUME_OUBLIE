@@ -864,6 +864,7 @@ static int dgN, dgI; static bool dlgOn, dlgEnd; // dlgEnd : apres la derniere pa
 static struct En { float x, y, vx, vy; int type, hp, t, st, dir; bool alive, flash; } EN[14];
 static int enN;
 static struct Bu { float x, y, vx, vy; int fr; bool on; } BU[6]; // fr : projectile renvoye par le souffle
+static struct { float x, y, vx, vy; int st, fr; bool on; } RCK; // LA PIERRE DU GOLEM : 0 jetee, 1 posee, 2 soufflee
 static struct Pk { float x, y; int t; bool on; } PK[8]; // 0 coeur, 1 piece, 2 etoile
 static uint8_t CN[50][3]; static uint8_t CNON[50]; // 50 pieces semees dans la region : { salle, tuileX, tuileY } + prises ou non
 static struct Pt { float x, y, vx, vy; int life; uint8_t cr, cg, cb; } PT[36];
@@ -1208,6 +1209,7 @@ static void drawDlg() {
 // ---------------- Monstres ----------------
 static void spawnEnemies() {
   enN = 0;
+  RCK.on = false; // la pierre du GOLEM reste dans sa salle
   for (int i = 0; i < 14; i++) { EN[i].alive = false; BU[i % 6].on = false; BU[i % 6].fr = 0; }
   for (int i = 0; i < 8; i++) PK[i].on = false;
   for (int i = 0; i < ESWN[room] && enN < 13; i++) {
@@ -1297,10 +1299,14 @@ static void updEnemies() {
           if (!EN[j].alive || EN[j].type < 4) continue;
           float ddx = EN[j].x - e->x, ddy = EN[j].y - e->y;
           if (ddx * ddx + ddy * ddy < 324) {
-            EN[j].hp -= 1 + pLvl / 2; // un souffle murit cogne bien plus fort
             e->alive = false; kills++;
             poof(e->x, e->y, C_WHT, 12); shake = 6;
-            if (EN[j].hp <= 0) { EN[j].alive = false; bossDead = true; kills++; shake = 14; dropPickup(EN[j].x, EN[j].y + 6, 2); }
+            if (EN[j].type == 4) { // LE GOLEM DE PIERRE : seule sa pierre le blesse, le volant se brise dessus
+              poof(EN[j].x, EN[j].y - 8, C_ROCK2, 10);
+            } else {
+              EN[j].hp -= 1 + pLvl / 2; // un souffle murit cogne bien plus fort
+              if (EN[j].hp <= 0) { EN[j].alive = false; bossDead = true; kills++; shake = 14; dropPickup(EN[j].x, EN[j].y + 6, 2); }
+            }
             done = true;
           }
         }
@@ -1362,8 +1368,27 @@ static void updEnemies() {
           break;
         }
       }
-    } else if (e->type >= 4) { // LE GARDIEN : saute puis frappe le sol
-      if (e->st == 0 && e->t % (90 - chap * 6) == 0) { // chaque region : cycles plus presses
+    } else if (e->type >= 4) { // LE GARDIEN
+      if (chap == 0) { // LE GOLEM DE PIERRE : il ne combat qu'a coups de pierre, une seule a la fois
+        float gdx = plx - e->x, gdy = ply - e->y;
+        float gd = sqrtf(gdx * gdx + gdy * gdy); if (gd < 1) gd = 1;
+        if (gd > 44) { // il patrouille lourdement, il n'aime pas qu'on s'approche
+          float mx = gdx / gd * 0.35f, my = gdy / gd * 0.35f;
+          if (walkable(e->x + mx, e->y, 6)) e->x += mx;
+          if (walkable(e->x, e->y + my, 6)) e->y += my;
+        }
+        if (e->t % 150 == 40 && !RCK.on) { // IL LANCE SA PIERRE : tant qu'elle vole ou attend, pas d'autre
+          RCK.on = true; RCK.st = 0; RCK.x = e->x; RCK.y = e->y - 10;
+          float ttx = plx + (float)(rnd(33) - 16), tty = ply + (float)(rnd(33) - 16);
+          if (ttx < 12) ttx = 12; if (ttx > SW - 12) ttx = SW - 12;
+          if (tty < TOPOFF + 12) tty = TOPOFF + 12; if (tty > TOPOFF + MH * TS - 12) tty = TOPOFF + MH * TS - 12;
+          float ddx2 = ttx - RCK.x, ddy2 = tty - RCK.y;
+          float dd2 = sqrtf(ddx2 * ddx2 + ddy2 * ddy2); if (dd2 < 1) dd2 = 1;
+          RCK.fr = (int)(dd2 / 4.0f); if (RCK.fr < 12) RCK.fr = 12;
+          RCK.vx = ddx2 / dd2 * 4.0f; RCK.vy = ddy2 / dd2 * 4.0f;
+          poof(RCK.x, RCK.y - 4, C_ROCK2, 6); shake = 3;
+        }
+      } else if (e->st == 0 && e->t % (90 - chap * 6) == 0) { // chaque region : cycles plus presses
         if (chap == 6) { // L'OMBRE : elle se deplace pres de toi sans prevenir
           poof(e->x, e->y, C_PUR, 10);
           float a2 = (float)rnd(100) * 0.0628f;
@@ -1441,20 +1466,47 @@ static void updEnemies() {
         float er2 = (EN[i].type >= 4) ? 16 : 8;
         if (BU[b].x > EN[i].x - er2 && BU[b].x < EN[i].x + er2 && BU[b].y > EN[i].y - er2 && BU[b].y < EN[i].y + er2) {
           BU[b].on = false;
-          EN[i].hp -= 2 + pLvl / 2; // plus le souffle est fort, plus l'objet renvoye fait mal
-          poof(BU[b].x, BU[b].y, C_YEL, 6);
-          if (EN[i].type >= 4) shake = 5;
-          if (EN[i].hp <= 0) {
-            EN[i].alive = false; kills++;
-            poof(EN[i].x, EN[i].y, C_PUR, 12);
-            if (EN[i].type >= 4) { bossDead = true; shake = 14; dropPickup(EN[i].x, EN[i].y + 6, 2); }
-            else if (rnd(2)) dropPickup(EN[i].x, EN[i].y, -1);
-          } else { EN[i].st = 99; EN[i].t = 0; }
+          if (EN[i].type == 4) { // LE GOLEM DE PIERRE : insensible a tout, sauf a sa propre pierre
+            poof(BU[b].x, BU[b].y, C_ROCK2, 8); shake = 3;
+          } else {
+            EN[i].hp -= 2 + pLvl / 2; // plus le souffle est fort, plus l'objet renvoye fait mal
+            poof(BU[b].x, BU[b].y, C_YEL, 6);
+            if (EN[i].type >= 4) shake = 5;
+            if (EN[i].hp <= 0) {
+              EN[i].alive = false; kills++;
+              poof(EN[i].x, EN[i].y, C_PUR, 12);
+              if (EN[i].type >= 4) { bossDead = true; shake = 14; dropPickup(EN[i].x, EN[i].y + 6, 2); }
+              else if (rnd(2)) dropPickup(EN[i].x, EN[i].y, -1);
+            } else { EN[i].st = 99; EN[i].t = 0; }
+          }
           break;
         }
       }
     } else if (BU[b].x > plx - 6 && BU[b].x < plx + 6 && BU[b].y > ply - 6 && BU[b].y < ply + 6) {
       BU[b].on = false; hurtPlayer(1, BU[b].x - BU[b].vx, BU[b].y - BU[b].vy);
+    }
+  }
+  if (RCK.on) { // LA PIERRE DU GOLEM, dans tous ses etats
+    if (RCK.st == 0) { // jetee : elle file vers sa case de chute
+      RCK.x += RCK.vx; RCK.y += RCK.vy;
+      if (--RCK.fr <= 0) { RCK.st = 1; poof(RCK.x, RCK.y + 6, C_ROCK2, 8); shake = 2; } // elle se pose
+    } else if (RCK.st == 2) { // SOUFFLEE : elle file, et elle cogne
+      RCK.x += RCK.vx; RCK.y += RCK.vy;
+      int rtx = (int)(RCK.x / TS), rty = (int)((RCK.y - TOPOFF) / TS);
+      bool boom = RCK.x < 4 || RCK.x > SW - 4 || RCK.y < TOPOFF + 4 || RCK.y > TOPOFF + MH * TS - 4 || solid(rtx, rty); // MUR : elle eclate
+      for (int i = 0; i < 14 && !boom; i++) {
+        if (!EN[i].alive || EN[i].type < 4) continue;
+        float ddx = EN[i].x - RCK.x, ddy = EN[i].y - RCK.y;
+        if (ddx * ddx + ddy * ddy < 400) { // EN PLEIN COEUR : un tiers de sa vie s'envole
+          int hpm = 16 + chap * 3 + ngPlus * 8;
+          EN[i].hp -= (hpm + 2) / 3;
+          shake = 8;
+          poof(RCK.x, RCK.y, C_WHT, 12); poof(EN[i].x, EN[i].y - 8, C_YEL, 10);
+          if (EN[i].hp <= 0) { EN[i].alive = false; bossDead = true; kills++; shake = 14; dropPickup(EN[i].x, EN[i].y + 6, 2); }
+          boom = true;
+        }
+      }
+      if (boom) { poof(RCK.x, RCK.y, C_ROCK2, 12); RCK.on = false; } // fin du vol, fin de la pierre
     }
   }
 }
@@ -1495,6 +1547,19 @@ static void blow() { // LE SOUFFLE : l'esprit repousse tout devant lui
       BU[b].vx = gx / gd * 2.6f; BU[b].vy = gy / gd * 2.6f;
     } else { BU[b].vx = dx * 2.6f; BU[b].vy = dy * 2.6f; }
     poof(BU[b].x, BU[b].y, KDColor::RGB24(0x9AD8E8), 5);
+  }
+  // LA PIERRE POSEE DU GOLEM : le souffle la lui renvoie
+  if (RCK.on && RCK.st == 1) {
+    float rx = RCK.x - plx, ry = RCK.y - ply;
+    float rd2 = rx * rx + ry * ry;
+    if (rd2 >= 1 && rd2 <= rr) {
+      float rd = sqrtf(rd2);
+      if ((rx * dx + ry * dy) / rd >= 0.45f) { // dans l'eventail : elle part dans le sens du vent
+        RCK.st = 2;
+        RCK.vx = dx * 3.4f; RCK.vy = dy * 3.4f;
+        poof(RCK.x, RCK.y, KDColor::RGB24(0x9AD8E8), 8);
+      }
+    }
   }
   // le souffle brise les pots et fait ceder les rochers fissures
   for (int pr = -1; pr <= 1; pr++) { // l'eventail balaie trois cases devant l'esprit
@@ -1804,6 +1869,25 @@ static void drawEnemies(int ox, int oy) {
       if (e->hp <= hpm * 5 / 16) { fRect(x - 12, y - 3 + hop, 8, 1, C_BLK); px(x - 4, y - 2 + hop, C_BLK); px(x - 3, y - 1 + hop, C_BLK); fRect(x + 9, y - 12 + hop, 1, 5, C_BLK); fRect(x + 8, y + 2 + hop, 3, 1, C_BLK); }
       if (e->hp <= hpm * 3 / 16) { fRect(x - 2, y - 10 + hop, 5, 1, C_BLK); fRect(x + 7, y + 6 + hop, 1, 5, C_BLK); px(x - 1, y - 7 + hop, C_BLK); px(x + 1, y - 7 + hop, C_BLK); }
       if (e->hp <= hpm * 5 / 16 && ((frame >> 3) & 1)) { px(x - 6, y - 4 + hop, bE); px(x + 6, y + 0 + hop, bE); px(x, y - 7 + hop, bE); px(x + 7, y + 8 + hop, bE); } // veines ardentes qui percent
+    }
+  }
+  if (RCK.on) { // LA PIERRE DU GOLEM, l'arme et la faiblesse du colosse
+    int rx2 = (int)RCK.x + ox, ry2 = (int)RCK.y + oy;
+    if (RCK.st == 0) { // jetee : elle flotte en arc, ombre au sol
+      int ho = 8 + (int)(sinf(RCK.fr * 0.31f) * 10.0f);
+      fCirc(rx2, ry2 + 4, 4, KDColor::RGB24(0x1A1610));
+      fCirc(rx2, ry2 - ho, 5, C_ROCK); fCirc(rx2 - 1, ry2 - 1 - ho, 3, C_ROCK2);
+      px(rx2 - 2, ry2 - 2 - ho, KDColor::RGB24(0xB8B8C0));
+    } else if (RCK.st == 1) { // posee : elle attend qu'on la souffle
+      fCirc(rx2, ry2 + 4, 5, KDColor::RGB24(0x2A2420)); // ombre
+      fCirc(rx2, ry2, 5, C_ROCK); fCirc(rx2 - 1, ry2 - 1, 3, C_ROCK2);
+      px(rx2 - 2, ry2 - 2, KDColor::RGB24(0xB8B8C0));
+      if ((frame >> 3) & 1) { px(rx2 + 5, ry2 - 6, C_WHT); px(rx2 - 5, ry2 - 5, C_CYN); } // scintillement : souffle-moi
+    } else { // soufflee : elle file, trainee de poussiere
+      px(rx2 - (int)(RCK.vx * 2), ry2 - (int)(RCK.vy * 2), C_ROCK2);
+      px(rx2 - (int)(RCK.vx * 3), ry2 - (int)(RCK.vy * 3), KDColor::RGB24(0x8A8A94));
+      fCirc(rx2, ry2, 5, C_ROCK); fCirc(rx2 - 1, ry2 - 1, 3, C_ROCK2);
+      px(rx2 - 2, ry2 - 2, C_WHT);
     }
   }
   for (int b = 0; b < 6; b++) if (BU[b].on) { // rochers ardents en rotation
