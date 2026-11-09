@@ -1140,12 +1140,13 @@ static void drawTile(int tx, int ty, int ox, int oy) {
       fRect(x + 1, y, 14, TS, C_BLK);
       fRect(x + 3, y + 2, 10, 12, KDColor::RGB24(0x14141A));
     } else {
-      fRect(x + 2, y, 12, TS, C_GOLD);
-      fRect(x + 2, y, 12, 1, KDColor::RGB24(0xFFE888));
-      fRect(x + 4, y + 2, 8, 13, KDColor::RGB24(0xB8962A));
-      fRect(x + 4, y + 2, 8, 1, KDColor::RGB24(0xE8C858));
-      fRect(x + 7, y + 6, 2, 4, C_BLK); fRect(x + 7, y + 3, 2, 2, C_BLK); // trou de serrure
-      px(x + 3, y + 1, KDColor::RGB24(0xFFE888)); px(x + 12, y + 14, KDColor::RGB24(0x8A6A18));
+      fRect(x + 1, y - 12, 14, 28, KDColor::RGB24(0x8A6A18)); // cadre
+      fRect(x + 2, y - 11, 12, 27, C_GOLD); // PORTE MONUMENTALE : elle depasse au-dessus du mur coupe par l'ecran
+      fRect(x + 2, y - 11, 12, 2, KDColor::RGB24(0xFFE888)); // arete doree
+      fRect(x + 5, y - 3, 6, 11, KDColor::RGB24(0xB8962A)); // panneau
+      fRect(x + 5, y - 3, 6, 1, KDColor::RGB24(0xE8C858));
+      fRect(x + 7, y - 1, 2, 4, C_BLK); fRect(x + 7, y - 5, 2, 2, C_BLK); // trou de serrure
+      if ((frame >> 4) & 1) { px(x + 3, y - 14, C_WHT); px(x + 12, y - 13, C_WHT); } // reflet qui veille
     }
   } else if (c == 'C') {
     fRect(x, y, TS, TS, isDun(room) ? C_FLR : g1);
@@ -2669,6 +2670,12 @@ void ion_main(int argc, char *argv[]) {
         playTick();
         if (mode != 2) break;
         drawRoom(ox, oy);
+        { // SOUBASSEMENT : la bande sous la salle devient un socle sombre, plus un vide noir
+          int by2 = TOPOFF + MH * TS;
+          fRect(0, by2 + oy, SW, SH - by2, KDColor::RGB24(0x1A1A22));
+          fRect(0, by2 + oy, SW, 1, KDColor::RGB24(0x3A3A44)); // arete eclairee
+          for (int i = 0; i < 20; i++) px(8 + i * 16 + ((i & 3) * 5) + ox, by2 + 3 + ((i & 1) * 3) + oy, KDColor::RGB24(0x2A2A34)); // joints de pierre
+        }
         blit();
         Ion::Timing::msleep(16);
       }
