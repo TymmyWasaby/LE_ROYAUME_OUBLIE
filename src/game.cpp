@@ -891,7 +891,7 @@ static char RMO[40][12][21]; // copie modifiable de la carte (generee, pots bris
 
 // ---------------- Sauvegarde complete : le monde tel que tu l'as laisse ----------------
 static uint8_t svB[11152]; // l'image complete de la partie
-static const uint32_t SAV_MAGIC = 0x5A8E1102u; // nouveau format : tout est dedans
+static const uint32_t SAV_MAGIC = 0x5A8E1103u; // la carte du croquis change tout : les vieilles sauvegardes ne valent plus
 static bool savOk;
 static void svPut(int o, const void *p, int n) { memcpy(svB + o, p, n); }
 static void svGet(int o, void *p, int n) { memcpy(p, svB + o, n); }
