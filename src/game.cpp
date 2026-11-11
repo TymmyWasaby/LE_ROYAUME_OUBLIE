@@ -265,6 +265,12 @@ static void buildSprite(int bi) {
   rectb(s, 16, 16, 9, 4, 1, 1, C_OUT);
   /* bouche */
   rectb(s, 16, 16, 7, 5, 3, 1, RGB(180,90,90));
+  /* reflet sur le casque + joues + ceinture */
+  rectb(s, 16, 16, 6, 1, 2, 1, C_WHITE);
+  rectb(s, 16, 16, 5, 4, 1, 1, RGB(255,160,160));
+  rectb(s, 16, 16, 10, 4, 1, 1, RGB(255,160,160));
+  rectb(s, 16, 16, 5, 9, 6, 1, cd);
+  rectb(s, 16, 16, 7, 9, 2, 1, cl);
 }
 
 static void buildPortraits() {
@@ -334,6 +340,20 @@ static void buildGround() {
     int x = rnd(62) + 1, y = rnd(61) + 1;
     g_ground[y * 64 + x] = C_GRASS3;
     g_ground[(y + 1) * 64 + x] = RGB(38,96,38);
+  }
+  /* Fleurs et cailloux */
+  static const uint16_t FLOWERS[4] = { RGB(255,240,120), RGB(255,120,150), RGB(255,255,255), RGB(150,150,255) };
+  for (int k = 0; k < 14; k++) {
+    int x = rnd(60) + 2, y = rnd(60) + 2;
+    uint16_t c = FLOWERS[rnd(4)];
+    g_ground[y * 64 + x] = c;
+    g_ground[y * 64 + x - 1] = c;
+    g_ground[(y - 1) * 64 + x] = RGB(255,200,200);
+  }
+  for (int k = 0; k < 10; k++) {
+    int x = rnd(61) + 1, y = rnd(61) + 1;
+    g_ground[y * 64 + x] = RGB(120,130,110);
+    g_ground[(y + 1) * 64 + x] = RGB(90,100,85);
   }
 }
 
@@ -636,6 +656,7 @@ static void botThink(Actor * a, int idx) {
     }
   }
   if (a->cd > 0) a->cd--;
+  if (a->flashT > 0) a->flashT--;
 }
 
 /* ================================================================ */
@@ -708,7 +729,6 @@ static void drawBrawler(int sx, int sy, const Actor & a) {
   if (a.flashT > 0) {
     fillRect(sx + wx * 8 - 2, sy + wy * 8 - 2 + bob, 5, 5, RGB(255,240,150));
     fillRect(sx + wx * 8 - 1, sy + wy * 8 - 1 + bob, 3, 3, C_WHITE);
-    a.flashT--;
   }
   /* dans un buisson : translucide simule par pointilles */
   if (inBush(a.x, a.y)) {
@@ -755,9 +775,20 @@ static void draw() {
       blit(g_ground, 64, 64, sx, sy, false);
     }
 
-  /* Tuiles texturees */
+  /* Ombres portees des murs et caisses (passe 1) */
   int tx0 = g_cx / TILE, ty0 = g_cy / TILE;
   int tx1 = (g_cx + SCREEN_W) / TILE + 1, ty1 = (g_cy + VIEW_H) / TILE + 1;
+  for (int ty = ty0; ty <= ty1 && ty < MAP_H; ty++) {
+    for (int tx = tx0; tx <= tx1 && tx < MAP_W; tx++) {
+      uint8_t t = g_map[ty * MAP_W + tx];
+      if (t != T_WALL && t != T_CRATE) continue;
+      int sx = tx * TILE - g_cx, sy = HUD_H + ty * TILE - g_cy;
+      fillRect(sx + 1, sy + 8, 8, 2, RGB(30,50,30));
+      fillRect(sx + 8, sy + 1, 2, 8, RGB(30,50,30));
+    }
+  }
+
+  /* Tuiles texturees */
   for (int ty = ty0; ty <= ty1 && ty < MAP_H; ty++) {
     for (int tx = tx0; tx <= tx1 && tx < MAP_W; tx++) {
       int idx = ty * MAP_W + tx;
@@ -774,6 +805,11 @@ static void draw() {
       }
       const uint16_t * tex = (t == T_WALL) ? g_tileWall : (t == T_BUSH) ? g_tileBush : g_tileCrate;
       blit(tex, 8, 8, sx, sy, false);
+      /* Buissons : feuille qui scintille */
+      if (t == T_BUSH && ((g_frame / 20 + tx * 3 + ty * 5) % 7) == 0) {
+        fillRect(sx + 2, sy + 2, 2, 1, C_BUSHL);
+        fillRect(sx + 5, sy + 4, 1, 2, C_BUSHL);
+      }
     }
   }
 
@@ -807,8 +843,18 @@ static void draw() {
     Bullet & b = g_bullets[i];
     int sz = b.super ? 5 : 3;
     int sx = b.x - sz / 2 - g_cx, sy = HUD_H + b.y - sz / 2 - g_cy;
+    /* trainee */
+    int tx = (int)(b.x - b.dx * 4) - g_cx, ty = HUD_H + (int)(b.y - b.dy * 4) - g_cy;
+    if (b.super) {
+      fillRect(tx - 1, ty - 1, sz + 2, sz + 2, RGB(160,120,20));
+      fillRect(tx, ty, sz, sz, RGB(200,170,60));
+    } else {
+      fillRect(tx, ty, sz - 1, sz - 1, RGB(230,190,120));
+    }
     fillRect(sx - 1, sy - 1, sz + 2, sz + 2, b.super ? RGB(180,150,40) : RGB(200,150,60));
     fillRect(sx, sy, sz, sz, b.super ? C_SUPER : C_BULLET);
+    /* reflet */
+    fillRect(sx, sy, 1, 1, C_WHITE);
   }
 
   /* Particules */
