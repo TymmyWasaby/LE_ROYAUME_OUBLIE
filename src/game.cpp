@@ -204,7 +204,6 @@ static void spawnPart(int x, int y, uint16_t c, int n, int spd) {
   for (int i = 0; i < N_PART && n > 0; i++) {
     Part & p = g_parts[i];
     if (p.alive) continue;
-    int a = rnd(360);
     p.x = x; p.y = y;
     p.vx = (int)(spd * (rnd(100) - 50) / 50);
     p.vy = (int)(spd * (rnd(100) - 50) / 50);
@@ -506,7 +505,7 @@ static void updateZone() {
   if (g_frame % ZONE_DMG_TICK == 0) {
     for (int i = 0; i < N_ACTORS; i++) {
       Actor & a = g_actors[i];
-      if (a.alive && !inZone(a->x, a->y)) damageActor(i, ZONE_DMG, -1);
+      if (a.alive && !inZone(a.x, a.y)) damageActor(i, ZONE_DMG, -1);
     }
   }
 }
@@ -559,12 +558,17 @@ static void drawBrawler(int sx, int sy, const Actor & a, bool walking) {
 
 static void draw() {
   Actor & p = g_actors[0];
-  g_cx = p.x - SCREEN_W / 2; if (g_cx < 0) g_cx = 0; if (g_cx > WORLD_W - SCREEN_W) g_cx = WORLD_W - SCREEN_W;
-  g_cy = p.y - VIEW_H / 2;   if (g_cy < 0) g_cy = 0; if (g_cy > WORLD_H - VIEW_H) g_cy = WORLD_H - VIEW_H;
+  g_cx = p.x - SCREEN_W / 2;
+  g_cy = p.y - VIEW_H / 2;
+  if (g_cx < 0) g_cx = 0;
+  if (g_cx > WORLD_W - SCREEN_W) g_cx = WORLD_W - SCREEN_W;
+  if (g_cy < 0) g_cy = 0;
+  if (g_cy > WORLD_H - VIEW_H) g_cy = WORLD_H - VIEW_H;
   if (g_shake > 0) {
     g_cx += rnd(2 * g_shake + 1) - g_shake;
     g_cy += rnd(2 * g_shake + 1) - g_shake;
-    if (g_cx < 0) g_cx = 0; if (g_cy < 0) g_cy = 0;
+    if (g_cx < 0) g_cx = 0;
+    if (g_cy < 0) g_cy = 0;
     if (g_cx > WORLD_W - SCREEN_W) g_cx = WORLD_W - SCREEN_W;
     if (g_cy > WORLD_H - VIEW_H) g_cy = WORLD_H - VIEW_H;
     g_shake--;
