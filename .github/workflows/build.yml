@@ -36,6 +36,12 @@ jobs:
       - name: Build app
         run: make clean build
 
+      - name: Check NWA exists
+        shell: bash
+        run: |
+          ls -la target/
+          test -f target/tymbrawl.nwa || { echo "ERREUR : target/tymbrawl.nwa absent — verifie le Makefile"; exit 1; }
+
       - name: Diagnostics
         run: |
           { echo "=== Diagnostics du build ==="
@@ -51,6 +57,7 @@ jobs:
           path: target/tymbrawl.nwa
 
       - name: Publier le NWA en Release
+        shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
