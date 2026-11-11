@@ -1,6 +1,6 @@
-# Mini BS NumWorks — adaptation EADK
+# Tymbrawl NumWorks — adaptation EADK
 
-Ce dépôt contient une adaptation de `Brawl Microstars v2` pour être compilée comme application externe NumWorks `.nwa`.
+Ce dépôt contient une adaptation de `Tymbrawl` pour être compilée comme application externe NumWorks `.nwa`.
 
 ## Compilation
 
