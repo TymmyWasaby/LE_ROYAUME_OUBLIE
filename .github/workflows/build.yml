@@ -54,4 +54,5 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create latest target/tymbrawl.nwa --title "Dernier build" --notes-file relnotes.txt --clobber || gh release upload latest target/tymbrawl.nwa --clobber
+          gh release delete latest --yes --cleanup-tag 2>/dev/null || true
+          gh release create latest target/tymbrawl.nwa --title "Dernier build" --notes-file relnotes.txt
